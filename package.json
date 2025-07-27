@@ -14,7 +14,11 @@
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
-    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix"
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@eslint/eslintrc": "^3.3.1",

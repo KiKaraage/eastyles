@@ -1,13 +1,17 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Default Popup Title</title>
-    <meta name="manifest.type" content="browser_action" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="./main.tsx"></script>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Eastyles Popup</title>
+        <meta name="manifest.type" content="browser_action" />
+        <link rel="stylesheet" href="/assets/main.css" />
+    </head>
+    <body class="bg-base-100 text-base-content">
+        <div
+            id="root"
+            class="min-h-screen flex items-center justify-center"
+        ></div>
+        <script type="module" src="./main.tsx"></script>
+    </body>
 </html>
