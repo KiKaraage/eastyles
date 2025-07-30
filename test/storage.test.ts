@@ -3,7 +3,7 @@
  * Tests CRUD operations, error handling, and fallback mechanisms
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   SettingsStorage,
   UserStyle,
@@ -215,7 +215,8 @@ describe("StorageFallbacks", () => {
       expect(fallback.lastUsed).toBe(corruptedSettings.lastUsed);
       expect(fallback.isDebuggingEnabled).toBe(true);
       expect(fallback.themeMode).toBe("dark");
-      expect((fallback as any).invalidField).toBeUndefined();
+      // @ts-expect-error: Testing for non-existent property
+      expect(fallback.invalidField).toBeUndefined();
     });
 
     it("should reject invalid field values", () => {

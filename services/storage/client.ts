@@ -481,6 +481,7 @@ export class EastylesStorageClient implements StorageClient {
     try {
       this.debug("Setting up settings watcher");
       return settingsStorage.watch((newValue, oldValue) => {
+        this.debug("Settings watcher callback triggered", newValue, oldValue);
         callback(newValue, oldValue);
       });
     } catch (error) {
@@ -495,6 +496,7 @@ export class EastylesStorageClient implements StorageClient {
     try {
       this.debug("Setting up styles watcher");
       return stylesStorage.watch((newValue, oldValue) => {
+        this.debug("Styles watcher callback triggered", newValue, oldValue);
         callback(newValue, oldValue);
       });
     } catch (error) {

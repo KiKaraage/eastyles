@@ -1,8 +1,6 @@
-// test/setup.ts
+// test/setup.ts - Enhanced version with proper WXT storage mocking
 // This file sets up the testing environment for Vitest
 
-// Mock browser APIs that are commonly used in the extension
-// but not available in the test environment
 import { vi, beforeAll, afterEach } from "vitest";
 
 // region: Type Definitions for Mocks
@@ -60,22 +58,136 @@ interface MockMediaQueryList {
 }
 // endregion
 
+// In-memory storage implementation
+const storageData: { [key: string]: unknown } = {};
+
+// Track watchers for each storage key - maps key to array of { callback, callImmediate }
+const watchers: {
+  [key: string]: Array<{
+    callback: (newValue: unknown, oldValue: unknown) => void;
+  }>;
+} = {};
+
+// Reset storage function for test isolation
+export function resetStorage(): void {
+  Object.keys(storageData).forEach((key) => {
+    delete storageData[key];
+  });
+
+  // Clear all watchers
+  Object.keys(watchers).forEach((key) => {
+    delete watchers[key];
+  });
+}
+
 beforeAll(() => {
+  // Mock browser.storage.local with actual implementation
+  const mockStorageArea: MockBrowserStorageArea = {
+    get: vi.fn(async (keys?: string | string[] | object | null) => {
+      if (keys === null || keys === undefined) {
+        // Return all data
+        return { ...storageData };
+      }
+
+      if (typeof keys === "string") {
+        // Return single key
+        return { [keys]: storageData[keys] };
+      }
+
+      if (Array.isArray(keys)) {
+        // Return multiple keys
+        const result: { [key: string]: unknown } = {};
+        for (const key of keys) {
+          result[key] = storageData[key];
+        }
+        return result;
+      }
+
+      if (typeof keys === "object") {
+        // Return default values for missing keys
+        const result: { [key: string]: unknown } = {};
+        for (const [key, defaultValue] of Object.entries(keys)) {
+          result[key] =
+            storageData[key] !== undefined ? storageData[key] : defaultValue;
+        }
+        return result;
+      }
+
+      return {};
+    }),
+
+    set: vi.fn(async (items: { [key: string]: unknown }) => {
+      // Get current values before updating
+      const oldValues = { ...storageData };
+
+      // Update storage
+      Object.assign(storageData, items);
+
+      // Notify watchers for each changed key
+      for (const [key, newValue] of Object.entries(items)) {
+        if (watchers[key]) {
+          const oldValue = oldValues[key];
+          for (const { callback } of watchers[key]) {
+            // Always call the callback when value changes
+            // Using setTimeout to ensure the spy captures the call
+            setTimeout(() => {
+              callback(newValue, oldValue);
+            }, 0);
+          }
+        }
+      }
+    }),
+
+    remove: vi.fn(async (keys: string | string[]) => {
+      const keyList = Array.isArray(keys) ? keys : [keys];
+      const oldValues: { [key: string]: unknown } = {};
+
+      // Store old values before removal
+      for (const key of keyList) {
+        oldValues[key] = storageData[key];
+      }
+
+      // Remove keys
+      keyList.forEach((key) => {
+        delete storageData[key];
+      });
+
+      // Notify watchers
+      for (const key of keyList) {
+        if (watchers[key]) {
+          for (const { callback } of watchers[key]) {
+            // Using setTimeout to ensure the spy captures the call
+            setTimeout(() => {
+              callback(undefined, oldValues[key]);
+            }, 0);
+          }
+        }
+      }
+    }),
+
+    clear: vi.fn(async () => {
+      const oldValues = { ...storageData };
+      resetStorage();
+
+      // Notify watchers for all keys
+      for (const key of Object.keys(oldValues)) {
+        if (watchers[key]) {
+          for (const { callback } of watchers[key]) {
+            // Using setTimeout to ensure the spy captures the call
+            setTimeout(() => {
+              callback(undefined, oldValues[key]);
+            }, 0);
+          }
+        }
+      }
+    }),
+  };
+
   // Mock browser API with proper types
   const mockBrowser: MockBrowser = {
     storage: {
-      local: {
-        get: vi.fn(),
-        set: vi.fn(),
-        remove: vi.fn(),
-        clear: vi.fn(),
-      },
-      sync: {
-        get: vi.fn(),
-        set: vi.fn(),
-        remove: vi.fn(),
-        clear: vi.fn(),
-      },
+      local: mockStorageArea,
+      sync: { ...mockStorageArea }, // Copy the same implementation
     },
     runtime: {
       sendMessage: vi.fn(),
@@ -115,9 +227,71 @@ beforeAll(() => {
     writable: true,
     value: mockMatchMedia,
   });
+
+  // Mock the @wxt-dev/storage module
+  vi.mock("@wxt-dev/storage", () => {
+    const storage = {
+      defineItem: vi.fn((key: string, options?: { fallback?: unknown }) => {
+        // Initialize watchers for this key if not already done
+        if (!watchers[key]) {
+          watchers[key] = [];
+        }
+
+        // Create a mock storage item
+        return {
+          getValue: vi.fn(async () => {
+            const result = await browser.storage.local.get(key);
+            return result[key] ?? options?.fallback;
+          }),
+          setValue: vi.fn(async (value: unknown) => {
+            await browser.storage.local.set({ [key]: value });
+          }),
+          removeValue: vi.fn(async () => {
+            await browser.storage.local.remove(key);
+          }),
+          clear: vi.fn(async () => {
+            await browser.storage.local.clear();
+          }),
+          watch: vi.fn(
+            (callback: (newValue: unknown, oldValue: unknown) => void) => {
+              // Store the callback for this key
+              watchers[key].push({ callback });
+
+              // Initial call with current value
+              void browser.storage.local
+                .get(key)
+                .then((result) => {
+                  const value = result[key] ?? options?.fallback;
+                  // Use immediate setTimeout to ensure the callback is processed
+                  setTimeout(() => {
+                    callback(value, undefined);
+                  }, 0);
+                })
+                .catch((err) => {
+                  console.error("Error in initial watch call:", err);
+                });
+
+              // Return unsubscribe function
+              return () => {
+                const index = watchers[key].findIndex(
+                  (w) => w.callback === callback,
+                );
+                if (index !== -1) {
+                  watchers[key].splice(index, 1);
+                }
+              };
+            },
+          ),
+        };
+      }),
+    };
+
+    return { storage };
+  });
 });
 
-// Clean up mocks after each test
+// Clean up mocks and reset storage after each test
 afterEach(() => {
   vi.clearAllMocks();
+  resetStorage();
 });
