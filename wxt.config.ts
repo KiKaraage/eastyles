@@ -8,11 +8,11 @@ export default defineConfig({
     permissions: ["storage"],
   },
   vite: () => ({
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss() as any],
   }),
   imports: {
     eslintrc: {
-      enabled: 9,
+      enabled: false,
     },
   },
 });
