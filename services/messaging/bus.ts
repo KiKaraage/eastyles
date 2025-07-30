@@ -1,14 +1,17 @@
 /**
  * Message bus service for handling communication between extension components.
  * Implements async message handling with timeout and retry mechanisms.
+ * Includes offline message queuing for reliable message delivery.
  */
 
 import { browser } from "@wxt-dev/browser";
+import { storage } from "@wxt-dev/storage";
 import { ReceivedMessages, SentMessages, ErrorDetails } from "./types";
 import {
   isValidReceivedMessage,
   createInvalidMessageError,
 } from "./validation";
+import { messageHandlerService } from "./handlers";
 
 // Default timeout for message responses (5 seconds)
 const DEFAULT_TIMEOUT = 5000;
@@ -24,6 +27,21 @@ interface PendingMessage {
   retries: number;
 }
 
+// Interface for offline message queue items
+interface OfflineMessage {
+  id: string;
+  message: ReceivedMessages;
+  tabId?: number;
+  timestamp: number;
+  retries: number;
+}
+
+// Maximum age for offline messages (24 hours)
+const MAX_OFFLINE_MESSAGE_AGE = 24 * 60 * 60 * 1000;
+
+// Maximum number of offline messages to store
+const MAX_OFFLINE_MESSAGES = 100;
+
 /**
  * MessageBus class that handles sending and receiving messages between extension components.
  * Provides reliable communication with timeout and retry mechanisms.
@@ -34,10 +52,16 @@ export class MessageBus {
   private messageQueue: Array<{ message: ReceivedMessages; tabId?: number }> =
     [];
   private isProcessingQueue = false;
+  private isOnline = true;
+  private offlineCheckInterval?: number;
 
   constructor() {
     // Set up listener for incoming messages
     this.setupMessageListener();
+    // Initialize online status monitoring
+    this.initializeOnlineStatusMonitoring();
+    // Process any existing offline messages
+    this.processOfflineMessages();
   }
 
   /**
@@ -147,34 +171,8 @@ export class MessageBus {
     message: ReceivedMessages,
     tabId?: number,
   ): Promise<unknown> {
-    // This is a placeholder for actual message handling logic
-    // In a real implementation, this would route messages to appropriate handlers
-    switch (message.type) {
-      case "GET_CURRENT_TAB":
-        return tabId ? { id: tabId } : null;
-      case "TOGGLE_THEME":
-        // Placeholder for theme toggling logic
-        return { success: true };
-      case "REQUEST_EXPORT":
-        // Placeholder for export logic
-        return { data: "exported-data", format: "json" };
-      case "REQUEST_IMPORT":
-        // Placeholder for import logic
-        return { success: true, importedCount: 1 };
-      case "RESET_SETTINGS":
-        // Placeholder for reset logic
-        return { success: true };
-      case "GET_ALL_STYLES":
-        // Placeholder for getting all styles
-        return { styles: [] };
-      case "OPEN_MANAGER":
-        // Placeholder for opening manager page
-        return { success: true };
-      default:
-        throw new Error(
-          `Unknown message type: ${(message as { type: string }).type}`,
-        );
-    }
+    // Use the message handler service to process the message
+    return await messageHandlerService.handleMessage(message, tabId);
   }
 
   /**
@@ -350,7 +348,167 @@ export class MessageBus {
    * Generate a unique ID for message tracking.
    */
   private generateId(): string {
-    return Math.random().toString(36).substr(2, 9);
+    return Math.random().toString(36).slice(2, 11);
+  }
+
+  /**
+   * Initialize online status monitoring.
+   */
+  private initializeOnlineStatusMonitoring(): void {
+    // Check online status periodically
+    this.offlineCheckInterval = window.setInterval(() => {
+      this.checkOnlineStatus();
+    }, 5000);
+
+    // Listen for browser events that might indicate connectivity changes
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", () => {
+        this.isOnline = true;
+        this.processOfflineMessages();
+      });
+
+      window.addEventListener("offline", () => {
+        this.isOnline = false;
+      });
+    }
+  }
+
+  /**
+   * Check if the extension context is online and functional.
+   */
+  private async checkOnlineStatus(): Promise<void> {
+    try {
+      // Try to access browser APIs to check if context is alive
+      if (browser.runtime && browser.runtime.id) {
+        const wasOffline = !this.isOnline;
+        this.isOnline = true;
+
+        // If we just came back online, process offline messages
+        if (wasOffline) {
+          this.processOfflineMessages();
+        }
+      }
+    } catch {
+      this.isOnline = false;
+    }
+  }
+
+  /**
+   * Store a message in the offline queue.
+   */
+  private async storeOfflineMessage(
+    message: ReceivedMessages,
+    tabId?: number,
+  ): Promise<void> {
+    try {
+      const offlineMessage: OfflineMessage = {
+        id: this.generateId(),
+        message,
+        tabId,
+        timestamp: Date.now(),
+        retries: 0,
+      };
+
+      // Get existing offline messages
+      const existingMessages = await this.getOfflineMessages();
+
+      // Add new message
+      existingMessages.push(offlineMessage);
+
+      // Keep only the most recent messages
+      const sortedMessages = existingMessages
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, MAX_OFFLINE_MESSAGES);
+
+      // Store back to storage
+      await storage.setItem("local:offlineMessages", sortedMessages);
+    } catch {
+      // Silent failure - can't do much if we can't store offline messages
+    }
+  }
+
+  /**
+   * Get offline messages from storage.
+   */
+  private async getOfflineMessages(): Promise<OfflineMessage[]> {
+    try {
+      const messages = await storage.getItem("local:offlineMessages", {
+        fallback: [] as OfflineMessage[],
+      });
+
+      // Filter out old messages
+      const cutoffTime = Date.now() - MAX_OFFLINE_MESSAGE_AGE;
+      return messages.filter((msg) => msg.timestamp > cutoffTime);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Process offline messages when connection is restored.
+   */
+  private async processOfflineMessages(): Promise<void> {
+    if (!this.isOnline) return;
+
+    try {
+      const offlineMessages = await this.getOfflineMessages();
+
+      if (offlineMessages.length === 0) return;
+
+      // Process messages one by one
+      const processedMessageIds: string[] = [];
+
+      for (const offlineMessage of offlineMessages) {
+        try {
+          // Try to send the message
+          await this.send(offlineMessage.message, offlineMessage.tabId);
+          processedMessageIds.push(offlineMessage.id);
+        } catch {
+          // Increment retry count
+          offlineMessage.retries++;
+
+          // If max retries reached, mark for removal
+          if (offlineMessage.retries >= MAX_RETRIES) {
+            processedMessageIds.push(offlineMessage.id);
+          }
+        }
+      }
+
+      // Remove processed messages from storage
+      if (processedMessageIds.length > 0) {
+        const remainingMessages = offlineMessages.filter(
+          (msg) => !processedMessageIds.includes(msg.id),
+        );
+        await storage.setItem("local:offlineMessages", remainingMessages);
+      }
+    } catch {
+      // Silent failure - will retry on next check
+    }
+  }
+
+  /**
+   * Enhanced send method with offline queue support.
+   */
+  async sendWithOfflineSupport<T = unknown>(
+    message: ReceivedMessages,
+    tabId?: number,
+  ): Promise<T> {
+    // If we're offline, store the message for later
+    if (!this.isOnline) {
+      await this.storeOfflineMessage(message, tabId);
+      throw new Error(
+        "Extension is offline - message queued for later delivery",
+      );
+    }
+
+    try {
+      return await this.send<T>(message, tabId);
+    } catch (error: unknown) {
+      // If send fails, might be due to connectivity issues
+      // Store for offline processing
+      await this.storeOfflineMessage(message, tabId);
+      throw error;
+    }
   }
 
   /**
@@ -358,6 +516,56 @@ export class MessageBus {
    */
   getPendingMessageCount(): number {
     return this.pendingMessages.size;
+  }
+
+  /**
+   * Get the number of offline messages.
+   */
+  async getOfflineMessageCount(): Promise<number> {
+    const offlineMessages = await this.getOfflineMessages();
+    return offlineMessages.length;
+  }
+
+  /**
+   * Clear all offline messages.
+   */
+  async clearOfflineMessages(): Promise<void> {
+    try {
+      await storage.setItem("local:offlineMessages", []);
+    } catch {
+      // Silent failure
+    }
+  }
+
+  /**
+   * Get online status.
+   */
+  getOnlineStatus(): boolean {
+    return this.isOnline;
+  }
+
+  /**
+   * Cleanup resources when the MessageBus is no longer needed.
+   */
+  cleanup(): void {
+    if (this.offlineCheckInterval) {
+      window.clearInterval(this.offlineCheckInterval);
+      this.offlineCheckInterval = undefined;
+    }
+  }
+
+  /**
+   * Get message handler service for advanced handler management.
+   */
+  getHandlerService() {
+    return messageHandlerService;
+  }
+
+  /**
+   * Validate that all required message handlers are registered.
+   */
+  validateHandlers(): { isValid: boolean; missingHandlers: string[] } {
+    return messageHandlerService.validateHandlers();
   }
 }
 

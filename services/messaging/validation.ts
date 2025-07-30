@@ -61,47 +61,67 @@ function isManagerMessage(type: string): boolean {
 /**
  * Validates a PopupMessage based on its type and required payload structure.
  */
-function validatePopupMessage(message: any, type: string): boolean {
-  switch (type) {
-    case "OPEN_MANAGER":
+function validatePopupMessage(message: unknown, type: string): boolean {
+  if (type === "OPEN_MANAGER") {
+    if (message && typeof message === "object" && "payload" in message) {
+      const payload = (message as { payload: unknown }).payload;
       return (
-        message.payload &&
-        typeof message.payload === "object" &&
-        "url" in message.payload &&
-        typeof message.payload.url === "string" &&
-        message.payload.url.length > 0
+        payload !== null &&
+        typeof payload === "object" &&
+        "url" in payload &&
+        typeof (payload as { url?: unknown }).url === "string" &&
+        (payload as { url: string }).url.length > 0
       );
-    case "GET_CURRENT_TAB":
-    case "TOGGLE_THEME":
-      return !message.payload || Object.keys(message.payload).length === 0;
-    default:
-      return false;
+    }
+    return false;
   }
+
+  if (type === "GET_CURRENT_TAB" || type === "TOGGLE_THEME") {
+    return (
+      message === null ||
+      message === undefined ||
+      (typeof message === "object" && Object.keys(message).length === 0)
+    );
+  }
+
+  return false;
 }
 
 /**
  * Validates a ManagerMessage based on its type and required payload structure.
  */
-function validateManagerMessage(message: any, type: string): boolean {
+function validateManagerMessage(message: unknown, type: string): boolean {
   switch (type) {
     case "REQUEST_EXPORT":
-      return (
-        message.payload &&
-        typeof message.payload === "object" &&
-        "format" in message.payload &&
-        message.payload.format === "json"
-      );
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "format" in payload &&
+          (payload as { format?: unknown }).format === "json"
+        );
+      }
+      return false;
     case "REQUEST_IMPORT":
-      return (
-        message.payload &&
-        typeof message.payload === "object" &&
-        "data" in message.payload &&
-        typeof message.payload.data === "string" &&
-        message.payload.data.length > 0
-      );
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "data" in payload &&
+          typeof (payload as { data?: unknown }).data === "string" &&
+          (payload as { data: string }).data.length > 0
+        );
+      }
+      return false;
     case "RESET_SETTINGS":
     case "GET_ALL_STYLES":
-      return !message.payload || Object.keys(message.payload).length === 0;
+      return (
+        message === null ||
+        message === undefined ||
+        (typeof message === "object" && Object.keys(message).length === 0)
+      );
     default:
       return false;
   }
@@ -111,7 +131,7 @@ function validateManagerMessage(message: any, type: string): boolean {
  * Creates a standardized error message for invalid messages.
  */
 export function createInvalidMessageError(
-  message: any,
+  message: unknown,
   source: string,
 ): ErrorDetails {
   return {
@@ -126,12 +146,27 @@ export function createInvalidMessageError(
 /**
  * Type guard to check if an object is a valid ErrorDetails structure.
  */
-export function isValidErrorDetails(error: any): boolean {
-  return (
-    error &&
-    typeof error.message === "string" &&
-    typeof error.timestamp === "number" &&
-    ["background", "popup", "manager", "content"].includes(error.source) &&
-    ["silent", "notify", "fatal"].includes(error.severity)
-  );
+export function isValidErrorDetails(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const hasMessage =
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string";
+  const hasTimestamp =
+    "timestamp" in error &&
+    typeof (error as { timestamp?: unknown }).timestamp === "number";
+  const hasSource =
+    "source" in error &&
+    ["background", "popup", "manager", "content"].includes(
+      (error as { source?: unknown }).source as string,
+    );
+  const hasSeverity =
+    "severity" in error &&
+    ["silent", "notify", "fatal"].includes(
+      (error as { severity?: unknown }).severity as string,
+    );
+
+  return hasMessage && hasTimestamp && hasSource && hasSeverity;
 }

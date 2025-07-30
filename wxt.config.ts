@@ -1,5 +1,6 @@
 import { defineConfig } from "wxt";
 import tailwindcss from "@tailwindcss/vite";
+import { PluginOption } from "vite";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -8,7 +9,7 @@ export default defineConfig({
     permissions: ["storage"],
   },
   vite: () => ({
-    plugins: [tailwindcss() as any],
+    plugins: [tailwindcss() as unknown as PluginOption],
   }),
   imports: {
     eslintrc: {

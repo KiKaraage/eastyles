@@ -226,8 +226,12 @@ export class StorageFallbacks {
         const isValidSettings =
           stored.settings &&
           typeof stored.settings === "object" &&
-          typeof (stored.settings as any).lastUsed === "number" &&
-          typeof (stored.settings as any).version === "string";
+          "lastUsed" in stored.settings &&
+          typeof (stored.settings as { lastUsed?: unknown }).lastUsed ===
+            "number" &&
+          "version" in stored.settings &&
+          typeof (stored.settings as { version?: unknown }).version ===
+            "string";
 
         if (isValidSettings) {
           settings = stored.settings as SettingsStorage;
