@@ -63,6 +63,12 @@ export default [
       },
     },
     settings: {
+      "import/resolver": {
+        typescript: {
+          alwaysTryTypes: true,
+          project: "./tsconfig.json",
+        },
+      },
       react: {
         version: "detect",
       },
@@ -71,7 +77,7 @@ export default [
       "no-undef": "off",
       "no-unused-vars": "off",
       "no-constant-condition": "warn",
-      "no-console": "warn",
+      "no-console": "off",
 
       // TypeScript ESLint rules (these will be applied after being extended by compat)
       "@typescript-eslint/no-unused-vars": [
@@ -103,10 +109,26 @@ export default [
         },
       ],
     },
+    // Define global variables for Vitest
+    globals: {
+      describe: "readonly",
+      test: "readonly",
+      it: "readonly",
+      expect: "readonly",
+      beforeAll: "readonly",
+      beforeEach: "readonly",
+      afterAll: "readonly",
+      afterEach: "readonly",
+      vi: "readonly",
+      vitest: "readonly",
+    },
   },
 
   // Ignore generated files and directories from linting
   {
     ignores: ["**/.output/**", "**/.wxt/**", "node_modules/**"],
+    linterOptions: {
+      noWarnIgnored: true,
+    },
   },
 ];

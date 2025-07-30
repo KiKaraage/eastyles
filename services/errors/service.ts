@@ -1,0 +1,431 @@
+/**
+ * Error handling service for the Eastyles extension.
+ * Provides centralized error management with classification, logging, and reporting.
+ */
+
+/**
+ * Error severity levels for classification and handling.
+ */
+export enum ErrorSeverity {
+  /** Silent errors - logged but not shown to user */
+  SILENT = "silent",
+  /** Notify errors - shown to user with recovery options */
+  NOTIFY = "notify",
+  /** Fatal errors - require extension restart or significant intervention */
+  FATAL = "fatal",
+}
+
+/**
+ * Error sources within the extension.
+ */
+export enum ErrorSource {
+  BACKGROUND = "background",
+  POPUP = "popup",
+  MANAGER = "manager",
+  CONTENT = "content",
+  STORAGE = "storage",
+  MESSAGING = "messaging",
+  IMPORT_EXPORT = "import_export",
+  RUNTIME = "runtime",
+}
+
+/**
+ * Base error class for all extension errors.
+ */
+export abstract class ExtensionError extends Error {
+  public readonly severity: ErrorSeverity;
+  public readonly source: ErrorSource;
+  public readonly timestamp: number;
+  public readonly context?: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    severity: ErrorSeverity,
+    source: ErrorSource,
+    context?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+    this.severity = severity;
+    this.source = source;
+    this.timestamp = Date.now();
+    this.context = context;
+
+    // Maintain proper stack trace
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+  }
+
+  /**
+   * Convert error to a plain object for serialization.
+   */
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      severity: this.severity,
+      source: this.source,
+      timestamp: this.timestamp,
+      context: this.context,
+    };
+  }
+
+  /**
+   * Check if this error should be shown to the user.
+   */
+  shouldNotifyUser(): boolean {
+    return this.severity === ErrorSeverity.NOTIFY || this.severity === ErrorSeverity.FATAL;
+  }
+
+  /**
+   * Check if this error is fatal and requires significant intervention.
+   */
+  isFatal(): boolean {
+    return this.severity === ErrorSeverity.FATAL;
+  }
+}
+
+/**
+ * Storage-related errors.
+ */
+export class StorageError extends ExtensionError {
+  constructor(
+    message: string,
+    severity: ErrorSeverity = ErrorSeverity.NOTIFY,
+    context?: Record<string, unknown>,
+  ) {
+    super(message, severity, ErrorSource.STORAGE, context);
+  }
+}
+
+/**
+ * Storage quota exceeded error.
+ */
+export class StorageQuotaExceededError extends StorageError {
+  constructor(context?: Record<string, unknown>) {
+    super(
+      "Storage quota exceeded. Please clear some data or reduce storage usage.",
+      ErrorSeverity.NOTIFY,
+      context,
+    );
+  }
+}
+
+/**
+ * Invalid storage data error.
+ */
+export class StorageInvalidDataError extends StorageError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(
+      `Invalid storage data: ${message}`,
+      ErrorSeverity.NOTIFY,
+      context,
+    );
+  }
+}
+
+/**
+ * Message passing related errors.
+ */
+export class MessageError extends ExtensionError {
+  constructor(
+    message: string,
+    severity: ErrorSeverity = ErrorSeverity.NOTIFY,
+    context?: Record<string, unknown>,
+  ) {
+    super(message, severity, ErrorSource.MESSAGING, context);
+  }
+}
+
+/**
+ * Message timeout error.
+ */
+export class MessageTimeoutError extends MessageError {
+  constructor(messageType: string, attempts: number, context?: Record<string, unknown>) {
+    super(
+      `Message timeout after ${attempts} attempts: ${messageType}`,
+      ErrorSeverity.NOTIFY,
+      { messageType, attempts, ...context },
+    );
+  }
+}
+
+/**
+ * Invalid message error.
+ */
+export class MessageInvalidError extends MessageError {
+  constructor(reason: string, context?: Record<string, unknown>) {
+    super(
+      `Invalid message: ${reason}`,
+      ErrorSeverity.NOTIFY,
+      context,
+    );
+  }
+}
+
+/**
+ * Import/Export related errors.
+ */
+export class ImportExportError extends ExtensionError {
+  constructor(
+    message: string,
+    severity: ErrorSeverity = ErrorSeverity.NOTIFY,
+    context?: Record<string, unknown>,
+  ) {
+    super(message, severity, ErrorSource.IMPORT_EXPORT, context);
+  }
+}
+
+/**
+ * Invalid file format error.
+ */
+export class InvalidFileFormatError extends ImportExportError {
+  constructor(expectedFormat: string, actualFormat?: string, context?: Record<string, unknown>) {
+    const message = actualFormat
+      ? `Invalid file format: expected ${expectedFormat}, got ${actualFormat}`
+      : `Invalid file format: expected ${expectedFormat}`;
+
+    super(message, ErrorSeverity.NOTIFY, { expectedFormat, actualFormat, ...context });
+  }
+}
+
+/**
+ * Data corruption error.
+ */
+export class DataCorruptedError extends ImportExportError {
+  constructor(details: string, context?: Record<string, unknown>) {
+    super(
+      `Data corrupted: ${details}`,
+      ErrorSeverity.NOTIFY,
+      context,
+    );
+  }
+}
+
+/**
+ * Runtime errors for general application failures.
+ */
+export class RuntimeError extends ExtensionError {
+  constructor(
+    message: string,
+    severity: ErrorSeverity = ErrorSeverity.NOTIFY,
+    context?: Record<string, unknown>,
+  ) {
+    super(message, severity, ErrorSource.RUNTIME, context);
+  }
+}
+
+/**
+ * Browser API errors.
+ */
+export class BrowserAPIError extends RuntimeError {
+  constructor(api: string, operation: string, originalError?: Error, context?: Record<string, unknown>) {
+    const message = `Browser API error in ${api}.${operation}: ${originalError?.message || "Unknown error"}`;
+    super(message, ErrorSeverity.NOTIFY, { api, operation, originalError: originalError?.message, ...context });
+  }
+}
+
+/**
+ * Permission denied error.
+ */
+export class PermissionDeniedError extends RuntimeError {
+  constructor(permission: string, context?: Record<string, unknown>) {
+    super(
+      `Permission denied: ${permission}`,
+      ErrorSeverity.FATAL,
+      { permission, ...context },
+    );
+  }
+}
+
+/**
+ * Error classification and handling service.
+ */
+export class ErrorService {
+  private errorListeners: Array<(error: ExtensionError) => void> = [];
+  private errorCounts: Map<string, number> = new Map();
+  private isDebuggingEnabled = false;
+
+  /**
+   * Set debugging mode for verbose error logging.
+   */
+  setDebuggingEnabled(enabled: boolean): void {
+    this.isDebuggingEnabled = enabled;
+  }
+
+  /**
+   * Add error listener for custom error handling.
+   */
+  addErrorListener(listener: (error: ExtensionError) => void): () => void {
+    this.errorListeners.push(listener);
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.errorListeners.indexOf(listener);
+      if (index !== -1) {
+        this.errorListeners.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Handle an error through the error service.
+   */
+  handleError(error: Error | ExtensionError, context?: Record<string, unknown>): ExtensionError {
+    let extensionError: ExtensionError;
+
+    // Convert regular errors to ExtensionError
+    if (error instanceof ExtensionError) {
+      extensionError = error;
+    } else {
+      extensionError = new RuntimeError(
+        error.message || "Unknown error",
+        ErrorSeverity.NOTIFY,
+        { originalError: error.message, stack: error.stack, ...context },
+      );
+    }
+
+    // Track error counts
+    const errorKey = `${extensionError.source}:${extensionError.name}`;
+    const currentCount = this.errorCounts.get(errorKey) || 0;
+    this.errorCounts.set(errorKey, currentCount + 1);
+
+    // Debug logging
+    if (this.isDebuggingEnabled) {
+      console.error("ErrorService handling error:", {
+        error: extensionError.toJSON(),
+        count: currentCount + 1,
+      });
+    }
+
+    // Notify listeners
+    this.errorListeners.forEach(listener => {
+      try {
+        listener(extensionError);
+      } catch (listenerError) {
+        console.error("Error in error listener:", listenerError);
+      }
+    });
+
+    return extensionError;
+  }
+
+  /**
+   * Create and handle a storage error.
+   */
+  createStorageError(message: string, context?: Record<string, unknown>): StorageError {
+    const error = new StorageError(message, ErrorSeverity.NOTIFY, context);
+    this.handleError(error);
+    return error;
+  }
+
+  /**
+   * Create and handle a message error.
+   */
+  createMessageError(message: string, context?: Record<string, unknown>): MessageError {
+    const error = new MessageError(message, ErrorSeverity.NOTIFY, context);
+    this.handleError(error);
+    return error;
+  }
+
+  /**
+   * Create and handle an import/export error.
+   */
+  createImportExportError(message: string, context?: Record<string, unknown>): ImportExportError {
+    const error = new ImportExportError(message, ErrorSeverity.NOTIFY, context);
+    this.handleError(error);
+    return error;
+  }
+
+  /**
+   * Create and handle a runtime error.
+   */
+  createRuntimeError(message: string, context?: Record<string, unknown>): RuntimeError {
+    const error = new RuntimeError(message, ErrorSeverity.NOTIFY, context);
+    this.handleError(error);
+    return error;
+  }
+
+  /**
+   * Get error statistics.
+   */
+  getErrorStats(): Record<string, number> {
+    const stats: Record<string, number> = {};
+    this.errorCounts.forEach((count, key) => {
+      stats[key] = count;
+    });
+    return stats;
+  }
+
+  /**
+   * Clear error statistics.
+   */
+  clearErrorStats(): void {
+    this.errorCounts.clear();
+  }
+
+  /**
+   * Check if an error type has exceeded a threshold.
+   */
+  hasErrorExceededThreshold(source: ErrorSource, errorName: string, threshold: number): boolean {
+    const errorKey = `${source}:${errorName}`;
+    const count = this.errorCounts.get(errorKey) || 0;
+    return count >= threshold;
+  }
+
+  /**
+   * Get total error count.
+   */
+  getTotalErrorCount(): number {
+    let total = 0;
+    this.errorCounts.forEach(count => {
+      total += count;
+    });
+    return total;
+  }
+}
+
+// Export singleton instance
+export const errorService = new ErrorService();
+
+/**
+ * Utility function to wrap async functions with error handling.
+ */
+export function withErrorHandling<T extends unknown[], R>(
+  fn: (...args: T) => Promise<R>,
+  errorContext?: Record<string, unknown>,
+): (...args: T) => Promise<R> {
+  return async (...args: T): Promise<R> => {
+    try {
+      return await fn(...args);
+    } catch (error: unknown) {
+      const extensionError = errorService.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        errorContext,
+      );
+      throw extensionError;
+    }
+  };
+}
+
+/**
+ * Utility function to wrap sync functions with error handling.
+ */
+export function withSyncErrorHandling<T extends unknown[], R>(
+  fn: (...args: T) => R,
+  errorContext?: Record<string, unknown>,
+): (...args: T) => R {
+  return (...args: T): R => {
+    try {
+      return fn(...args);
+    } catch (error: unknown) {
+      const extensionError = errorService.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        errorContext,
+      );
+      throw extensionError;
+    }
+  };
+}

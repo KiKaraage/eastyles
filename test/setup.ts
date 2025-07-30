@@ -1,3 +1,5 @@
+/// <reference types="vitest" />
+/// <reference types="../.wxt/wxt.d.ts" />
 // test/setup.ts - Enhanced version with proper WXT storage mocking
 // This file sets up the testing environment for Vitest
 
@@ -260,15 +262,15 @@ beforeAll(() => {
               // Initial call with current value
               void browser.storage.local
                 .get(key)
-                .then((result) => {
+                .then((result: { [key: string]: unknown }) => {
                   const value = result[key] ?? options?.fallback;
                   // Use immediate setTimeout to ensure the callback is processed
                   setTimeout(() => {
                     callback(value, undefined);
                   }, 0);
                 })
-                .catch((err) => {
-                  console.error("Error in initial watch call:", err);
+                .catch((err: unknown) => {
+                  console.error("Error in initial watch call:", err as Error);
                 });
 
               // Return unsubscribe function
