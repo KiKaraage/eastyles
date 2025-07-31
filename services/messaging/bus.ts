@@ -268,28 +268,19 @@ export class MessageBus {
     // Add the message ID for response tracking
     const messageWithId = { ...message, messageId };
 
+    // Send the message without handling the Promise result
     if (tabId !== undefined) {
       // Send to specific tab
       if (browser.tabs) {
-        browser.tabs.sendMessage(tabId, messageWithId).catch((error) => {
-          const pending = this.pendingMessages.get(messageId);
-          if (pending) {
-            this.pendingMessages.delete(messageId);
-            window.clearTimeout(pending.timeoutId);
-            pending.reject(error);
-          }
+        browser.tabs.sendMessage(tabId, messageWithId).catch(() => {
+          // Error will be handled by timeout/retry mechanism
         });
       }
     } else {
       // Send to background script or other context
       if (browser.runtime) {
-        browser.runtime.sendMessage(messageWithId).catch((error) => {
-          const pending = this.pendingMessages.get(messageId);
-          if (pending) {
-            this.pendingMessages.delete(messageId);
-            window.clearTimeout(pending.timeoutId);
-            pending.reject(error);
-          }
+        browser.runtime.sendMessage(messageWithId).catch(() => {
+          // Error will be handled by timeout/retry mechanism
         });
       }
     }

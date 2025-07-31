@@ -77,11 +77,12 @@ function validatePopupMessage(message: unknown, type: string): boolean {
   }
 
   if (type === "GET_CURRENT_TAB" || type === "TOGGLE_THEME") {
-    return (
-      message === null ||
-      message === undefined ||
-      (typeof message === "object" && Object.keys(message).length === 0)
-    );
+    // These messages should only have the 'type' property
+    if (message && typeof message === "object") {
+      const keys = Object.keys(message);
+      return keys.length === 1 && keys[0] === "type";
+    }
+    return false;
   }
 
   return false;
@@ -117,11 +118,12 @@ function validateManagerMessage(message: unknown, type: string): boolean {
       return false;
     case "RESET_SETTINGS":
     case "GET_ALL_STYLES":
-      return (
-        message === null ||
-        message === undefined ||
-        (typeof message === "object" && Object.keys(message).length === 0)
-      );
+      // These messages should only have the 'type' property
+      if (message && typeof message === "object") {
+        const keys = Object.keys(message);
+        return keys.length === 1 && keys[0] === "type";
+      }
+      return false;
     default:
       return false;
   }
