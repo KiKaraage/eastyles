@@ -206,7 +206,16 @@ beforeAll(() => {
   // Assign the mock to global.browser
   Object.defineProperty(global, "browser", {
     writable: true,
-    value: mockBrowser,
+    value: {
+      ...mockBrowser,
+      runtime: {
+        ...mockBrowser.runtime,
+        getManifest: vi.fn().mockReturnValue({ version: "1.1.0" }),
+        onInstalled: {
+          addListener: vi.fn(),
+        },
+      },
+    },
   });
 
   // Mock matchMedia for theme testing
@@ -292,8 +301,59 @@ beforeAll(() => {
   });
 });
 
+// Mock the storage client
+vi.mock("../../services/storage/client", () => {
+  const getSettings = vi.fn().mockResolvedValue({});
+  const updateSettings = vi.fn().mockResolvedValue(undefined);
+  const resetSettings = vi.fn().mockResolvedValue(undefined);
+  const watchSettings = vi.fn();
+
+  // Add mockImplementation method to the mock functions
+  getSettings.mockImplementation =
+    getSettings.mockImplementation || ((...args) => getSettings(...args));
+  updateSettings.mockImplementation =
+    updateSettings.mockImplementation || ((...args) => updateSettings(...args));
+  resetSettings.mockImplementation =
+    resetSettings.mockImplementation || ((...args) => resetSettings(...args));
+
+  return {
+    storageClient: {
+      getSettings,
+      updateSettings,
+      resetSettings,
+      watchSettings,
+    },
+  };
+});
+
 // Clean up mocks and reset storage after each test
 afterEach(() => {
   vi.clearAllMocks();
   resetStorage();
+});
+
+// Mock the logger module
+vi.mock("../../services/errors/logger", () => {
+  const logger = {
+    info: vi.fn().mockReturnValue(undefined),
+    error: vi.fn().mockReturnValue(undefined),
+    warn: vi.fn().mockReturnValue(undefined),
+    debug: vi.fn().mockReturnValue(undefined),
+    logError: vi.fn().mockReturnValue(undefined),
+    setDebuggingEnabled: vi.fn().mockReturnValue(undefined),
+    getLogStats: vi.fn().mockReturnValue({}),
+  };
+  return { logger };
+});
+
+// Mock the ErrorService module
+vi.mock("../../services/errors/service", () => {
+  const ErrorService = vi.fn().mockImplementation(() => ({
+    handleError: vi.fn(),
+    addErrorListener: vi.fn(),
+    createRuntimeError: vi.fn(),
+    setDebuggingEnabled: vi.fn(),
+    getErrorAnalytics: vi.fn(),
+  }));
+  return { ErrorService };
 });

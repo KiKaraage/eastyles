@@ -3,13 +3,13 @@
  * Handles service worker initialization, lifecycle events, and service coordination.
  */
 
-// TODOs: Discover what's all this defineBackground about and why the model hallucinated to a nonexistent wxt/sandbox module
-// import { defineBackground } from "wxt/sandbox";
 import { browser } from "@wxt-dev/browser";
 import { errorService } from "../services/errors/service";
 import { logger } from "../services/errors/logger";
 import { reporter } from "../services/errors/reporter";
 import { messageBus } from "../services/messaging/bus";
+import { storageClient } from "../services/storage/client";
+import { migrationService } from "../services/lifecycle/migrations";
 import { ErrorSource } from "../services/errors/service";
 
 /**
@@ -49,17 +49,17 @@ async function initializeServices(): Promise<void> {
 
   try {
     // 1. Initialize error service first
-    errorService.setDebuggingEnabled(false); // Will be overridden by settings
+    errorService.setDebuggingEnabled(process.env.NODE_ENV === "development");
     backgroundState.services.errorService = true;
     logger.info(ErrorSource.BACKGROUND, "Error service initialized");
 
     // 2. Initialize logger
-    logger.setDebuggingEnabled(false); // Will be overridden by settings
+    logger.setDebuggingEnabled(process.env.NODE_ENV === "development");
     backgroundState.services.logger = true;
     logger.info(ErrorSource.BACKGROUND, "Logger service initialized");
 
     // 3. Initialize reporter
-    reporter.setDebuggingEnabled(false); // Will be overridden by settings
+    reporter.setDebuggingEnabled(process.env.NODE_ENV === "development");
     backgroundState.services.reporter = true;
     logger.info(ErrorSource.BACKGROUND, "Reporter service initialized");
 
@@ -118,8 +118,8 @@ async function handleInstallation(
         "First-time installation - setting up defaults",
       );
 
-      // TODO: Initialize default settings when storage service is available
-      // await storageService.initializeDefaults();
+      // Initialize default settings when storage service is available
+      await storageClient.resetSettings();
 
       logger.info(ErrorSource.BACKGROUND, "Default settings initialized");
     } else if (details.reason === "update") {
@@ -130,8 +130,8 @@ async function handleInstallation(
         to: browser.runtime.getManifest().version,
       });
 
-      // TODO: Run migrations when migration service is available
-      // await migrationService.runMigrations(previousVersion);
+      // Run migrations when migration service is available
+      await migrationService.runMigrations(previousVersion);
 
       logger.info(ErrorSource.BACKGROUND, "Migration completed successfully");
     }
@@ -139,6 +139,7 @@ async function handleInstallation(
     const extensionError = errorService.handleError(
       error instanceof Error ? error : new Error(String(error)),
       {
+        source: ErrorSource.BACKGROUND,
         installationReason: details.reason,
         previousVersion: details.previousVersion,
       },
@@ -173,7 +174,7 @@ async function handleStartup(): Promise<void> {
 
     // Log system status
     const healthScore = reporter.getHealthScore();
-    const errorStats = errorService.getErrorStats();
+    const errorStats = errorService.getErrorAnalytics();
 
     logger.info(ErrorSource.BACKGROUND, "Extension startup completed", {
       healthScore,
@@ -186,7 +187,10 @@ async function handleStartup(): Promise<void> {
   } catch (error: unknown) {
     errorService.handleError(
       error instanceof Error ? error : new Error(String(error)),
-      { phase: "startup" },
+      {
+        source: ErrorSource.BACKGROUND,
+        phase: "startup",
+      },
     );
   }
 }
@@ -250,10 +254,11 @@ function handleGlobalError(error: ErrorEvent | PromiseRejectionEvent): void {
 }
 
 /**
- * Main background script definition.
+ * Main background script definition using WXT.
  */
 export default defineBackground({
   persistent: false, // Use non-persistent background for Manifest V3
+  type: "module", // Use ES modules for better code splitting
 
   main: async () => {
     try {
@@ -294,7 +299,10 @@ export default defineBackground({
       try {
         errorService.handleError(
           error instanceof Error ? error : new Error(String(error)),
-          { phase: "critical_initialization" },
+          {
+            source: ErrorSource.BACKGROUND,
+            phase: "critical_initialization",
+          },
         );
       } catch {
         // Silent fallback - we've done all we can
