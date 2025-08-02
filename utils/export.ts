@@ -24,6 +24,20 @@ export interface ExportOptions {
 }
 
 /**
+ * Import options for data restoration
+ */
+export interface ImportOptions {
+  /** Whether to overwrite existing data (true) or merge (false) */
+  overwrite?: boolean;
+  /** Create backup before import */
+  createBackup?: boolean;
+  /** Custom backup filename prefix */
+  backupPrefix?: string;
+  /** Validate data integrity before import */
+  validateData?: boolean;
+}
+
+/**
  * Export result containing the data and metadata
  */
 export interface ExportResult {
@@ -39,6 +53,28 @@ export interface ExportResult {
   timestamp: number;
   /** Number of styles exported */
   styleCount: number;
+}
+
+/**
+ * Import result containing operation details
+ */
+export interface ImportResult {
+  /** Whether import was successful */
+  success: boolean;
+  /** Number of styles imported */
+  stylesImported: number;
+  /** Number of styles skipped/failed */
+  stylesSkipped: number;
+  /** Whether settings were updated */
+  settingsUpdated: boolean;
+  /** Backup filename if created */
+  backupFilename?: string;
+  /** Import operation timestamp */
+  timestamp: number;
+  /** Any warnings encountered */
+  warnings: string[];
+  /** Detected import data version */
+  importVersion?: string;
 }
 
 /**
@@ -387,7 +423,404 @@ export class ExportService {
   }
 
   /**
-   * Get export statistics
+   * Import data from JSON string or file content
+   */
+  static async importData(
+    jsonData: string,
+    options: ImportOptions = {},
+  ): Promise<ImportResult> {
+    const startTime = Date.now();
+    const result: ImportResult = {
+      success: false,
+      stylesImported: 0,
+      stylesSkipped: 0,
+      settingsUpdated: false,
+      timestamp: startTime,
+      warnings: [],
+    };
+
+    try {
+      logger.info(ErrorSource.BACKGROUND, "Starting data import");
+
+      // Parse JSON data
+      let parsedData: unknown;
+      try {
+        parsedData = JSON.parse(jsonData);
+      } catch (parseError) {
+        throw new ImportExportError(
+          "Invalid JSON format in import data",
+          ErrorSeverity.NOTIFY,
+          { originalError: parseError },
+        );
+      }
+
+      // Check if data is compressed
+      let importData: ExportData;
+      if (this.isCompressedFormat(parsedData)) {
+        const compressedObj = parsedData as {
+          compressed: boolean;
+          data: string;
+          originalSize: number;
+          compressedSize: number;
+        };
+
+        try {
+          const decompressedJson = await CompressionUtils.decompress(
+            compressedObj.data,
+          );
+          const decompressedData = JSON.parse(decompressedJson);
+
+          if (!this.isValidExportFormat(decompressedData)) {
+            throw new ImportExportError(
+              "Invalid export format in decompressed data",
+              ErrorSeverity.NOTIFY,
+            );
+          }
+
+          importData = decompressedData;
+          logger.info(
+            ErrorSource.BACKGROUND,
+            "Successfully decompressed import data",
+            {
+              originalSize: compressedObj.originalSize,
+              compressedSize: compressedObj.compressedSize,
+            },
+          );
+        } catch (error) {
+          throw new ImportExportError(
+            "Failed to decompress import data",
+            ErrorSeverity.NOTIFY,
+            { originalError: error },
+          );
+        }
+      } else {
+        // Validate uncompressed data
+        if (!this.isValidExportFormat(parsedData)) {
+          throw new ImportExportError(
+            "Invalid export data format",
+            ErrorSeverity.NOTIFY,
+          );
+        }
+        importData = parsedData;
+      }
+
+      // Validate data integrity if requested
+      if (options.validateData !== false) {
+        const validation = this.validateImportData(importData);
+        if (!validation.isValid) {
+          throw new ImportExportError(
+            `Import data validation failed: ${validation.errors.join(", ")}`,
+            ErrorSeverity.NOTIFY,
+          );
+        }
+        result.warnings.push(...validation.warnings);
+      }
+
+      // Create backup if requested
+      if (options.createBackup) {
+        try {
+          const backupResult = await this.exportData({
+            filename: options.backupPrefix || "pre-import-backup",
+            compress: true,
+          });
+          result.backupFilename = backupResult.filename;
+          logger.info(ErrorSource.BACKGROUND, "Created backup before import", {
+            filename: result.backupFilename,
+          });
+        } catch (backupError) {
+          logger.warn(ErrorSource.BACKGROUND, "Failed to create backup", {
+            error:
+              backupError instanceof Error
+                ? backupError.message
+                : String(backupError),
+          });
+          result.warnings.push("Failed to create backup before import");
+        }
+      }
+
+      // Perform import
+      const { overwrite = true } = options;
+
+      if (overwrite) {
+        // Overwrite mode: replace all data
+        await storageClient.importAll(importData, { overwrite: true });
+        result.stylesImported = importData.styles.length;
+        result.settingsUpdated = true;
+
+        logger.info(
+          ErrorSource.BACKGROUND,
+          "Import completed (overwrite mode)",
+          {
+            stylesImported: result.stylesImported,
+          },
+        );
+      } else {
+        // Merge mode: combine with existing data
+        const existingData = await storageClient.exportAll();
+        const existingStyleIds = new Set(existingData.styles.map((s) => s.id));
+
+        let newStyles = 0;
+        let updatedStyles = 0;
+
+        for (const style of importData.styles) {
+          if (existingStyleIds.has(style.id)) {
+            updatedStyles++;
+          } else {
+            newStyles++;
+          }
+        }
+
+        await storageClient.importAll(importData, { overwrite: false });
+        result.stylesImported = newStyles + updatedStyles;
+        result.settingsUpdated = true;
+
+        logger.info(ErrorSource.BACKGROUND, "Import completed (merge mode)", {
+          newStyles,
+          updatedStyles,
+          totalImported: result.stylesImported,
+        });
+      }
+
+      // Set import version if available
+      result.importVersion = importData.exportVersion || importData.version;
+      result.success = true;
+
+      logger.info(
+        ErrorSource.BACKGROUND,
+        "Data import completed successfully",
+        {
+          stylesImported: result.stylesImported,
+          settingsUpdated: result.settingsUpdated,
+          duration: Date.now() - startTime,
+          warnings: result.warnings.length,
+        },
+      );
+
+      return result;
+    } catch (error) {
+      logger.error(ErrorSource.BACKGROUND, "Failed to import data", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      if (error instanceof ImportExportError) {
+        throw error;
+      }
+
+      throw new ImportExportError(
+        "Failed to import data",
+        ErrorSeverity.NOTIFY,
+        {
+          originalError: error,
+          context: { options },
+        },
+      );
+    }
+  }
+
+  /**
+   * Import data from a File object (browser file input)
+   */
+  static async importFromFile(
+    file: File,
+    options: ImportOptions = {},
+  ): Promise<ImportResult> {
+    try {
+      logger.info(ErrorSource.BACKGROUND, "Starting file import", {
+        filename: file.name,
+        size: file.size,
+        type: file.type,
+      });
+
+      // Validate file type
+      if (
+        file.type &&
+        !file.type.includes("json") &&
+        !file.name.endsWith(".json")
+      ) {
+        throw new ImportExportError(
+          "Invalid file type. Please select a JSON file.",
+          ErrorSeverity.NOTIFY,
+        );
+      }
+
+      // Check file size (reasonable limit: 50MB)
+      const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+      if (file.size > MAX_FILE_SIZE) {
+        throw new ImportExportError(
+          "File too large. Maximum size is 50MB.",
+          ErrorSeverity.NOTIFY,
+        );
+      }
+
+      // Read file content
+      const fileContent = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result && typeof e.target.result === "string") {
+            resolve(e.target.result);
+          } else {
+            reject(new Error("Failed to read file content"));
+          }
+        };
+        reader.onerror = () => reject(new Error("File reading failed"));
+        reader.readAsText(file);
+      });
+
+      // Import the data
+      return await this.importData(fileContent, options);
+    } catch (error) {
+      logger.error(ErrorSource.BACKGROUND, "Failed to import from file", {
+        filename: file.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      if (error instanceof ImportExportError) {
+        throw error;
+      }
+
+      throw new ImportExportError(
+        "Failed to import from file",
+        ErrorSeverity.NOTIFY,
+        {
+          originalError: error,
+          context: { filename: file.name, size: file.size },
+        },
+      );
+    }
+  }
+
+  /**
+   * Validate import data for common issues
+   */
+  private static validateImportData(data: ExportData): {
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  } {
+    const result = {
+      isValid: true,
+      errors: [] as string[],
+      warnings: [] as string[],
+    };
+
+    try {
+      // Check for duplicate style IDs
+      const styleIds = new Set<string>();
+      const duplicateIds = new Set<string>();
+
+      for (const style of data.styles) {
+        if (styleIds.has(style.id)) {
+          duplicateIds.add(style.id);
+          result.warnings.push(`Duplicate style ID found: ${style.id}`);
+        } else {
+          styleIds.add(style.id);
+        }
+      }
+
+      // Check for very old export versions
+      const exportVersion = data.exportVersion || "0.0.0";
+      const [major] = exportVersion.split(".").map(Number);
+
+      if (major < 1) {
+        result.warnings.push(
+          `Importing from older export version (${exportVersion}). Some features may not be preserved.`,
+        );
+      }
+
+      // Check for styles with empty names or code
+      let emptyStyles = 0;
+      for (const style of data.styles) {
+        if (!style.name.trim() || !style.code.trim()) {
+          emptyStyles++;
+        }
+      }
+
+      if (emptyStyles > 0) {
+        result.warnings.push(`${emptyStyles} styles have empty names or code`);
+      }
+
+      // Check for very large styles (potential performance issues)
+      let largeStyles = 0;
+      const LARGE_STYLE_THRESHOLD = 100 * 1024; // 100KB
+
+      for (const style of data.styles) {
+        if (style.code.length > LARGE_STYLE_THRESHOLD) {
+          largeStyles++;
+        }
+      }
+
+      if (largeStyles > 0) {
+        result.warnings.push(
+          `${largeStyles} styles are very large (>100KB) and may impact performance`,
+        );
+      }
+
+      // Check timestamp validity
+      const now = Date.now();
+      if (data.timestamp > now) {
+        result.warnings.push("Export timestamp is in the future");
+      }
+
+      // Check for very old exports (more than 1 year)
+      const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
+      if (data.timestamp < oneYearAgo) {
+        result.warnings.push("Import data is more than 1 year old");
+      }
+    } catch (error) {
+      result.errors.push(
+        `Validation error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      result.isValid = false;
+    }
+
+    return result;
+  }
+
+  /**
+   * Get import/export statistics
+   */
+  static async getImportExportStats(): Promise<{
+    totalStyles: number;
+    estimatedExportSize: number;
+    canImport: boolean;
+    canExport: boolean;
+    supportedFormats: string[];
+    compressionSupported: boolean;
+  }> {
+    try {
+      const exportData = await storageClient.exportAll();
+      const jsonSize = JSON.stringify(exportData).length;
+
+      return {
+        totalStyles: exportData.styles.length,
+        estimatedExportSize: jsonSize,
+        canImport: true,
+        canExport: true,
+        supportedFormats: ["json"],
+        compressionSupported: "CompressionStream" in window,
+      };
+    } catch (error) {
+      logger.error(
+        ErrorSource.BACKGROUND,
+        "Failed to get import/export statistics",
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+
+      return {
+        totalStyles: 0,
+        estimatedExportSize: 0,
+        canImport: false,
+        canExport: false,
+        supportedFormats: [],
+        compressionSupported: false,
+      };
+    }
+  }
+
+  /**
+   * Get export statistics (backward compatibility)
    */
   static async getExportStats(): Promise<{
     totalStyles: number;
@@ -416,6 +849,106 @@ export class ExportService {
   }
 }
 
+/**
+ * Complete import/export service combining export and import functionality
+ */
+class ImportExportService extends ExportService {
+  /**
+   * Perform a complete backup and restore cycle for testing data integrity
+   */
+  static async testDataIntegrity(): Promise<{
+    success: boolean;
+    errors: string[];
+    warnings: string[];
+    duration: number;
+  }> {
+    const startTime = Date.now();
+    const result = {
+      success: false,
+      errors: [] as string[],
+      warnings: [] as string[],
+      duration: 0,
+    };
+
+    try {
+      // Get original data
+      const originalData = await storageClient.exportAll();
+      const originalHash = this.hashData(originalData);
+
+      // Export data
+      const exportResult = await this.exportData({ compress: true });
+
+      // Create a temporary backup of current data
+      const tempBackup = await storageClient.exportAll();
+
+      // Clear all data
+      await storageClient.resetAll();
+
+      // Import the exported data back
+      const importResult = await this.importData(exportResult.data, {
+        overwrite: true,
+        validateData: true,
+      });
+
+      // Get restored data
+      const restoredData = await storageClient.exportAll();
+      const restoredHash = this.hashData(restoredData);
+
+      // Compare data integrity
+      if (originalHash === restoredHash) {
+        result.success = true;
+        logger.info(ErrorSource.BACKGROUND, "Data integrity test passed");
+      } else {
+        result.errors.push(
+          "Data integrity test failed: restored data differs from original",
+        );
+        logger.error(ErrorSource.BACKGROUND, "Data integrity test failed", {
+          originalHash,
+          restoredHash,
+        });
+      }
+
+      // Restore original data
+      await storageClient.importAll(tempBackup, { overwrite: true });
+
+      // Add any warnings from import
+      result.warnings.push(...importResult.warnings);
+    } catch (error) {
+      result.errors.push(
+        `Integrity test error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      logger.error(ErrorSource.BACKGROUND, "Data integrity test error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    result.duration = Date.now() - startTime;
+    return result;
+  }
+
+  /**
+   * Create a simple hash of export data for integrity checking
+   */
+  private static hashData(data: ExportData): string {
+    // Create a deterministic string representation for hashing
+    const hashableData = {
+      settingsCount: Object.keys(data.settings).length,
+      stylesCount: data.styles.length,
+      totalCodeLength: data.styles.reduce(
+        (sum, style) => sum + style.code.length,
+        0,
+      ),
+      totalDomains: data.styles.reduce(
+        (sum, style) => sum + style.domains.length,
+        0,
+      ),
+      enabledStyles: data.styles.filter((s) => s.enabled).length,
+    };
+
+    return btoa(JSON.stringify(hashableData));
+  }
+}
+
 // Export utilities for external use
-export { CompressionUtils };
+export { CompressionUtils, ImportExportService };
 export default ExportService;
