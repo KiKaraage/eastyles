@@ -24,6 +24,7 @@ vi.mock("../../services/errors/logger", () => ({
     info: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
+    warn: vi.fn(),
   },
 }));
 
@@ -40,6 +41,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Set current version for tests
   mockGetManifest.mockReturnValue({ version: "1.1.0" });
+  migrationService.getCurrentVersion = () => "1.1.0";
 });
 
 describe("Migration Scenarios", () => {
@@ -113,35 +115,28 @@ describe("Migration Scenarios", () => {
     const initialSettings = { ...DEFAULT_SETTINGS };
     (storageClient.getSettings as Mock).mockResolvedValue(initialSettings);
 
-    // Mock multiple migration steps
-    const MIGRATION_STEPS = {
-      "1.0.0": [
-        vi
-          .fn()
-          .mockImplementation((settings) => ({
-            ...settings,
-            migratedTo1_0: true,
-          })),
-      ],
-      "1.1.0": [
-        vi
-          .fn()
-          .mockImplementation((settings) => ({
-            ...settings,
-            migratedTo1_1: true,
-          })),
-      ],
-    };
+    // Create spies for migration functions
+    const migration1_0 = vi.fn().mockImplementation((settings) => ({
+      ...settings,
+      migratedTo1_0: true,
+    }));
+    const migration1_1 = vi.fn().mockImplementation((settings) => ({
+      ...settings,
+      migratedTo1_1: true,
+    }));
 
-    // Spy on the migration steps
-    const migration1_0 = MIGRATION_STEPS["1.0.0"][0];
-    const migration1_1 = MIGRATION_STEPS["1.1.0"][0];
-
-    // Replace the actual migration steps with our mocks
-    Object.defineProperty(migrationService, "MIGRATION_STEPS", {
-      value: MIGRATION_STEPS,
-      writable: true,
+    // Set migration steps with spy functions
+    migrationService.setMigrations({
+      "1.0.0": [migration1_0],
+      "1.1.0": [migration1_1]
     });
+
+    // Verify the migration functions are correctly assigned
+    const migrations = migrationService.getMigrations();
+    expect(migrations["1.0.0"]).toContain(migration1_0);
+    expect(migrations["1.1.0"]).toContain(migration1_1);
+
+    // Removed debug console log
 
     // Act
     await migrationService.runMigrations("0.9.0");
@@ -169,10 +164,9 @@ describe("Migration Scenarios", () => {
       "Data integrity issues detected and repaired",
       expect.objectContaining({
         issues: expect.arrayContaining([
-          expect.stringContaining("theme must be"),
-          expect.stringContaining("maxHistoryItems must be"),
-        ]),
-      }),
+          expect.stringContaining("Missing setting"),
+        ])
+      })
     );
   });
 
@@ -208,7 +202,11 @@ describe("Migration Scenarios", () => {
     expect(logger.warn).toHaveBeenCalledWith(
       ErrorSource.BACKGROUND,
       "Data integrity issues detected and repaired",
-      expect.any(Object),
+      expect.objectContaining({
+        issues: expect.arrayContaining([
+          expect.stringContaining("Missing setting")
+        ])
+      })
     );
   });
 

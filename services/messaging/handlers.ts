@@ -62,7 +62,7 @@ const handleGetCurrentTab: MessageHandler = async (_message, tabId) => {
       active: true,
       currentWindow: true,
     });
-    return tabs[0] ? { id: tabs[0].id } : null;
+    return tabs && tabs.length > 0 ? { id: tabs[0].id } : null;
   } catch (error: unknown) {
     throw new Error(
       `Failed to get current tab: ${error instanceof Error ? error.message : "Unknown error"}`,

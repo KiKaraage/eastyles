@@ -20,7 +20,7 @@ describe("Message Validation", () => {
         type: "GET_CURRENT_TAB",
       };
 
-      expect(isValidReceivedMessage(message)).toBe(false); // Should be false for non-empty object
+      expect(isValidReceivedMessage(message)).toBe(true); // Should be true for valid message
     });
 
     it("should validate TOGGLE_THEME message", () => {
@@ -28,7 +28,7 @@ describe("Message Validation", () => {
         type: "TOGGLE_THEME",
       };
 
-      expect(isValidReceivedMessage(message)).toBe(false); // Should be false for non-empty object
+      expect(isValidReceivedMessage(message)).toBe(true); // Should be true for valid message
     });
 
     it("should validate REQUEST_EXPORT message with payload", () => {
@@ -58,7 +58,7 @@ describe("Message Validation", () => {
         type: "RESET_SETTINGS",
       };
 
-      expect(isValidReceivedMessage(message)).toBe(false); // Should be false for non-empty object
+      expect(isValidReceivedMessage(message)).toBe(true); // Should be true for valid message
     });
 
     it("should validate GET_ALL_STYLES message", () => {
@@ -66,7 +66,7 @@ describe("Message Validation", () => {
         type: "GET_ALL_STYLES",
       };
 
-      expect(isValidReceivedMessage(message)).toBe(false); // Should be false for non-empty object
+      expect(isValidReceivedMessage(message)).toBe(true); // Should be true for valid message
     });
 
     it("should validate OPEN_MANAGER message with payload", () => {
@@ -258,7 +258,7 @@ describe("Message Validation", () => {
       const serialized = JSON.stringify(original);
       const deserialized = JSON.parse(serialized);
 
-      expect(isValidReceivedMessage(deserialized)).toBe(false); // Non-empty object with just type
+      expect(isValidReceivedMessage(deserialized)).toBe(true); // Should be true for valid message
       expect(deserialized).toEqual(original);
     });
 

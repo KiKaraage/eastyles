@@ -162,7 +162,7 @@ describe("Message Handler Error Propagation", () => {
         const message: ReceivedMessages = { type: "GET_CURRENT_TAB" };
 
         const result = await handleGetCurrentTab(message);
-        expect(result).toBeNull();
+        expect(result).toEqual(null);
       });
     });
 

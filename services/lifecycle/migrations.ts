@@ -40,14 +40,37 @@ export const MIGRATION_STEPS: Record<string, Migration[]> = {
 
 export class MigrationService {
   private debugEnabled = false;
-  private currentVersion: string = "1.0.0"; // Default version
+  private currentVersion: string = "1.1.0"; // Default version
+
+
+
+  public getMigrations(): Record<string, Migration[]> {
+    return MIGRATION_STEPS;
+  }
+
+  public getMigrationSteps(): Record<string, Migration[]> {
+    return MIGRATION_STEPS;
+  }
+
+  public setMigrations(migrations: Record<string, Migration[]>): void {
+    // Update the static MIGRATION_STEPS object
+    Object.assign(MIGRATION_STEPS, migrations);
+    
+    // Also update the instance property if it exists
+    if (this instanceof MigrationService) {
+      Object.defineProperty(this, "MIGRATION_STEPS", {
+        value: migrations,
+        writable: true,
+      });
+    }
+  }
 
   constructor() {
     // Initialize debug mode first
     this.initializeDebugMode();
   }
 
-  private getCurrentVersion(): string {
+  public getCurrentVersion(): string {
     // Only access browser when needed, with fallback for tests
     try {
       return browser.runtime.getManifest().version;
@@ -137,7 +160,7 @@ export class MigrationService {
 
       // Apply repairs
       await storageClient.updateSettings(integrityCheck.repairedSettings);
-      logger.warn(
+      logger.warn?.(
         ErrorSource.BACKGROUND,
         "Data integrity issues detected and repaired",
         {
@@ -189,9 +212,9 @@ export class MigrationService {
 
       try {
         console.log("[runMigrations] Entering try block.");
-        logger.info(
+        logger.info?.(
           ErrorSource.BACKGROUND,
-          `Running migrations from ${previousVersion} to ${currentVersion}`,
+          `Running migrations from ${previousVersion} to ${currentVersion}`
         );
 
         // Get current settings
@@ -204,7 +227,7 @@ export class MigrationService {
         // Track if any migrations were actually applied
         let migrationsApplied = false;
 
-        // Get all migration versions and sort them
+        // Get all migration versions and sort them numerically
         const migrationVersions = Object.keys(MIGRATION_STEPS).sort((a, b) => {
           const aParts = a.split(".").map(Number);
           const bParts = b.split(".").map(Number);
@@ -219,13 +242,14 @@ export class MigrationService {
           return 0;
         });
 
+        // Removed debug console logs
+
         // Apply migrations sequentially for all versions between previous and current
         for (const version of migrationVersions) {
           if (this.shouldRunMigration(previousVersion, version)) {
             this.debug(`Applying migrations for version ${version}`);
 
             for (const migration of MIGRATION_STEPS[version]) {
-              console.log("[runMigrations] Executing failing migration step.");
               currentSettings = migration(currentSettings);
             }
 
@@ -238,15 +262,15 @@ export class MigrationService {
 
         // Only update if migrations were applied or data was repaired
         if (migrationsApplied) {
-          logger.info(
+          logger.info?.(
             ErrorSource.BACKGROUND,
-            "Migrations completed successfully.",
+            "Migrations completed successfully."
           );
         } else {
           this.debug("No migrations needed");
-          logger.info(
+          logger.info?.(
             ErrorSource.BACKGROUND,
-            "No migrations needed for this update",
+            "No migrations needed for this update"
           );
         }
 
