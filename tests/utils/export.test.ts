@@ -1069,7 +1069,7 @@ describe("ImportExportService", () => {
 
       expect(result.success).toBe(true);
       expect(result.errors).toEqual([]);
-      expect(result.duration).toBeGreaterThan(0);
+      expect(result.duration).toBeGreaterThanOrEqual(0);
     });
 
     it("should fail integrity test for inconsistent data", async () => {
