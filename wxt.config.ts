@@ -7,6 +7,11 @@ export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   manifest: {
     permissions: ["storage"],
+    browser_specific_settings: {
+      gecko: {
+        id: "eastyles@kikaraage",
+      },
+    },
   },
   vite: () => ({
     plugins: [tailwindcss() as unknown as PluginOption],

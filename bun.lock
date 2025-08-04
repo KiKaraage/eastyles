@@ -11,7 +11,7 @@
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
         "tailwindcss": "^4.1.11",
-        "vitest": "^3.2.4",
+        "vitest": "^3.2.4"
       },
       "devDependencies": {
         "@types/react": "^19.1.2",
@@ -24,14 +24,14 @@
         "eslint-plugin-react-hooks": "^5.2.0",
         "typescript": "^5.8.3",
         "typescript-eslint": "^8.38.0",
-        "wxt": "^0.20.6",
-      },
-    },
+        "wxt": "^0.20.6"
+      }
+    }
   },
   "trustedDependencies": [
     "@tailwindcss/oxide",
     "esbuild",
-    "spawn-sync",
+    "spawn-sync"
   ],
   "packages": {
     "@1natsu/wait-element": ["@1natsu/wait-element@4.1.2", "", { "dependencies": { "defu": "^6.1.4", "many-keys-map": "^2.0.1" } }, "sha512-qWxSJD+Q5b8bKOvESFifvfZ92DuMsY+03SBNjTO34ipJLP6mZ9yK4bQz/vlh48aEQXoJfaZBqUwKL5BdI5iiWw=="],

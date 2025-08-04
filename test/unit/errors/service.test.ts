@@ -1,5 +1,9 @@
 /// <reference types="vitest" />
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
+
+// Unmock the service to test the actual implementation
+vi.unmock("@services/errors/service");
+
 import {
   ErrorService,
   errorService,
@@ -20,7 +24,7 @@ import {
   ErrorSource,
   withErrorHandling,
   withSyncErrorHandling,
-} from "../../../services/errors/service";
+} from "@services/errors/service";
 
 // Mock the reporter to avoid circular dependencies
 vi.mock("../../../services/errors/reporter", () => ({

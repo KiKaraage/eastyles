@@ -302,26 +302,15 @@ beforeAll(() => {
 });
 
 // Mock the storage client
-vi.mock("../../services/storage/client", () => {
-  const getSettings = vi.fn().mockResolvedValue({});
-  const updateSettings = vi.fn().mockResolvedValue(undefined);
-  const resetSettings = vi.fn().mockResolvedValue(undefined);
-  const watchSettings = vi.fn();
-
-  // Add mockImplementation method to the mock functions
-  getSettings.mockImplementation =
-    getSettings.mockImplementation || ((...args) => getSettings(...args));
-  updateSettings.mockImplementation =
-    updateSettings.mockImplementation || ((...args) => updateSettings(...args));
-  resetSettings.mockImplementation =
-    resetSettings.mockImplementation || ((...args) => resetSettings(...args));
-
+vi.mock("@services/storage/client", async () => {
+  const actual = await vi.importActual("@services/storage/client");
   return {
+    ...actual,
     storageClient: {
-      getSettings,
-      updateSettings,
-      resetSettings,
-      watchSettings,
+      getSettings: vi.fn().mockResolvedValue({}),
+      updateSettings: vi.fn().mockResolvedValue(undefined),
+      resetSettings: vi.fn().mockResolvedValue(undefined),
+      watchSettings: vi.fn(),
     },
   };
 });
@@ -333,7 +322,7 @@ afterEach(() => {
 });
 
 // Mock the logger module
-vi.mock("../../services/errors/logger", () => {
+vi.mock("@services/errors/logger", () => {
   const logger = {
     info: vi.fn().mockReturnValue(undefined),
     error: vi.fn().mockReturnValue(undefined),
@@ -347,7 +336,8 @@ vi.mock("../../services/errors/logger", () => {
 });
 
 // Mock the ErrorService module
-vi.mock("../../services/errors/service", () => {
+vi.mock("@services/errors/service", async () => {
+  const actual = await vi.importActual("@services/errors/service");
   const ErrorService = vi.fn().mockImplementation(() => ({
     handleError: vi.fn(),
     addErrorListener: vi.fn(),
@@ -355,5 +345,9 @@ vi.mock("../../services/errors/service", () => {
     setDebuggingEnabled: vi.fn(),
     getErrorAnalytics: vi.fn(),
   }));
-  return { ErrorService };
+  return {
+    ...actual,
+    ErrorService,
+    errorService: new ErrorService(),
+  };
 });
