@@ -311,7 +311,7 @@ export function useErrorRecovery() {
     console.log("Retrying last operation...");
   }, []);
 
-  const dismissError = useCallback((id: string) => {
+  const dismissError = useCallback((_id: string) => {
     clearErrors();
   }, [clearErrors]);
 

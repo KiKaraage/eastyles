@@ -36,23 +36,26 @@ export function useStorage<T>(
 ): UseStorageReturn<T> {
   const [data, setDataState] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [storageError, setStorageError] = useState<Error | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const previousDataRef = useRef<T | null>(null);
 
   // Load initial data
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
+    setStorageError(null);
 
     try {
       const storedData = await storageClient.getSettings();
-      const value = (storedData as any)[key] ?? defaultValue;
+      const value =
+        storedData && typeof storedData === "object" && key in storedData
+          ? ((storedData as unknown as Record<string, unknown>)[key] as T)
+          : defaultValue;
       previousDataRef.current = value;
       setDataState(value);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
+      const caughtError = err instanceof Error ? err : new Error(String(err));
+      setStorageError(caughtError);
       setDataState(defaultValue);
     } finally {
       setIsLoading(false);
@@ -60,11 +63,10 @@ export function useStorage<T>(
   }, [key, defaultValue]);
 
   // Update stored data
-  const setData = useCallback(async (value: T) => {
-    try {
-      const currentSettings = await storageClient.getSettings();
+  const setData = useCallback(
+    async (value: T) => {
       const updatedSettings = {
-        ...currentSettings,
+        ...(await storageClient.getSettings()),
         [key]: value,
       };
 
@@ -72,12 +74,9 @@ export function useStorage<T>(
       previousDataRef.current = value;
       setDataState(value);
       setIsDirty(false);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      throw error;
-    }
-  }, [key]);
+    },
+    [key],
+  );
 
   // Refresh data from storage
   const refresh = useCallback(async () => {
@@ -86,28 +85,22 @@ export function useStorage<T>(
 
   // Reset to default value
   const reset = useCallback(async () => {
-    try {
-      const currentSettings = await storageClient.getSettings();
-      const updatedSettings = {
-        ...currentSettings,
-        [key]: defaultValue,
-      };
+    const updatedSettings = {
+      ...(await storageClient.getSettings()),
+      [key]: defaultValue,
+    };
 
-      await storageClient.updateSettings(updatedSettings);
-      previousDataRef.current = defaultValue;
-      setDataState(defaultValue);
-      setIsDirty(false);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      throw error;
-    }
+    await storageClient.updateSettings(updatedSettings);
+    previousDataRef.current = defaultValue;
+    setDataState(defaultValue);
+    setIsDirty(false);
   }, [key, defaultValue]);
 
   // Check if data has changed
   useEffect(() => {
     if (previousDataRef.current && data) {
-      const hasChanged = JSON.stringify(previousDataRef.current) !== JSON.stringify(data);
+      const hasChanged =
+        JSON.stringify(previousDataRef.current) !== JSON.stringify(data);
       setIsDirty(hasChanged);
     }
   }, [data]);
@@ -120,7 +113,7 @@ export function useStorage<T>(
   return {
     data,
     isLoading,
-    error,
+    error: storageError,
     setData,
     refresh,
     reset,
@@ -132,10 +125,11 @@ export function useStorage<T>(
  * Hook specifically for theme mode storage
  */
 export function useThemeMode() {
-  const { data: themeMode, setData: setThemeMode, ...rest } = useStorage(
-    "themeMode",
-    "system" as "light" | "dark" | "system",
-  );
+  const {
+    data: themeMode,
+    setData: setThemeMode,
+    ...rest
+  } = useStorage("themeMode", "system" as "light" | "dark" | "system");
 
   return {
     themeMode: themeMode || "system",
@@ -148,10 +142,11 @@ export function useThemeMode() {
  * Hook specifically for debug mode storage
  */
 export function useDebugMode() {
-  const { data: debugMode, setData: setDebugMode, ...rest } = useStorage(
-    "isDebuggingEnabled",
-    false,
-  );
+  const {
+    data: debugMode,
+    setData: setDebugMode,
+    ...rest
+  } = useStorage("isDebuggingEnabled", false);
 
   return {
     debugMode: debugMode ?? false,
@@ -166,51 +161,39 @@ export function useDebugMode() {
 export function useSettings() {
   const [settings, setSettingsState] = useState<SettingsStorage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
 
   // Load settings
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
 
     try {
       const settingsData = await storageClient.getSettings();
       setSettingsState(settingsData);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      setSettingsState(storageClient.getSettings() as any);
+    } catch {
+      // If we can't load settings, use the client's default settings
+      setSettingsState(await storageClient.getSettings());
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   // Update settings
-  const updateSettings = useCallback(async (updates: Partial<SettingsStorage>) => {
-    try {
+  const updateSettings = useCallback(
+    async (updates: Partial<SettingsStorage>) => {
       await storageClient.updateSettings(updates);
       if (settings) {
         setSettingsState({ ...settings, ...updates });
       } else {
         await loadSettings();
       }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      throw error;
-    }
-  }, [settings, loadSettings]);
+    },
+    [settings, loadSettings],
+  );
 
   // Reset settings
   const resetSettings = useCallback(async () => {
-    try {
-      await storageClient.resetSettings();
-      await loadSettings();
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      throw error;
-    }
+    await storageClient.resetSettings();
+    await loadSettings();
   }, [loadSettings]);
 
   // Load settings on mount
@@ -230,7 +213,7 @@ export function useSettings() {
   return {
     settings,
     isLoading,
-    error,
+    error: null,
     updateSettings,
     resetSettings,
     refresh: loadSettings,
@@ -245,11 +228,21 @@ export function useStorageWatcher<T>(
   callback: (newValue: T, oldValue?: T) => void,
 ) {
   useEffect(() => {
-    const unsubscribe = storageClient.watchSettings((newSettings, oldSettings) => {
-      const newValue = (newSettings as any)[key];
-      const oldValue = oldSettings ? (oldSettings as any)[key] : undefined;
-      callback(newValue, oldValue);
-    });
+    const unsubscribe = storageClient.watchSettings(
+      (newSettings, oldSettings) => {
+        const newValue =
+          newSettings && typeof newSettings === "object" && key in newSettings
+            ? ((newSettings as unknown as Record<string, unknown>)[key] as T)
+            : undefined;
+        const oldValue =
+          oldSettings && typeof oldSettings === "object" && key in oldSettings
+            ? ((oldSettings as unknown as Record<string, unknown>)[key] as T)
+            : undefined;
+        if (newValue !== undefined) {
+          callback(newValue, oldValue);
+        }
+      },
+    );
 
     return unsubscribe;
   }, [key, callback]);

@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   errorService,
   ExtensionError,
-  ErrorSeverity,
   ErrorSource,
-  RuntimeError,
 } from "../services/errors/service";
 
 interface ErrorState {
@@ -82,6 +80,41 @@ export function useErrorHandling(
     (() => Promise<void>) | null
   >(null);
 
+  const handleErrorRef =
+    useRef<
+      (error: Error | ExtensionError, context?: Record<string, unknown>) => void
+    >();
+
+  // Retry the failed operation
+  const retry = useCallback(async () => {
+    if (!retryCallback || errorState.retryCount >= maxRetries) {
+      return;
+    }
+
+    setErrorState((prev) => ({
+      error: null,
+      isLoading: true,
+      retryCount: prev.retryCount + 1,
+    }));
+
+    try {
+      await retryCallback();
+      setErrorState((prev) => ({
+        ...prev,
+        isLoading: false,
+      }));
+      onRecover?.();
+    } catch (error) {
+      handleErrorRef.current?.(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          isRetry: true,
+          retryAttempt: errorState.retryCount + 1,
+        },
+      );
+    }
+  }, [retryCallback, errorState.retryCount, maxRetries, onRecover]);
+
   // Handle error with proper ExtensionError creation and preservation
   const handleError = useCallback(
     (error: Error | ExtensionError, context?: Record<string, unknown>) => {
@@ -112,7 +145,7 @@ export function useErrorHandling(
           1000 * Math.pow(2, errorState.retryCount),
           5000,
         );
-        setTimeout(() => retry(), retryDelay);
+        setTimeout(() => handleErrorRef.current?.(error), retryDelay);
       }
     },
     [
@@ -121,42 +154,15 @@ export function useErrorHandling(
       autoRetry,
       maxRetries,
       errorState.retryCount,
-      retryCallback,
+      // retryCallback, // Removed from dependency array
+      // retry, // Removed from dependency array
     ],
   );
 
-  // Retry the failed operation
-  const retry = useCallback(async () => {
-    if (!retryCallback || errorState.retryCount >= maxRetries) {
-      return;
-    }
-
-    setErrorState((prev) => ({
-      error: null,
-      isLoading: true,
-      retryCount: prev.retryCount + 1,
-    }));
-
-    try {
-      await retryCallback();
-      setErrorState((prev) => ({
-        ...prev,
-        isLoading: false,
-      }));
-      onRecover?.();
-    } catch (error) {
-      handleError(error instanceof Error ? error : new Error(String(error)), {
-        isRetry: true,
-        retryAttempt: errorState.retryCount + 1,
-      });
-    }
-  }, [
-    retryCallback,
-    errorState.retryCount,
-    maxRetries,
-    onRecover,
-    handleError,
-  ]);
+  // Update the ref whenever handleError changes
+  useEffect(() => {
+    handleErrorRef.current = handleError;
+  }, [handleError]);
 
   // Clear the current error
   const clearError = useCallback(() => {

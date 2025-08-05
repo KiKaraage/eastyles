@@ -42,8 +42,6 @@ export class MigrationService {
   private debugEnabled = false;
   private currentVersion: string = "1.1.0"; // Default version
 
-
-
   public getMigrations(): Record<string, Migration[]> {
     return MIGRATION_STEPS;
   }
@@ -55,7 +53,7 @@ export class MigrationService {
   public setMigrations(migrations: Record<string, Migration[]>): void {
     // Update the static MIGRATION_STEPS object
     Object.assign(MIGRATION_STEPS, migrations);
-    
+
     // Also update the instance property if it exists
     if (this instanceof MigrationService) {
       Object.defineProperty(this, "MIGRATION_STEPS", {
@@ -73,8 +71,10 @@ export class MigrationService {
   public getCurrentVersion(): string {
     // Only access browser when needed, with fallback for tests
     try {
-      return browser.runtime.getManifest().version;
-    } catch (error) {
+      const manifest = browser.runtime.getManifest();
+      return manifest.version ?? this.currentVersion;
+      // manifest.version is guaranteed to be a string by the browser API
+    } catch {
       // Fallback for test environment
       return this.currentVersion;
     }
@@ -84,7 +84,7 @@ export class MigrationService {
     try {
       const settings = await storageClient.getSettings();
       this.debugEnabled = settings?.isDebuggingEnabled ?? false;
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(
         "Failed to initialize debug mode for MigrationService:",
         error,
@@ -125,14 +125,13 @@ export class MigrationService {
     });
 
     // Validate data types and ranges
-    if (
-      "themeMode" in repairedSettings &&
-      !["light", "dark", "system"].includes(
-        (repairedSettings as any).themeMode ?? "",
-      )
-    ) {
-      issues.push('themeMode must be "light", "dark", or "system"');
-      (repairedSettings as any).themeMode = DEFAULT_SETTINGS.themeMode;
+    if ("themeMode" in repairedSettings) {
+      const themeMode = (repairedSettings as { themeMode?: string }).themeMode;
+      if (themeMode && !["light", "dark", "system"].includes(themeMode)) {
+        issues.push('themeMode must be "light", "dark", or "system"');
+        (repairedSettings as { themeMode: string }).themeMode =
+          DEFAULT_SETTINGS.themeMode as string;
+      }
     }
 
     return {
@@ -181,6 +180,7 @@ export class MigrationService {
    */
   private shouldRunMigration(fromVersion: string, toVersion: string): boolean {
     // Handle edge cases
+    if (!fromVersion || !toVersion) return false;
     if (fromVersion === toVersion) return false;
     if (fromVersion === "0.0.0") return true; // Always run migrations for new installations
 
@@ -205,90 +205,87 @@ export class MigrationService {
    * @param previousVersion The version from which the extension is being updated.
    */
   async runMigrations(previousVersion: string): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      this.debug("Starting migrations from version:", previousVersion);
-      const currentVersion = this.getCurrentVersion();
-      console.log("[runMigrations] Promise started.");
+    this.debug("Starting migrations from version:", previousVersion);
+    const currentVersion = this.getCurrentVersion();
+    console.log("[runMigrations] Promise started.");
 
-      try {
-        console.log("[runMigrations] Entering try block.");
+    try {
+      console.log("[runMigrations] Entering try block.");
+      logger.info?.(
+        ErrorSource.BACKGROUND,
+        `Running migrations from ${previousVersion} to ${currentVersion}`,
+      );
+
+      // Get current settings
+      let currentSettings = await storageClient.getSettings();
+
+      // Validate and repair data integrity before migrations
+      this.debug("Validating and repairing data integrity");
+      currentSettings = await this.repairSettings(currentSettings);
+
+      // Track if any migrations were actually applied
+      let migrationsApplied = false;
+
+      // Get all migration versions and sort them numerically
+      const migrationVersions = Object.keys(MIGRATION_STEPS).sort((a, b) => {
+        const aParts = a.split(".").map(Number);
+        const bParts = b.split(".").map(Number);
+
+        for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+          const aVal = i < aParts.length ? aParts[i] : 0;
+          const bVal = i < bParts.length ? bParts[i] : 0;
+
+          if (aVal !== bVal) return aVal - bVal;
+        }
+
+        return 0;
+      });
+
+      // Removed debug console logs
+
+      // Apply migrations sequentially for all versions between previous and current
+      for (const version of migrationVersions) {
+        if (this.shouldRunMigration(previousVersion, version)) {
+          this.debug(`Applying migrations for version ${version}`);
+
+          for (const migration of MIGRATION_STEPS[version]) {
+            currentSettings = migration(currentSettings);
+          }
+
+          migrationsApplied = true;
+
+          // Update storage after each version to prevent data loss if migration fails midway
+          await storageClient.updateSettings(currentSettings);
+        }
+      }
+
+      // Only update if migrations were applied or data was repaired
+      if (migrationsApplied) {
         logger.info?.(
           ErrorSource.BACKGROUND,
-          `Running migrations from ${previousVersion} to ${currentVersion}`
+          "Migrations completed successfully.",
         );
-
-        // Get current settings
-        let currentSettings = await storageClient.getSettings();
-
-        // Validate and repair data integrity before migrations
-        this.debug("Validating and repairing data integrity");
-        currentSettings = await this.repairSettings(currentSettings);
-
-        // Track if any migrations were actually applied
-        let migrationsApplied = false;
-
-        // Get all migration versions and sort them numerically
-        const migrationVersions = Object.keys(MIGRATION_STEPS).sort((a, b) => {
-          const aParts = a.split(".").map(Number);
-          const bParts = b.split(".").map(Number);
-
-          for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-            const aVal = i < aParts.length ? aParts[i] : 0;
-            const bVal = i < bParts.length ? bParts[i] : 0;
-
-            if (aVal !== bVal) return aVal - bVal;
-          }
-
-          return 0;
-        });
-
-        // Removed debug console logs
-
-        // Apply migrations sequentially for all versions between previous and current
-        for (const version of migrationVersions) {
-          if (this.shouldRunMigration(previousVersion, version)) {
-            this.debug(`Applying migrations for version ${version}`);
-
-            for (const migration of MIGRATION_STEPS[version]) {
-              currentSettings = migration(currentSettings);
-            }
-
-            migrationsApplied = true;
-
-            // Update storage after each version to prevent data loss if migration fails midway
-            await storageClient.updateSettings(currentSettings);
-          }
-        }
-
-        // Only update if migrations were applied or data was repaired
-        if (migrationsApplied) {
-          logger.info?.(
-            ErrorSource.BACKGROUND,
-            "Migrations completed successfully."
-          );
-        } else {
-          this.debug("No migrations needed");
-          logger.info?.(
-            ErrorSource.BACKGROUND,
-            "No migrations needed for this update"
-          );
-        }
-
-        // Final integrity check after all migrations
-        await this.repairSettings(currentSettings);
-        console.log("[runMigrations] Resolving promise.");
-        resolve(); // Explicitly resolve on success
-      } catch (error: unknown) {
-        console.error("[runMigrations] Caught error in catch block:", error);
-        logger.error(ErrorSource.BACKGROUND, "Migration failed", {
-          error: error instanceof Error ? error.message : String(error),
-          previousVersion,
-          currentVersion,
-        });
-        console.log("[runMigrations] Rejecting promise.");
-        reject(error); // Explicitly reject on failure
+      } else {
+        this.debug("No migrations needed");
+        logger.info?.(
+          ErrorSource.BACKGROUND,
+          "No migrations needed for this update",
+        );
       }
-    });
+
+      // Final integrity check after all migrations
+      await this.repairSettings(currentSettings);
+      console.log("[runMigrations] Resolving promise.");
+    } catch (_error: unknown) {
+      console.error("[runMigrations] Caught error in catch block:", _error);
+      logger.error(ErrorSource.BACKGROUND, "Migration failed", {
+        error: _error instanceof Error ? _error.message : String(_error),
+        previousVersion,
+        currentVersion,
+      });
+      console.log("[runMigrations] Rejecting promise.");
+      throw _error; // Re-throw the error after logging
+    }
   }
 }
 

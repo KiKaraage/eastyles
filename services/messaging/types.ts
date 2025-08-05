@@ -3,6 +3,16 @@
  * Defines the contract for message passing between background script, popup, and manager page.
  */
 
+// Response types for popup messages
+export interface PopupMessageResponses {
+  [key: string]: {
+    success: boolean;
+    error?: string;
+    styleId?: string;
+    styles?: unknown[];
+  };
+}
+
 /**
  * Messages sent from the background script to other components.
  */
@@ -28,8 +38,39 @@ export type BackgroundMessages =
 export type PopupMessages =
   | {
       type: "OPEN_MANAGER";
+      payload?: {
+        url?: string;
+      };
+    }
+  | {
+      type: "ADD_STYLE";
+      payload?: {
+        template?: string;
+      };
+    }
+  | {
+      type: "OPEN_SETTINGS";
+      payload?: {
+        section?: string;
+      };
+    }
+  | {
+      type: "GET_STYLES";
+      payload?: {
+        ids?: string[];
+      };
+    }
+  | {
+      type: "TOGGLE_STYLE";
       payload: {
-        url: string;
+        id: string;
+        enabled: boolean;
+      };
+    }
+  | {
+      type: "THEME_CHANGED";
+      payload: {
+        theme: "light" | "dark" | "system";
       };
     }
   | {
@@ -37,6 +78,9 @@ export type PopupMessages =
     }
   | {
       type: "TOGGLE_THEME";
+    }
+  | {
+      type: "RESET_SETTINGS";
     };
 
 /**

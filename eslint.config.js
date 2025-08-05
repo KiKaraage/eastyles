@@ -4,6 +4,8 @@ import { FlatCompat } from "@eslint/eslintrc";
 import path from "path";
 import { fileURLToPath } from "url";
 import tsParser from "@typescript-eslint/parser"; // Directly import the parser
+import htmlParser from "@html-eslint/parser";
+import htmlPlugin from "@html-eslint/eslint-plugin";
 
 // Mimic CommonJS variables -- not needed if using CommonJS
 const __filename = fileURLToPath(import.meta.url);
@@ -60,6 +62,16 @@ export default [
         requestIdleCallback: "readonly",
         cancelIdleCallback: "readonly",
         AbortController: "readonly",
+        describe: "readonly",
+        test: "readonly",
+        it: "readonly",
+        expect: "readonly",
+        beforeAll: "readonly",
+        beforeEach: "readonly",
+        afterAll: "readonly",
+        afterEach: "readonly",
+        vi: "readonly",
+        vitest: "readonly",
       },
     },
     settings: {
@@ -109,26 +121,24 @@ export default [
         },
       ],
     },
-    // Define global variables for Vitest
-    globals: {
-      describe: "readonly",
-      test: "readonly",
-      it: "readonly",
-      expect: "readonly",
-      beforeAll: "readonly",
-      beforeEach: "readonly",
-      afterAll: "readonly",
-      afterEach: "readonly",
-      vi: "readonly",
-      vitest: "readonly",
-    },
   },
 
   // Ignore generated files and directories from linting
   {
     ignores: ["**/.output/**", "**/.wxt/**", "node_modules/**"],
-    linterOptions: {
-      noWarnIgnored: true,
+  },
+
+  // HTML file configuration
+  {
+    files: ["**/*.html"],
+    plugins: {
+      "@html-eslint": htmlPlugin,
+    },
+    languageOptions: {
+      parser: htmlParser,
+    },
+    rules: {
+      "@html-eslint/require-doctype": ["error"],
     },
   },
 ];

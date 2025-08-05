@@ -180,26 +180,114 @@ const handleGetAllStyles: MessageHandler = async (_message) => {
  * Handler for OPEN_MANAGER messages.
  */
 const handleOpenManager: MessageHandler = async (message) => {
+  console.log("[handleOpenManager] Processing request");
   try {
-    const managerMessage = message as Extract<
+    // Extract optional payload for navigation
+    const navMessage = message as Extract<
       ReceivedMessages,
       { type: "OPEN_MANAGER" }
     >;
-    const url = managerMessage.payload.url;
+    const tab = navMessage.payload?.url ? "styles" : "styles"; // Default to styles tab
 
-    // Open the manager page in a new tab
-    const tab = await browser.tabs.create({ url });
+    // Always open the manager page in a new tab
+    const url = browser.runtime.getURL("/manager.html");
+    const fullUrl = tab === "styles" ? `${url}#styles` : `${url}#settings`;
 
+    console.log("[handleOpenManager] Opening manager page with URL:", fullUrl);
+    await browser.tabs.create({ url: fullUrl });
+
+    console.log("[handleOpenManager] Successfully opened manager page");
     return {
       success: true,
-      tabId: tab.id,
-      url: tab.url,
+      action: "opened_manager_page",
+      tab: tab,
     };
   } catch (error: unknown) {
+    console.error("[handleOpenManager] Error:", error);
     throw new Error(
       `Failed to open manager page: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
+};
+
+/**
+ * Handler for ADD_STYLE messages.
+ */
+const handleAddStyle: MessageHandler = async (message) => {
+  console.log("Add style requested:", message);
+  // TODO: Implement actual style creation when storage service is available
+  return {
+    success: true,
+    styleId: `style-${Date.now()}`,
+  };
+};
+
+/**
+ * Handler for OPEN_SETTINGS messages.
+ */
+const handleOpenSettings: MessageHandler = async (_message) => {
+  console.log("[handleOpenSettings] Processing request");
+  try {
+    // Open the manager page with settings tab
+    const url = browser.runtime.getURL("/manager.html");
+    const fullUrl = `${url}#settings`;
+
+    console.log("[handleOpenSettings] Opening manager page with URL:", fullUrl);
+    await browser.tabs.create({ url: fullUrl });
+
+    console.log("[handleOpenSettings] Successfully opened settings page");
+    return {
+      success: true,
+      action: "opened_settings_page",
+      tab: "settings",
+    };
+  } catch (error: unknown) {
+    console.error("[handleOpenSettings] Error:", error);
+    throw new Error(
+      `Failed to open settings page: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+  }
+};
+
+/**
+ * Handler for GET_STYLES messages.
+ */
+const handleGetStyles: MessageHandler = async (message) => {
+  console.log("Get styles requested:", message);
+  // TODO: Implement actual styles retrieval when storage service is available
+  return {
+    styles: [],
+  };
+};
+
+/**
+ * Handler for TOGGLE_STYLE messages.
+ */
+const handleToggleStyle: MessageHandler = async (message) => {
+  const toggleMessage = message as Extract<
+    ReceivedMessages,
+    { type: "TOGGLE_STYLE" }
+  >;
+  console.log("Toggle style requested:", toggleMessage);
+  // TODO: Implement actual style toggling when storage service is available
+  return {
+    success: true,
+  };
+};
+
+/**
+ * Handler for THEME_CHANGED messages.
+ */
+const handleThemeChanged: MessageHandler = async (message) => {
+  const themeMessage = message as Extract<
+    ReceivedMessages,
+    { type: "THEME_CHANGED" }
+  >;
+  console.log("Theme changed:", themeMessage.payload);
+  // TODO: Implement actual theme change handling when storage service is available
+  return {
+    success: true,
+  };
 };
 
 /**
@@ -208,11 +296,16 @@ const handleOpenManager: MessageHandler = async (message) => {
 const handlerRegistry: HandlerRegistry = {
   GET_CURRENT_TAB: withErrorHandling(handleGetCurrentTab),
   TOGGLE_THEME: withErrorHandling(handleToggleTheme),
+  OPEN_MANAGER: withErrorHandling(handleOpenManager),
+  ADD_STYLE: withErrorHandling(handleAddStyle),
+  OPEN_SETTINGS: withErrorHandling(handleOpenSettings),
+  GET_STYLES: withErrorHandling(handleGetStyles),
+  TOGGLE_STYLE: withErrorHandling(handleToggleStyle),
+  THEME_CHANGED: withErrorHandling(handleThemeChanged),
   REQUEST_EXPORT: withErrorHandling(handleRequestExport),
   REQUEST_IMPORT: withErrorHandling(handleRequestImport),
   RESET_SETTINGS: withErrorHandling(handleResetSettings),
   GET_ALL_STYLES: withErrorHandling(handleGetAllStyles),
-  OPEN_MANAGER: withErrorHandling(handleOpenManager),
 };
 
 /**
@@ -331,11 +424,16 @@ export class MessageHandlerService {
     const requiredTypes: ReceivedMessages["type"][] = [
       "GET_CURRENT_TAB",
       "TOGGLE_THEME",
+      "OPEN_MANAGER",
+      "ADD_STYLE",
+      "OPEN_SETTINGS",
+      "GET_STYLES",
+      "TOGGLE_STYLE",
+      "THEME_CHANGED",
       "REQUEST_EXPORT",
       "REQUEST_IMPORT",
       "RESET_SETTINGS",
       "GET_ALL_STYLES",
-      "OPEN_MANAGER",
     ];
 
     const missingHandlers: string[] = [];
@@ -360,10 +458,15 @@ export const messageHandlerService = new MessageHandlerService();
 export {
   handleGetCurrentTab,
   handleToggleTheme,
+  handleOpenManager,
+  handleAddStyle,
+  handleOpenSettings,
+  handleGetStyles,
+  handleToggleStyle,
+  handleThemeChanged,
   handleRequestExport,
   handleRequestImport,
   handleResetSettings,
   handleGetAllStyles,
-  handleOpenManager,
   withErrorHandling,
 };

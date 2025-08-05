@@ -254,24 +254,47 @@ function handleGlobalError(error: ErrorEvent | PromiseRejectionEvent): void {
 }
 
 /**
+ * Create a context menu item for opening the manager page.
+ */
+function createContextMenu(): void {
+  browser.contextMenus.create({
+    id: "open-manager",
+    title: "Manage Styles",
+    contexts: ["browser_action"],
+  });
+}
+
+/**
  * Main background script definition using WXT.
  */
 export default defineBackground({
   persistent: false, // Use non-persistent background for Manifest V3
   type: "module", // Use ES modules for better code splitting
 
-  main: async () => {
+  main: () => {
     try {
       // Set up global error handlers
       self.addEventListener("error", handleGlobalError);
       self.addEventListener("unhandledrejection", handleGlobalError);
 
       // Initialize all services
-      await initializeServices();
+      initializeServices();
+
+      // Message bus handles its own message listener setup
 
       // Set up extension lifecycle event listeners
       browser.runtime.onInstalled.addListener(handleInstallation);
       browser.runtime.onStartup.addListener(handleStartup);
+
+      // Create context menu
+      createContextMenu();
+
+      // Listen for context menu clicks
+      browser.contextMenus.onClicked.addListener((info) => {
+        if (info.menuItemId === "open-manager") {
+          browser.runtime.openOptionsPage();
+        }
+      });
 
       // Handle service worker suspension (Manifest V3)
       if ("onSuspend" in browser.runtime) {

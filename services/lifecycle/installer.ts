@@ -6,7 +6,6 @@
 import { logger } from "../../services/errors/logger";
 import { ErrorSource } from "../../services/errors/service";
 import { storageClient } from "../storage/client";
-import { DEFAULT_SETTINGS } from "../storage/schema";
 import { migrationService } from "./migrations";
 
 export class InstallerService {

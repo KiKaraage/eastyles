@@ -85,14 +85,14 @@ export class MessageBus {
   /**
    * Handle incoming messages from other extension components.
    */
-  private handleIncomingMessage(message: unknown, tabId?: number): boolean {
+  public handleIncomingMessage(message: unknown, tabId?: number): boolean {
     // First check if this is a response to a pending message
     const messageObj = message as Record<string, unknown>;
     if (messageObj.replyTo && typeof messageObj.replyTo === "string") {
       const pending = this.pendingMessages.get(messageObj.replyTo);
       if (pending) {
         // Clear the timeout
-        window.clearTimeout(pending.timeoutId);
+        self.clearTimeout(pending.timeoutId);
         this.pendingMessages.delete(messageObj.replyTo as string);
 
         // Resolve or reject the promise based on the response
@@ -187,7 +187,7 @@ export class MessageBus {
       const messageId = `message-${this.messageIdCounter++}`;
 
       // Set up timeout mechanism
-      const timeoutId = window.setTimeout(() => {
+      const timeoutId = self.setTimeout(() => {
         const pending = this.pendingMessages.get(messageId);
         if (pending) {
           // If we've reached max retries, reject
@@ -235,11 +235,11 @@ export class MessageBus {
     messageId: string,
   ): Promise<void> {
     // Clear the existing timeout
-    window.clearTimeout(pending.timeoutId);
+    self.clearTimeout(pending.timeoutId);
 
     // Set up a new timeout with exponential backoff
     const delay = DEFAULT_TIMEOUT * Math.pow(2, pending.retries);
-    pending.timeoutId = window.setTimeout(() => {
+    pending.timeoutId = self.setTimeout(() => {
       if (pending.retries >= MAX_RETRIES) {
         this.pendingMessages.delete(messageId);
         pending.reject(
@@ -347,7 +347,7 @@ export class MessageBus {
    */
   private initializeOnlineStatusMonitoring(): void {
     // Check online status periodically
-    this.offlineCheckInterval = window.setInterval(() => {
+    this.offlineCheckInterval = self.setInterval(() => {
       this.checkOnlineStatus();
     }, 5000);
 
@@ -540,7 +540,7 @@ export class MessageBus {
    */
   cleanup(): void {
     if (this.offlineCheckInterval) {
-      window.clearInterval(this.offlineCheckInterval);
+      self.clearInterval(this.offlineCheckInterval);
       this.offlineCheckInterval = undefined;
     }
   }

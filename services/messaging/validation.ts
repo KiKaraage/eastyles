@@ -43,7 +43,16 @@ export function isValidReceivedMessage(
  * Type guard to check if a message type belongs to PopupMessages.
  */
 function isPopupMessage(type: string): boolean {
-  return ["OPEN_MANAGER", "GET_CURRENT_TAB", "TOGGLE_THEME"].includes(type);
+  return [
+    "OPEN_MANAGER",
+    "ADD_STYLE",
+    "OPEN_SETTINGS",
+    "GET_STYLES",
+    "TOGGLE_STYLE",
+    "THEME_CHANGED",
+    "GET_CURRENT_TAB",
+    "TOGGLE_THEME",
+  ].includes(type);
 }
 
 /**
@@ -62,15 +71,28 @@ function isManagerMessage(type: string): boolean {
  * Validates a PopupMessage based on its type and required payload structure.
  */
 function validatePopupMessage(message: unknown, type: string): boolean {
-  if (type === "OPEN_MANAGER") {
-    if (message && typeof message === "object" && "payload" in message) {
-      const payload = (message as { payload: unknown }).payload;
+  if (
+    type === "OPEN_MANAGER" ||
+    type === "ADD_STYLE" ||
+    type === "OPEN_SETTINGS" ||
+    type === "GET_STYLES" ||
+    type === "TOGGLE_STYLE" ||
+    type === "THEME_CHANGED"
+  ) {
+    // These messages can have optional payload
+    if (message && typeof message === "object") {
+      const keys = Object.keys(message);
+      // Must have 'type' property, can optionally have 'payload' and 'responseId'
+      const hasType = keys.includes("type");
+      const hasPayload = keys.includes("payload");
+      const hasResponseId = keys.includes("responseId");
+
       return (
-        payload !== null &&
-        typeof payload === "object" &&
-        "url" in payload &&
-        typeof (payload as { url?: unknown }).url === "string" &&
-        (payload as { url: string }).url.length > 0
+        hasType &&
+        (!hasPayload ||
+          typeof (message as { payload?: unknown }).payload === "object") &&
+        (!hasResponseId ||
+          typeof (message as { responseId?: unknown }).responseId === "string")
       );
     }
     return false;
