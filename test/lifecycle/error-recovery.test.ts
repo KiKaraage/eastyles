@@ -6,10 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { installerService } from "../../services/lifecycle/installer";
-import {
-  migrationService,
-  MigrationService,
-} from "../../services/lifecycle/migrations";
+import { migrationService } from "../../services/lifecycle/migrations";
 import { storageClient } from "../../services/storage/client";
 import { DEFAULT_SETTINGS } from "../../services/storage/schema";
 import { logger } from "../../services/errors/logger";
@@ -254,7 +251,7 @@ describe("Error Recovery", () => {
           await migrationService.runMigrations("1.0.0");
           success = true;
           break;
-        } catch (error) {
+        } catch {
           // Continue retrying
           continue;
         }

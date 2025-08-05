@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import App from "../../entrypoints/popup/App";
@@ -43,7 +42,7 @@ describe("App Component", () => {
     // Default mock implementation for the useError hook
     mockUseError.mockReturnValue({
       executeWithErrorHandling: vi.fn(
-        async (fn: Function, context: unknown) => {
+        async (fn: () => Promise<unknown>, context: unknown) => {
           try {
             return await fn();
           } catch (error: unknown) {
@@ -65,8 +64,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -87,7 +84,7 @@ describe("App Component", () => {
     // Check main structure
     expect(screen.getByText("Styles for...")).toBeTruthy();
     expect(screen.getByText("v1.0.0")).toBeTruthy();
-    expect(screen.getByText("Manage Styles")).toBeTruthy();
+    expect(screen.getByText("Manage")).toBeTruthy();
     expect(screen.getByText("Add New Style")).toBeTruthy();
     expect(screen.getByText("Settings")).toBeTruthy();
     expect(screen.getByText("Active Styles")).toBeTruthy();
@@ -99,8 +96,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -155,8 +150,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -203,8 +196,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -249,8 +240,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -289,9 +278,7 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
-      toggleTheme: mockToggleTheme, // Ensure mockToggleTheme is returned
+      toggleTheme: vi.fn(),
     });
 
     mockUsePopupActions.mockReturnValue({
@@ -334,8 +321,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -370,8 +355,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "dark",
       effectiveTheme: "dark",
-      isDark: true,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -406,8 +389,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "light",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -434,8 +415,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -478,8 +457,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -528,8 +505,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -567,8 +542,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
     mockUseSettings.mockReturnValue({
@@ -609,8 +582,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 
@@ -664,8 +635,6 @@ describe("App Component", () => {
     mockUseTheme.mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
-      isDark: false,
-      setThemeMode: vi.fn(),
       toggleTheme: vi.fn(),
     });
 

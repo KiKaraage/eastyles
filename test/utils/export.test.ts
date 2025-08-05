@@ -138,7 +138,7 @@ describe("CompressionUtils", () => {
         encode() {
           throw new Error("Compression failed");
         }
-      } as any;
+      } as unknown as typeof TextEncoder;
 
       const testData = "test data";
       const result = await CompressionUtils.compress(testData);
@@ -788,7 +788,7 @@ describe("ExportService Import Functionality", () => {
 
       // Mock FileReader
       const mockFileReader = {
-        onload: null as ((e: any) => void) | null,
+        onload: null as ((e: ProgressEvent<FileReader>) => void) | null,
         onerror: null as (() => void) | null,
         readAsText: vi.fn(),
       };
@@ -805,8 +805,10 @@ describe("ExportService Import Functionality", () => {
       setTimeout(() => {
         if (mockFileReader.onload) {
           mockFileReader.onload({
-            target: { result: fileContent },
-          });
+            target: {
+              result: fileContent,
+            } as ProgressEvent<FileReader>["target"],
+          } as ProgressEvent<FileReader>);
         }
       }, 0);
 
@@ -846,7 +848,7 @@ describe("ExportService Import Functionality", () => {
       });
 
       const mockFileReader = {
-        onload: null as ((e: any) => void) | null,
+        onload: null as ((e: ProgressEvent<FileReader>) => void) | null,
         onerror: null as (() => void) | null,
         readAsText: vi.fn(),
       };

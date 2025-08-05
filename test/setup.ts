@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 /// <reference types="../.wxt/wxt.d.ts" />
 // test/setup.ts - Enhanced version with proper WXT storage mocking
 // This file sets up the testing environment for Vitest
