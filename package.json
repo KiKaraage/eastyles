@@ -9,6 +9,7 @@
     "dev:crx": "wxt",
     "build": "wxt build -b firefox",
     "build:crx": "wxt build",
+    "builds": "wxt build && wxt build -b firefox",
     "zip": "wxt zip -b firefox",
     "zip:crx": "wxt zip",
     "compile": "tsc --noEmit",
@@ -34,7 +35,6 @@
   "devDependencies": {
     "@html-eslint/eslint-plugin": "^0.44.0",
     "@html-eslint/parser": "^0.44.0",
-    "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.3",
