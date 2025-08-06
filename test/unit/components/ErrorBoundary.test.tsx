@@ -1,26 +1,27 @@
-/// <reference types="vitest" />
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import ErrorBoundary, { withErrorBoundary } from '../../../components/ui/ErrorBoundary';
-import { errorService } from '../../../services/errors/service';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import ErrorBoundary, {
+  withErrorBoundary,
+} from "../../../components/ui/ErrorBoundary";
+import { errorService } from "../../../services/errors/service";
 
 // Mock the errorService to prevent logging during tests
-vi.mock('../../../services/errors/service', () => ({
+vi.mock("../../../services/errors/service", () => ({
   errorService: {
     handleError: vi.fn(),
   },
   ErrorSource: {
-    POPUP: 'POPUP',
+    POPUP: "POPUP",
   },
   ErrorSeverity: {
-    FATAL: 'FATAL',
-    NON_FATAL: 'NON_FATAL',
+    FATAL: "FATAL",
+    NON_FATAL: "NON_FATAL",
   },
   ExtensionError: class extends Error {
     severity: string;
-    constructor(message: string, { severity = 'NON_FATAL' } = {}) {
+    constructor(message: string, { severity = "NON_FATAL" } = {}) {
       super(message);
-      this.name = 'ExtensionError';
+      this.name = "ExtensionError";
       this.severity = severity;
     }
   },
@@ -29,27 +30,27 @@ vi.mock('../../../services/errors/service', () => ({
 // A component that throws an error
 const ProblematicComponent = ({ shouldThrow = true }) => {
   if (shouldThrow) {
-    throw new Error('Test error');
+    throw new Error("Test error");
   }
   return <div>Success</div>;
 };
 
-describe('ErrorBoundary Component', () => {
+describe("ErrorBoundary Component", () => {
   // Suppress console.error output from React
   beforeEach(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it('renders children when there is no error', () => {
+  it("renders children when there is no error", () => {
     render(
       <ErrorBoundary>
         <ProblematicComponent shouldThrow={false} />
       </ErrorBoundary>,
     );
-    expect(screen.getByText('Success')).toBeTruthy();
+    expect(screen.getByText("Success")).toBeTruthy();
   });
 
-  it('catches an error and renders the default fallback UI', () => {
+  it("catches an error and renders the default fallback UI", () => {
     render(
       <ErrorBoundary>
         <ProblematicComponent />
@@ -57,12 +58,12 @@ describe('ErrorBoundary Component', () => {
     );
 
     // Check for fallback UI text
-    expect(screen.getByText('Something went wrong')).toBeTruthy();
+    expect(screen.getByText("Something went wrong")).toBeTruthy();
     expect(screen.getByText(/A technical error occurred/)).toBeTruthy();
   });
 
-  it('calls errorService.handleError when an error is caught', () => {
-    const testError = new Error('Test error');
+  it("calls errorService.handleError when an error is caught", () => {
+    const testError = new Error("Test error");
     const ProblematicComponent = () => {
       throw testError;
     };
@@ -73,14 +74,17 @@ describe('ErrorBoundary Component', () => {
       </ErrorBoundary>,
     );
 
-    expect(errorService.handleError).toHaveBeenCalledWith(testError, expect.any(Object));
+    expect(errorService.handleError).toHaveBeenCalledWith(
+      testError,
+      expect.any(Object),
+    );
   });
 
-  it('allows retrying and resets the error state', () => {
+  it("allows retrying and resets the error state", () => {
     let shouldThrow = true;
     const ProblematicComponent = () => {
       if (shouldThrow) {
-        throw new Error('Transient error');
+        throw new Error("Transient error");
       }
       return <div>Success after retry</div>;
     };
@@ -92,10 +96,10 @@ describe('ErrorBoundary Component', () => {
     );
 
     // Ensure fallback is shown
-    expect(screen.getByText('Something went wrong')).toBeTruthy();
+    expect(screen.getByText("Something went wrong")).toBeTruthy();
 
     // Simulate user clicking "Try Again"
-    const retryButton = screen.getByText('Try Again');
+    const retryButton = screen.getByText("Try Again");
     shouldThrow = false; // The next render should succeed
     fireEvent.click(retryButton);
 
@@ -107,26 +111,26 @@ describe('ErrorBoundary Component', () => {
     );
 
     // The component should now render the children
-    expect(screen.getByText('Success after retry')).toBeTruthy();
+    expect(screen.getByText("Success after retry")).toBeTruthy();
   });
 });
 
-describe('withErrorBoundary HOC', () => {
+describe("withErrorBoundary HOC", () => {
   beforeEach(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it('wraps a component and catches rendering errors', () => {
+  it("wraps a component and catches rendering errors", () => {
     const WrappedProblematicComponent = withErrorBoundary(ProblematicComponent);
     render(<WrappedProblematicComponent />);
 
-    expect(screen.getByText('Something went wrong')).toBeTruthy();
+    expect(screen.getByText("Something went wrong")).toBeTruthy();
   });
 
-  it('renders the wrapped component when no error occurs', () => {
+  it("renders the wrapped component when no error occurs", () => {
     const WrappedComponent = withErrorBoundary(ProblematicComponent);
     render(<WrappedComponent shouldThrow={false} />);
 
-    expect(screen.getByText('Success')).toBeTruthy();
+    expect(screen.getByText("Success")).toBeTruthy();
   });
 });
