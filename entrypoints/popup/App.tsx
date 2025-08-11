@@ -1,16 +1,8 @@
 import { useState } from "react";
 import { withErrorBoundary } from "../../components/ui/ErrorBoundary";
+import { browser } from "wxt/browser";
+import { List, Plus, Settings } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
-import { usePopupActions } from "../../hooks/useMessage";
-import { useError, ErrorSeverity, PopupErrorType } from "../../hooks/useError";
-import {
-  Brightness,
-  MoonSat,
-  Computer,
-  List,
-  Plus,
-  Settings,
-} from "iconoir-react";
 
 interface PopupState {
   isLoading: boolean;
@@ -21,99 +13,42 @@ const App = () => {
     isLoading: false,
   });
 
-  // Theme management
-  const { themeMode, effectiveTheme, toggleTheme } = useTheme();
+  // Theme hook to sync with user's preference from settings
+  const { isDark } = useTheme();
 
-  // Message passing
-  const { openManager, addNewStyle, openSettings } = usePopupActions();
+  // Helper function to close popup
+  // Using window.close() directly as it's supported in extension popups across browsers
+  const closePopup = () => {
+    window.close();
+  };
 
-  // Error handling
-  const { executeWithErrorHandling } = useError();
-
-  // Enhanced navigation handlers with error handling
+  // Direct navigation handler for manager page (styles tab)
   const handleOpenManager = async () => {
-    setState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      // Open manager page with styles tab
+      await browser.tabs.create({ url: "/manager.html#styles" });
+      closePopup();
+    } catch (error) {
+      console.error("Failed to open manager page:", error);
+    }
+  };
 
-    await executeWithErrorHandling(
-      async () => {
-        await openManager();
-        // Close popup after successfully opening manager
-        window.close();
-      },
-      {
-        errorMessage: "Failed to open manager page",
-        errorType: PopupErrorType.MESSAGE_ERROR,
-        severity: ErrorSeverity.MEDIUM,
-        recoverable: true,
-        action: {
-          label: "Retry",
-          callback: handleOpenManager,
-        },
-      },
-    ).finally(() => {
-      setState((prev) => ({ ...prev, isLoading: false }));
-    });
+  // Direct navigation handler for settings
+  const handleOpenSettings = async () => {
+    try {
+      // Open manager page with settings tab
+      await browser.tabs.create({ url: "/manager.html#settings" });
+      closePopup();
+    } catch (error) {
+      console.error("Failed to open settings page:", error);
+    }
   };
 
   const handleAddNewStyle = async () => {
     setState((prev) => ({ ...prev, isLoading: true }));
-
-    await executeWithErrorHandling(
-      async () => {
-        await addNewStyle();
-      },
-      {
-        errorMessage: "Failed to open style creation dialog",
-        errorType: PopupErrorType.MESSAGE_ERROR,
-        severity: ErrorSeverity.MEDIUM,
-        recoverable: true,
-        action: {
-          label: "Retry",
-          callback: handleAddNewStyle,
-        },
-      },
-    ).finally(() => {
-      setState((prev) => ({ ...prev, isLoading: false }));
-    });
-  };
-
-  const handleOpenSettings = async () => {
-    setState((prev) => ({ ...prev, isLoading: true }));
-
-    await executeWithErrorHandling(
-      async () => {
-        await openSettings();
-        // Close popup after successfully opening settings
-        window.close();
-      },
-      {
-        errorMessage: "Failed to open settings",
-        errorType: PopupErrorType.MESSAGE_ERROR,
-        severity: ErrorSeverity.MEDIUM,
-        recoverable: true,
-        action: {
-          label: "Retry",
-          callback: handleOpenSettings,
-        },
-      },
-    ).finally(() => {
-      setState((prev) => ({ ...prev, isLoading: false }));
-    });
-  };
-
-  // Theme toggle handler
-  const handleToggleTheme = async () => {
-    await executeWithErrorHandling(
-      async () => {
-        await toggleTheme();
-      },
-      {
-        errorMessage: "Failed to toggle theme",
-        errorType: PopupErrorType.STORAGE_ERROR,
-        severity: ErrorSeverity.LOW,
-        recoverable: true,
-      },
-    );
+    // TODO: Implement add new style functionality
+    console.log("Add new style clicked - implementation needed");
+    setState((prev) => ({ ...prev, isLoading: false }));
   };
 
   return (
@@ -127,27 +62,11 @@ const App = () => {
               Styles for...
             </h3>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="text-xs text-base-content/50">v1.0.0</div>
-            <button
-              onClick={handleToggleTheme}
-              className="btn btn-ghost btn-xs"
-              title={`Current theme: ${themeMode} (${effectiveTheme})`}
-            >
-              {themeMode === "light" ? (
-                <Brightness className="w-4 h-4" />
-              ) : themeMode === "dark" ? (
-                <MoonSat className="w-4 h-4" />
-              ) : (
-                <Computer className="w-4 h-4" />
-              )}
-            </button>
-          </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-2 overflow-y-auto">
+      <div className={`flex-1 p-2 overflow-y-auto ${isDark ? "dark" : ""}`}>
         {state.isLoading ? (
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
             <div className="loading loading-spinner loading-lg"></div>
@@ -183,7 +102,9 @@ const App = () => {
       </div>
 
       {/* Footer with Manage and Settings */}
-      <div className="bg-base-200 border-t border-base-300 p-2">
+      <div
+        className={`bg-base-200 border-t border-base-300 p-2 ${isDark ? "dark" : ""}`}
+      >
         <div className="flex justify-between items-center">
           <button
             onClick={handleOpenManager}
