@@ -16,7 +16,7 @@ export default defineConfig({
       page: "/manager.html",
     },
     action: {
-      default_title: "Eastyles Popup",
+      default_title: "Apply styles to this site",
       default_popup: "popup.html",
       default_icon: {
         "16": "icon/16.png",
