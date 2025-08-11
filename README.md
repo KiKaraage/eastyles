@@ -3,8 +3,8 @@
 
 ## 🗺️ Roadmap
 
-- Phase 1: Foundation preparation
-- Phase 2: Support UserCSS application
+- Phase 1: Foundation preparation ☑️
+- **Phase 2: Support UserCSS application**
 - Phase 3: Add CSS modification & color application
 - Phase 4: Add object hiding capabilities
 - Phase 5: Optimizations before release
