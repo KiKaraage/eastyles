@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Settings from "../../components/features/Settings";
 import { useTheme } from "../../hooks/useTheme";
-import { Brightness, MoonSat, Computer } from "iconoir-react";
+import { SunLight, HalfMoon, Computer } from "iconoir-react";
+import pkg from "../../package.json";
 
 const ManageStyles = () => <div>Manage Styles Content</div>;
 
@@ -43,7 +44,7 @@ const App = () => {
           <div role="tablist" className="tabs tabs-lifted">
             <button
               role="tab"
-              className={`tab ${activeTab === "manage-styles" ? "tab-active" : ""}`}
+              className={`tab font-bold ${activeTab === "manage-styles" ? "tab-active" : ""}`}
               onClick={() => {
                 setActiveTab("manage-styles");
                 window.location.hash = "styles";
@@ -53,7 +54,7 @@ const App = () => {
             </button>
             <button
               role="tab"
-              className={`tab ${activeTab === "settings" ? "tab-active" : ""}`}
+              className={`tab font-bold ${activeTab === "settings" ? "tab-active" : ""}`}
               onClick={() => {
                 setActiveTab("settings");
                 window.location.hash = "settings";
@@ -63,16 +64,16 @@ const App = () => {
             </button>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="text-xs text-base-content/50">v1.0.0</div>
+            <div className="text-xs text-base-content/50">v{pkg.version}</div>
             <button
               onClick={toggleTheme}
               className="btn btn-ghost btn-xs"
               title={`Current theme: ${themeMode} (${effectiveTheme})`}
             >
               {themeMode === "light" ? (
-                <Brightness className="w-4 h-4" />
+                <SunLight className="w-4 h-4" />
               ) : themeMode === "dark" ? (
-                <MoonSat className="w-4 h-4" />
+                <HalfMoon className="w-4 h-4" />
               ) : (
                 <Computer className="w-4 h-4" />
               )}
