@@ -6,7 +6,8 @@
     "baseUrl": ".",
     "paths": {
       "@services/*": ["services/*"]
-    }
+    },
+    "types": ["vitest/globals"]
   },
   "include": ["**/*.ts", "**/*.tsx", "test", "vitest.config.ts"]
 }
