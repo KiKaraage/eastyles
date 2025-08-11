@@ -87,13 +87,26 @@ function validatePopupMessage(message: unknown, type: string): boolean {
       const hasPayload = keys.includes("payload");
       const hasResponseId = keys.includes("responseId");
 
-      return (
-        hasType &&
-        (!hasPayload ||
-          typeof (message as { payload?: unknown }).payload === "object") &&
-        (!hasResponseId ||
-          typeof (message as { responseId?: unknown }).responseId === "string")
-      );
+      if (!hasType) return false;
+      
+      if (hasPayload) {
+        const payload = (message as { payload?: unknown }).payload;
+        if (typeof payload !== "object" || payload === null) return false;
+        
+        // For OPEN_MANAGER, url must be a non-empty string if present
+        if (type === "OPEN_MANAGER") {
+          const url = (payload as { url?: unknown }).url;
+          if (url !== undefined && (typeof url !== "string" || url.length === 0)) {
+            return false;
+          }
+          // If payload exists but url is not present, it's invalid for OPEN_MANAGER
+          if (url === undefined) {
+            return false;
+          }
+        }
+      }
+      
+      return !hasResponseId || typeof (message as { responseId?: unknown }).responseId === "string";
     }
     return false;
   }

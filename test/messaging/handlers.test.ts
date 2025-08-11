@@ -20,12 +20,22 @@ import type {
 vi.mock("@wxt-dev/browser", () => ({
   browser: {
     tabs: {
-      query: vi.fn(),
+      query: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
       sendMessage: vi.fn(),
+      onRemoved: {
+        addListener: vi.fn(),
+      },
     },
     runtime: {
       sendMessage: vi.fn(),
+      getPlatformInfo: vi.fn().mockResolvedValue({ os: "linux" }),
+    },
+    storage: {
+      local: {
+        get: vi.fn().mockResolvedValue({}),
+        set: vi.fn().mockResolvedValue(undefined),
+      },
     },
   },
 }));
@@ -39,7 +49,7 @@ describe("Message Handler Error Propagation", () => {
 
     // Setup default successful responses
     const { browser } = await import("@wxt-dev/browser");
-    vi.mocked(browser.tabs.query).mockResolvedValue(undefined);
+    vi.mocked(browser.tabs.query).mockResolvedValue([]);
     vi.mocked(browser.tabs.create).mockResolvedValue(undefined);
   });
 

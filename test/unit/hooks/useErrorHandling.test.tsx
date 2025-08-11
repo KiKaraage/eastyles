@@ -1,6 +1,5 @@
-/// <reference types="vitest" />
 import { describe, expect, test, vi, beforeEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import {
   useErrorHandling,
   useErrorAnalytics,
@@ -8,7 +7,6 @@ import {
 } from "../../../hooks/useErrorHandling";
 import {
   errorService,
-  ExtensionError,
   ErrorSeverity,
   ErrorSource,
   RuntimeError,

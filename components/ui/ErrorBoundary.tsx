@@ -8,7 +8,7 @@ import {
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
-  fallback?: React.ComponentType<ErrorFallbackProps>;
+  fallback?: React.ComponentType<ErrorFallbackProps> | null;
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
   isolate?: boolean;
 }
@@ -20,7 +20,7 @@ interface ErrorBoundaryState {
   retryCount: number;
 }
 
-interface ErrorFallbackProps {
+export interface ErrorFallbackProps {
   error: Error;
   errorInfo: React.ErrorInfo;
   retry: () => void;
@@ -120,6 +120,10 @@ class ErrorBoundary extends React.Component<
   private renderFallback() {
     const { error, errorInfo, retryCount } = this.state;
     const { fallback: CustomFallback } = this.props;
+
+    if (this.props.fallback === null) {
+      return null;
+    }
 
     if (!error || !errorInfo) return null;
 
@@ -251,7 +255,7 @@ class ErrorBoundary extends React.Component<
 
 export function withErrorBoundary<P extends object>(
   WrappedComponent: React.ComponentType<P>,
-  errorBoundaryProps?: Omit<ErrorBoundaryProps, "children">,
+  errorBoundaryProps?: Omit<ErrorBoundaryProps, "children">
 ) {
   const displayName =
     WrappedComponent.displayName || WrappedComponent.name || "Component";

@@ -14,12 +14,12 @@ import {
 import { messageHandlerService } from "./handlers";
 
 // Default timeout for message responses (5 seconds)
-const DEFAULT_TIMEOUT = 5000;
+export const DEFAULT_TIMEOUT = 5000;
 
 // Maximum number of retry attempts for failed messages
 const MAX_RETRIES = 3;
 
-// Interface for message response tracking
+// Maximum number
 interface PendingMessage {
   resolve: (value: unknown) => void;
   reject: (reason?: unknown) => void;
@@ -186,7 +186,7 @@ export class MessageBus {
       // Generate a unique ID for this message
       const messageId = `message-${this.messageIdCounter++}`;
 
-      // Set up timeout mechanism
+      // Set up timeout mechanism with increased timeout for service worker
       const timeoutId = self.setTimeout(() => {
         const pending = this.pendingMessages.get(messageId);
         if (pending) {
@@ -201,6 +201,9 @@ export class MessageBus {
           } else {
             // Increment retry count and try again
             pending.retries++;
+            console.log(
+              `[MessageBus] Retrying message ${message.type}, attempt ${pending.retries}`,
+            );
             this.resendMessage(message, tabId, pending, messageId);
           }
         }

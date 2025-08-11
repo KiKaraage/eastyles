@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import ErrorBoundary, {
   withErrorBoundary,
+  ErrorFallbackProps,
 } from "../../../components/ui/ErrorBoundary";
 import { errorService } from "../../../services/errors/service";
 
@@ -112,6 +113,57 @@ describe("ErrorBoundary Component", () => {
 
     // The component should now render the children
     expect(screen.getByText("Success after retry")).toBeTruthy();
+  });
+
+  it("should render a custom fallback UI when provided", () => {
+    const CustomFallback = ({ error, resetError }: ErrorFallbackProps) => (
+      <div>
+        <h1>Custom Fallback</h1>
+        <p>{error.message}</p>
+        <button onClick={resetError}>Try Again Custom</button>
+      </div>
+    );
+
+    render(
+      <ErrorBoundary fallback={CustomFallback}>
+        <ProblematicComponent />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText("Custom Fallback")).toBeTruthy();
+    expect(screen.getByText("Test error")).toBeTruthy();
+    expect(screen.getByText("Try Again Custom")).toBeTruthy();
+  });
+
+  it("should pass error and resetError to custom fallback UI", () => {
+    const CustomFallback = vi.fn(() => null);
+
+    render(
+      <ErrorBoundary fallback={CustomFallback}>
+        <ProblematicComponent />
+      </ErrorBoundary>,
+    );
+
+    expect(CustomFallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.any(Error),
+        errorInfo: expect.any(Object),
+        retry: expect.any(Function),
+        canRetry: expect.any(Boolean),
+        resetError: expect.any(Function),
+      }),
+      undefined,
+    );
+  });
+
+  it("should not render anything when fallback is null", () => {
+    const { container } = render(
+      <ErrorBoundary fallback={null}>
+        <ProblematicComponent />
+      </ErrorBoundary>,
+    );
+
+    expect(container.firstChild).toBeNull();
   });
 });
 

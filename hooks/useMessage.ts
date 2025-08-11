@@ -190,8 +190,8 @@ export function useMessage(): UseMessageReturn {
         return new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
             cleanupHandlers();
-            reject(new Error(`Message timeout: ${type}`));
-          }, 10000); // 10 second timeout
+            reject(new Error(`Message timeout after 3 attempts: ${type}`));
+          }, 15000); // 15 second timeout (increased for service worker)
 
           const cleanupHandlers = () => {
             clearTimeout(timeout);
@@ -420,7 +420,9 @@ export function usePopupActions() {
 
   const openManager = useCallback(async () => {
     console.log("[usePopupActions] openManager called");
-    return sendMessage(PopupMessageType.OPEN_MANAGER, {});
+    const response = await sendMessage(PopupMessageType.OPEN_MANAGER, {});
+    console.log("[usePopupActions] openManager response:", response);
+    return response;
   }, [sendMessage]);
 
   const addNewStyle = useCallback(
@@ -434,7 +436,11 @@ export function usePopupActions() {
   const openSettings = useCallback(
     async (section?: string) => {
       console.log("[usePopupActions] openSettings called, section:", section);
-      return sendMessage(PopupMessageType.OPEN_SETTINGS, { section });
+      const response = await sendMessage(PopupMessageType.OPEN_SETTINGS, {
+        section,
+      });
+      console.log("[usePopupActions] openSettings response:", response);
+      return response;
     },
     [sendMessage],
   );

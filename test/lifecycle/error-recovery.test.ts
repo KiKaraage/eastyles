@@ -118,6 +118,48 @@ describe("Error Recovery", () => {
       // One should succeed, one should fail gracefully
       expect(storageClient.resetSettings).toHaveBeenCalledTimes(2);
     });
+
+    it("should handle one successful and one failed concurrent installation attempt", async () => {
+      // Arrange
+      let callCount = 0;
+      (storageClient.resetSettings as Mock).mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve();
+        }
+        return Promise.reject(new Error("Settings locked"));
+      });
+
+      // Act
+      const promises = [
+        installerService.performFirstTimeSetup(),
+        installerService.performFirstTimeSetup(),
+      ];
+
+      // Assert
+      const results = await Promise.allSettled(promises);
+      expect(results).toHaveLength(2);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+      expect(storageClient.resetSettings).toHaveBeenCalledTimes(2);
+    });
+
+    it("should handle two successful concurrent installation attempts", async () => {
+      // Arrange
+      (storageClient.resetSettings as Mock).mockResolvedValue(undefined);
+
+      // Act
+      const promises = [
+        installerService.performFirstTimeSetup(),
+        installerService.performFirstTimeSetup(),
+      ];
+
+      // Assert
+      const results = await Promise.allSettled(promises);
+      expect(results).toHaveLength(2);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
+      expect(storageClient.resetSettings).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("Migration Error Recovery", () => {

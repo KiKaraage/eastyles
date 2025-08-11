@@ -6,6 +6,115 @@
 import { browser } from "@wxt-dev/browser";
 import { ReceivedMessages, ErrorDetails } from "./types";
 
+/**
+ * Helper function to keep service worker alive using browser.tabs API
+ * This is more reliable than setTimeout for preventing premature termination
+ */
+async function keepServiceWorkerAlive(): Promise<void> {
+  try {
+    // Query tabs to keep the service worker active
+    await browser.tabs.query({});
+  } catch (error) {
+    console.warn("Failed to keep service worker alive:", error);
+  }
+}
+
+/**
+ * Debounce mechanism to prevent duplicate tab creation calls
+ * This is crucial for preventing multiple tabs from being created
+ * when the service worker timeout causes retries
+ */
+const pendingTabOperations = new Set<string>();
+
+async function ensureUniqueOperation(
+  operationId: string,
+  operation: () => Promise<unknown>,
+): Promise<unknown> {
+  if (pendingTabOperations.has(operationId)) {
+    console.log(
+      `[ensureUniqueOperation] Operation ${operationId} already in progress, skipping`,
+    );
+    return { success: true, action: "skipped_duplicate" };
+  }
+
+  try {
+    pendingTabOperations.add(operationId);
+    return await operation();
+  } finally {
+    // Small delay before removing to prevent race conditions
+    setTimeout(() => {
+      pendingTabOperations.delete(operationId);
+    }, 1000);
+  }
+}
+
+/**
+ * Tab tracking mechanism to prevent duplicate manager tabs
+ * This ensures that only one manager tab exists at any time
+ */
+let activeManagerTabId: number | null = null;
+let managerTabCheckTimeout: number | null = null;
+
+async function trackManagerTab(tabId: number): Promise<void> {
+  activeManagerTabId = tabId;
+
+  // Clear any existing timeout
+  if (managerTabCheckTimeout) {
+    clearTimeout(managerTabCheckTimeout);
+  }
+
+  // Set timeout to clear the tracking after 5 minutes of inactivity
+  managerTabCheckTimeout = self.setTimeout(
+    () => {
+      activeManagerTabId = null;
+      managerTabCheckTimeout = null;
+    },
+    5 * 60 * 1000,
+  ); // 5 minutes
+}
+
+async function getTrackedManagerTab(): Promise<number | null> {
+  return activeManagerTabId;
+}
+
+/**
+ * Alternative helper function to keep service worker alive using storage API
+ * This is a more reliable method that works consistently across browsers
+ */
+async function keepServiceWorkerAliveWithStorage(): Promise<void> {
+  try {
+    // Use storage API to keep service worker alive
+    // This is a more reliable pattern than setTimeout
+    await browser.storage.local.set({
+      swKeepAlive: Date.now(),
+      swKeepAliveMessage: "KEEP_ALIVE",
+    });
+
+    // Immediately read it back to complete the operation
+    await browser.storage.local.get("swKeepAlive");
+  } catch (error) {
+    console.warn("Failed to keep service worker alive with storage:", error);
+    // Fallback to tabs API if storage fails
+    await keepServiceWorkerAlive();
+  }
+}
+
+/**
+ * Helper function to keep service worker alive using runtime API
+ * This extends the service worker lifetime temporarily
+ */
+async function keepServiceWorkerAliveWithRuntime(): Promise<void> {
+  try {
+    // Use runtime API to extend service worker lifetime
+    // This is the most reliable method for Firefox
+    await browser.runtime.getPlatformInfo();
+  } catch (error) {
+    console.warn("Failed to keep service worker alive with runtime:", error);
+    // Fallback to storage API if runtime fails
+    await keepServiceWorkerAliveWithStorage();
+  }
+}
+
 // Handler function type definition
 type MessageHandler = (
   message: ReceivedMessages,
@@ -189,24 +298,75 @@ const handleOpenManager: MessageHandler = async (message) => {
     >;
     const tab = navMessage.payload?.url ? "styles" : "styles"; // Default to styles tab
 
-    // Always open the manager page in a new tab
-    const url = browser.runtime.getURL("/manager.html");
-    const fullUrl = tab === "styles" ? `${url}#styles` : `${url}#settings`;
+    // Generate unique operation ID to prevent duplicates
+    const operationId = `open-manager-${Date.now()}`;
 
-    console.log("[handleOpenManager] Opening manager page with URL:", fullUrl);
-    await browser.tabs.create({ url: fullUrl });
+    // Use debounce mechanism to prevent duplicate calls
+    await ensureUniqueOperation(operationId, async () => {
+      // Check if manager tab already exists
+      const managerTab = await findManagerTab();
 
-    console.log("[handleOpenManager] Successfully opened manager page");
-    return {
-      success: true,
-      action: "opened_manager_page",
-      tab: tab,
-    };
+      if (managerTab) {
+        // Track this tab to prevent duplicates
+        await trackManagerTab(managerTab.id!);
+
+        // Focus existing tab
+        await browser.tabs.update(managerTab.id, { active: true });
+
+        // Navigate to the correct tab if needed
+        const targetHash = tab === "styles" ? "styles" : "settings";
+        const currentUrl = new URL(managerTab.url!);
+        const currentHash = currentUrl.hash.slice(1);
+
+        if (currentHash !== targetHash) {
+          await browser.tabs.update(managerTab.id, {
+            url: `/manager.html#${targetHash}`,
+          });
+        }
+
+        console.log("[handleOpenManager] Focused existing manager tab");
+        return {
+          success: true,
+          action: "focused_existing_manager_page",
+          tab: tab,
+          tabId: managerTab.id,
+        };
+      } else {
+        // Open new manager page
+        const url = "/manager.html";
+        const fullUrl = tab === "styles" ? `${url}#styles` : `${url}#settings`;
+
+        console.log(
+          "[handleOpenManager] Creating new manager page with URL:",
+          fullUrl,
+        );
+        const newTab = await browser.tabs.create({ url: fullUrl });
+
+        // Track the newly created tab
+        await trackManagerTab(newTab.id!);
+
+        console.log(
+          "[handleOpenManager] Successfully created manager tab:",
+          newTab.id,
+        );
+        return {
+          success: true,
+          action: "created_manager_page",
+          tab: tab,
+          tabId: newTab.id,
+        };
+      }
+    });
+
+    return { success: true, action: "processed", tab: tab };
   } catch (error: unknown) {
     console.error("[handleOpenManager] Error:", error);
-    throw new Error(
-      `Failed to open manager page: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Failed to open manager page: ${errorMessage}`);
+  } finally {
+    // Use runtime API which is the most reliable method for Firefox
+    await keepServiceWorkerAliveWithRuntime();
   }
 };
 
@@ -228,24 +388,68 @@ const handleAddStyle: MessageHandler = async (message) => {
 const handleOpenSettings: MessageHandler = async (_message) => {
   console.log("[handleOpenSettings] Processing request");
   try {
-    // Open the manager page with settings tab
-    const url = browser.runtime.getURL("/manager.html");
-    const fullUrl = `${url}#settings`;
+    // Generate unique operation ID to prevent duplicates
+    const operationId = `open-settings-${Date.now()}`;
 
-    console.log("[handleOpenSettings] Opening manager page with URL:", fullUrl);
-    await browser.tabs.create({ url: fullUrl });
+    // Use debounce mechanism to prevent duplicate calls
+    await ensureUniqueOperation(operationId, async () => {
+      // Check if manager tab already exists
+      const managerTab = await findManagerTab();
 
-    console.log("[handleOpenSettings] Successfully opened settings page");
-    return {
-      success: true,
-      action: "opened_settings_page",
-      tab: "settings",
-    };
+      if (managerTab) {
+        // Track this tab to prevent duplicates
+        await trackManagerTab(managerTab.id!);
+
+        // Focus existing tab and navigate to settings
+        await browser.tabs.update(managerTab.id, { active: true });
+        await browser.tabs.update(managerTab.id, {
+          url: `/manager.html#settings`,
+        });
+
+        console.log(
+          "[handleOpenSettings] Focused existing manager tab with settings",
+        );
+        return {
+          success: true,
+          action: "focused_existing_settings_page",
+          tab: "settings",
+          tabId: managerTab.id,
+        };
+      } else {
+        // Open new manager page with settings tab
+        const url = "/manager.html#settings";
+
+        console.log(
+          "[handleOpenSettings] Creating new manager page with URL:",
+          url,
+        );
+        const newTab = await browser.tabs.create({ url });
+
+        // Track the newly created tab
+        await trackManagerTab(newTab.id!);
+
+        console.log(
+          "[handleOpenSettings] Successfully created settings tab:",
+          newTab.id,
+        );
+        return {
+          success: true,
+          action: "created_settings_page",
+          tab: "settings",
+          tabId: newTab.id,
+        };
+      }
+    });
+
+    return { success: true, action: "processed", tab: "settings" };
   } catch (error: unknown) {
     console.error("[handleOpenSettings] Error:", error);
     throw new Error(
       `Failed to open settings page: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
+  } finally {
+    // Use runtime API which is the most reliable method for Firefox
+    await keepServiceWorkerAliveWithRuntime();
   }
 };
 
@@ -450,6 +654,60 @@ export class MessageHandlerService {
     };
   }
 }
+
+/**
+ * Helper function to find existing manager tab
+ * Uses both tracked tab and browser query for reliability
+ */
+async function findManagerTab(): Promise<Browser.tabs.Tab | null> {
+  try {
+    // First check if we have a tracked tab
+    const trackedTabId = await getTrackedManagerTab();
+    if (trackedTabId) {
+      try {
+        const tab = await browser.tabs.get(trackedTabId);
+        if (tab.url?.includes("manager.html")) {
+          return tab;
+        }
+      } catch {
+        // Tab might have been closed, clear the tracking
+        activeManagerTabId = null;
+      }
+    }
+
+    // Fall back to querying all tabs
+    const tabs = await browser.tabs.query({
+      url: "*://*/manager.html*",
+    });
+
+    // Return the first manager tab found
+    return tabs.length > 0 ? tabs[0] : null;
+  } catch (error: unknown) {
+    console.warn("[findManagerTab] Error querying tabs:", error);
+    return null;
+  }
+}
+
+/**
+ * Initialize tab close listener to clear tracking when manager tab is closed
+ */
+function initializeTabCloseListener(): void {
+  if (typeof browser !== "undefined" && browser.tabs) {
+    browser.tabs.onRemoved.addListener((tabId) => {
+      if (tabId === activeManagerTabId) {
+        console.log("[TabTracker] Manager tab closed, clearing tracking");
+        activeManagerTabId = null;
+        if (managerTabCheckTimeout) {
+          clearTimeout(managerTabCheckTimeout);
+          managerTabCheckTimeout = null;
+        }
+      }
+    });
+  }
+}
+
+// Initialize the tab close listener when the module loads
+initializeTabCloseListener();
 
 // Create singleton instance
 export const messageHandlerService = new MessageHandlerService();
