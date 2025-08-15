@@ -57,7 +57,16 @@ const App = () => {
       <div className="bg-base-200 p-4 border-b border-base-300">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img src="/logo.svg" alt="Eastyles logo" className="w-8 h-8" />
+            <div
+              className="h-8 w-8 bg-current"
+              style={{
+                WebkitMask: "url(/logo.svg) no-repeat center",
+                WebkitMaskSize: "contain",
+                mask: "url(/logo.svg) no-repeat center",
+                maskSize: "contain",
+              }}
+              aria-hidden="true"
+            />
             <h3 className="text-lg font-bold text-base-content">
               Styles for...
             </h3>

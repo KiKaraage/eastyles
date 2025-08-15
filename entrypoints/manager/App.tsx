@@ -41,7 +41,7 @@ const App = () => {
           <div className="flex items-center space-x-3">
             {/* Themed SVG Logo using mask */}
             <div
-              className="w-8 h-8 bg-current"
+              className="h-8 w-24 bg-current"
               style={{
                 WebkitMask: "url(/eastyles-logotype.svg) no-repeat center",
                 WebkitMaskSize: "contain",
@@ -54,23 +54,47 @@ const App = () => {
           <div role="tablist" className="tabs tabs-lifted">
             <button
               role="tab"
-              className={`tab font-bold ${activeTab === "manage-styles" ? "tab-active" : ""}`}
+              className={`tab font-bold relative transition-all duration-200 ${
+                activeTab === "manage-styles" ? "tab-active" : ""
+              }`}
               onClick={() => {
                 setActiveTab("manage-styles");
                 window.location.hash = "styles";
               }}
+              style={{
+                paddingBottom: "0.5rem",
+              }}
             >
               Manage Styles
+              <span
+                className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 h-0.5 rounded-full transition-all duration-200 ${
+                  activeTab === "manage-styles"
+                    ? "w-3/5 bg-primary"
+                    : "w-1/3 hover:w-3/5"
+                }`}
+              />
             </button>
             <button
               role="tab"
-              className={`tab font-bold ${activeTab === "settings" ? "tab-active" : ""}`}
+              className={`tab font-bold relative transition-all duration-200 ${
+                activeTab === "settings" ? "tab-active" : ""
+              }`}
               onClick={() => {
                 setActiveTab("settings");
                 window.location.hash = "settings";
               }}
+              style={{
+                paddingBottom: "0.5rem",
+              }}
             >
               Settings
+              <span
+                className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 h-0.5 rounded-full transition-all duration-200 ${
+                  activeTab === "settings"
+                    ? "w-3/5 bg-primary"
+                    : "w-1/3 hover:w-3/5"
+                }`}
+              />
             </button>
           </div>
           <div className="flex items-center space-x-2">
