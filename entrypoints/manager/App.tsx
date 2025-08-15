@@ -39,7 +39,17 @@ const App = () => {
       <div className="bg-base-200 p-4 border-b border-base-300">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img src="/logo.svg" alt="Eastyles logo" className="w-8 h-8" />
+            {/* Themed SVG Logo using mask */}
+            <div
+              className="w-8 h-8 bg-current"
+              style={{
+                WebkitMask: "url(/eastyles-logotype.svg) no-repeat center",
+                WebkitMaskSize: "contain",
+                mask: "url(/eastyles-logotype.svg) no-repeat center",
+                maskSize: "contain",
+              }}
+              aria-hidden="true"
+            />
           </div>
           <div role="tablist" className="tabs tabs-lifted">
             <button
