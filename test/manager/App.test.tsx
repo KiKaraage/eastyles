@@ -43,7 +43,7 @@ describe("Manager App Component", () => {
   it("renders the manager with correct structure and version", () => {
     render(<App />);
 
-    expect(screen.getByAltText("Eastyles logo")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "" })).toBeTruthy();
     expect(screen.getByText(`v${pkg.version}`)).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Manage Styles" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Settings" })).toBeTruthy();

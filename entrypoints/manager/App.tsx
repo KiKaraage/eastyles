@@ -43,9 +43,9 @@ const App = () => {
             <div
               className="h-8 w-24 bg-current"
               style={{
-                WebkitMask: "url(/eastyles-logotype-400.svg) no-repeat center",
+                WebkitMask: "url(/logotype.svg) no-repeat center",
                 WebkitMaskSize: "contain",
-                mask: "url(/eastyles-logotype-400.svg) no-repeat center",
+                mask: "url(/logotype.svg) no-repeat center",
                 maskSize: "contain",
               }}
               aria-hidden="true"
