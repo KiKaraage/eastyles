@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   parseUserCSS,
-  getErrorPosition,
+  getPositionFromIndex,
   extractMetadataBlock,
 } from "../../../services/usercss/processor";
 
@@ -335,10 +335,10 @@ body {
     });
   });
 
-  describe("getErrorPosition", () => {
+  describe("getPositionFromIndex", () => {
     it("should calculate correct line and column for single line text", () => {
       const text = "Hello World";
-      const position = getErrorPosition(text, 6);
+      const position = getPositionFromIndex(text, 6);
 
       expect(position).toEqual({ line: 1, column: 7 });
     });
@@ -347,21 +347,21 @@ body {
       const text = `Line 1
 Line 2
 Line 3`;
-      const position = getErrorPosition(text, 10); // 'L' in Line 2
+      const position = getPositionFromIndex(text, 10); // 'L' in Line 2
 
       expect(position).toEqual({ line: 2, column: 4 });
     });
 
     it("should handle edge case at beginning of text", () => {
       const text = "Test";
-      const position = getErrorPosition(text, 0);
+      const position = getPositionFromIndex(text, 0);
 
       expect(position).toEqual({ line: 1, column: 1 });
     });
 
     it("should handle edge case at end of text", () => {
       const text = "Test";
-      const position = getErrorPosition(text, 4);
+      const position = getPositionFromIndex(text, 4);
 
       expect(position).toEqual({ line: 1, column: 5 });
     });

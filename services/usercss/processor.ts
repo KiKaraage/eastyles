@@ -5,7 +5,8 @@
  * and preparing CSS content for preprocessing and injection.
  */
 
-import { StyleMeta, ParseResult } from "./types";
+import { StyleMeta, ParseResult, PreprocessorResult } from "./types";
+import { detectPreprocessor, PreprocessorEngine } from "./preprocessor";
 
 /**
  * Regular expression to match UserCSS metadata block
@@ -87,12 +88,7 @@ export function parseUserCSS(raw: string): ParseResult {
       }
 
       seenDirectives.add(directive);
-      // Handle special -moz-document directive that doesn't start with @
-      if (directive === "-moz-document") {
-        directives["-moz-document"] = value.trim();
-      } else {
-        directives[directive] = value.trim();
-      }
+      directives[directive] = value.trim();
 
       // Update line position for next iteration
       const newlines = fullMatch.match(/\n/g);
@@ -103,6 +99,17 @@ export function parseUserCSS(raw: string): ParseResult {
 
     // Reset regex for multiple uses
     DIRECTIVE_REGEX.lastIndex = 0;
+
+    // Handle special -moz-document directive that doesn't start with @
+    // Look for -moz-document directive not preceded by @
+    const mozDocumentMatch = metadataContent.match(/(?:^|\n)(-moz-document)[^\S\r\n]*([\s\S]*?)(?=\n@|\n==\/UserStyle==|$)/);
+    if (mozDocumentMatch) {
+      const [, directive, value] = mozDocumentMatch;
+      if (!seenDirectives.has(directive)) {
+        seenDirectives.add(directive);
+        directives[directive] = value.trim();
+      }
+    }
 
     // Handle legacy -moz-document syntax
     if (directives["-moz-document"]) {
@@ -116,17 +123,41 @@ export function parseUserCSS(raw: string): ParseResult {
         warnings.push(
           "Legacy -moz-document syntax detected. Consider using modern @domain directive",
         );
-        const domainMatches = mozDocumentRules.match(
+        // Match url(), url-prefix(), and domain() patterns
+        const urlMatches = mozDocumentRules.match(
           /url\(["']?(https?:\/\/[^"')]+)["']?\)/g,
         );
+        
+        const urlPrefixMatches = mozDocumentRules.match(
+          /url-prefix\(["']?(https?:\/\/[^"')]+)["']?\)/g,
+        );
 
-        if (domainMatches) {
-          domainMatches.forEach((match) => {
+        if (urlMatches) {
+          urlMatches.forEach((match) => {
             const urlMatch = match.match(
               /url\(["']?(https?:\/\/[^"')]+)["']?\)/,
             );
             if (urlMatch) {
-              domains.push(new URL(urlMatch[1]).hostname);
+              try {
+                domains.push(new URL(urlMatch[1]).hostname);
+              } catch (e) {
+                // Ignore invalid URLs
+              }
+            }
+          });
+        }
+        
+        if (urlPrefixMatches) {
+          urlPrefixMatches.forEach((match) => {
+            const urlMatch = match.match(
+              /url-prefix\(["']?(https?:\/\/[^"')]+)["']?\)/,
+            );
+            if (urlMatch) {
+              try {
+                domains.push(new URL(urlMatch[1]).hostname);
+              } catch (e) {
+                // Ignore invalid URLs
+              }
             }
           });
         }
@@ -236,6 +267,42 @@ export function parseUserCSS(raw: string): ParseResult {
 }
 
 /**
+ * Processes a raw UserCSS string through the full pipeline:
+ * 1. Parse to extract metadata
+ * 2. Detect preprocessor
+ * 3. Preprocess CSS
+ * 4. Return combined result
+ */
+export async function processUserCSS(raw: string): Promise<ParseResult & { compiledCss: string; preprocessorErrors: string[] }> {
+  // Step 1: Parse the UserCSS
+  const parseResult = parseUserCSS(raw);
+  
+  // If parsing failed, return early
+  if (parseResult.errors.length > 0) {
+    return {
+      ...parseResult,
+      compiledCss: "",
+      preprocessorErrors: []
+    };
+  }
+  
+  // Step 2: Detect preprocessor using the raw content to find @preprocessor directive
+  const preprocessorDetection = detectPreprocessor(raw);
+  const preprocessorType = preprocessorDetection.type;
+  
+  // Step 3: Preprocess CSS
+  const engine = new PreprocessorEngine();
+  const preprocessResult: PreprocessorResult = await engine.process(parseResult.css, preprocessorType);
+  
+  // Step 4: Return combined result
+  return {
+    ...parseResult,
+    compiledCss: preprocessResult.css,
+    preprocessorErrors: preprocessResult.errors
+  };
+}
+
+/**
  * Generates a unique ID for a style based on name and namespace
  */
 function generateId(name: string, namespace: string): string {
@@ -257,6 +324,20 @@ function generateId(name: string, namespace: string): string {
  * Validates the position of an error within the source text
  */
 export function getErrorPosition(
+  text: string,
+  index: number,
+): { line: number; column: number } {
+  const before = text.substring(0, index);
+  const line = before.split("\n").length;
+  const column = before.length - before.lastIndexOf("\n");
+
+  return { line, column };
+}
+
+/**
+ * Calculates line and column position from index
+ */
+export function getPositionFromIndex(
   text: string,
   index: number,
 ): { line: number; column: number } {

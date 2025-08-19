@@ -29,12 +29,8 @@ export interface PreprocessorDetection {
  * @returns PreprocessorDetection object with type, source, and confidence
  */
 export function detectPreprocessor(text: string): PreprocessorDetection {
-  const trimmed = text.trim();
-
-  // First, check for explicit @preprocessor directive
-  const preprocessorMatch = trimmed.match(
-    /^\/\*\s*@preprocessor\s+([a-zA-Z]+)\s*\*\/\s*/,
-  );
+  // First, check for explicit @preprocessor directive anywhere in the text
+  const preprocessorMatch = text.match(/@preprocessor\s+([a-zA-Z]+)/);
   if (preprocessorMatch) {
     const preprocessor = preprocessorMatch[1].toLowerCase();
 
@@ -53,20 +49,20 @@ export function detectPreprocessor(text: string): PreprocessorDetection {
   let stylusScore = 0;
 
   // Less patterns
-  if (trimmed.includes("@import")) lessScore += 1;
-  if (trimmed.includes("@extend")) lessScore += 1;
-  if (trimmed.includes("@mixin")) lessScore += 1;
-  if (trimmed.includes(".(")) lessScore += 1; // Less mixins
-  if (trimmed.includes("when ")) lessScore += 1; // Less guards
-  if (trimmed.includes(")")) lessScore += 1; // Less mixin calls like .btn()
+  if (text.includes("@import")) lessScore += 1;
+  if (text.includes("@extend")) lessScore += 1;
+  if (text.includes("@mixin")) lessScore += 1;
+  if (text.includes(".(")) lessScore += 1; // Less mixins
+  if (text.includes("when ")) lessScore += 1; // Less guards
+  if (text.includes(")")) lessScore += 1; // Less mixin calls like .btn()
 
   // Stylus patterns
-  if (trimmed.includes("&")) stylusScore += 1; // Parent selector
-  if (trimmed.includes("//")) stylusScore += 1; // Single line comments
-  if (trimmed.includes("->")) stylusScore += 1; // Property access
-  if (trimmed.includes("colors.")) stylusScore += 1; // Dot notation like colors.red
-  if (trimmed.includes("unless ")) stylusScore += 1; // Stylus unless
-  if (trimmed.includes("if ")) stylusScore += 1; // Stylus if
+  if (text.includes("&")) stylusScore += 1; // Parent selector
+  if (text.includes("//")) stylusScore += 1; // Single line comments
+  if (text.includes("->")) stylusScore += 1; // Property access
+  if (text.includes("colors.")) stylusScore += 1; // Dot notation like colors.red
+  if (text.includes("unless ")) stylusScore += 1; // Stylus unless
+  if (text.includes("if ")) stylusScore += 1; // Stylus if
 
   // Handle cases where both might match (prioritize less when scores are equal or close)
   if (
