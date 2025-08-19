@@ -225,7 +225,7 @@ describe("UserCSS Type Validation", () => {
   describe("DomainRuleSchema", () => {
     it("should validate a valid DomainRule", () => {
       const validRule = {
-        type: "domain" as const,
+        kind: "domain" as const,
         pattern: "example.com",
         include: true,
       };
@@ -236,7 +236,7 @@ describe("UserCSS Type Validation", () => {
 
     it("should reject DomainRule with empty pattern", () => {
       const invalidRule = {
-        type: "domain" as const,
+        kind: "domain" as const,
         pattern: "",
         include: true,
       };
@@ -250,26 +250,25 @@ describe("UserCSS Type Validation", () => {
       }
     });
 
-    it("should validate DomainRule with different types", () => {
+    it("should validate DomainRule with different kinds", () => {
       const validRules = [
         {
-          type: "url" as const,
+          kind: "url" as const,
           pattern: "https://example.com/page",
           include: true,
         },
         {
-          type: "url-prefix" as const,
+          kind: "url-prefix" as const,
           pattern: "https://example.com/",
           include: true,
         },
         {
-          type: "url-regexp" as const,
-          pattern: ".*\\.example\\.com",
+          kind: "domain" as const,
+          pattern: "example.com",
           include: true,
         },
-        { type: "domain" as const, pattern: "example.com", include: true },
         {
-          type: "regexp" as const,
+          kind: "regexp" as const,
           pattern: ".*\\.example\\.com",
           include: true,
         },
@@ -485,9 +484,9 @@ describe("UserCSS Type Validation", () => {
     describe("validateDomainRules", () => {
       it("should validate valid domain rules", () => {
         const validRules = [
-          { type: "domain" as const, pattern: "example.com", include: true },
+          { kind: "domain" as const, pattern: "example.com", include: true },
           {
-            type: "url" as const,
+            kind: "url" as const,
             pattern: "https://example.com/page",
             include: false,
           },

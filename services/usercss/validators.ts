@@ -28,7 +28,7 @@ const AssetSchema = z.object({
 
 // Domain rule schema
 const DomainRuleSchema = z.object({
-  type: z.enum(["url", "url-prefix", "url-regexp", "domain", "regexp"]),
+  kind: z.enum(["url", "url-prefix", "domain", "regexp"]),
   pattern: z.string().min(1, "Domain pattern cannot be empty"),
   include: z.boolean(),
 });

@@ -49,7 +49,7 @@ export interface VariableDescriptor {
 
 export interface DomainRule {
   /** Type of domain matching rule */
-  type: 'url' | 'url-prefix' | 'url-regexp' | 'domain' | 'regexp';
+  kind: 'url' | 'url-prefix' | 'domain' | 'regexp';
   /** Pattern to match against */
   pattern: string;
   /** Whether this rule should include or exclude the pattern */
