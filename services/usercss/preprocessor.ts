@@ -107,3 +107,289 @@ export function getPreprocessorName(type: PreprocessorType): string {
       return "Unknown";
   }
 }
+
+/**
+ * Result interface for preprocessor compilation
+ */
+export interface PreprocessorResult {
+  css: string;
+  warnings: string[];
+  errors: string[];
+}
+
+/**
+ * Cache entry interface for LRU cache
+ */
+interface CacheEntry {
+  result: PreprocessorResult;
+  timestamp: number;
+}
+
+/**
+ * LRU Cache implementation for preprocessor results
+ */
+class LRUCache {
+  private cache = new Map<string, CacheEntry>();
+  private maxSize: number;
+
+  constructor(maxSize: number = 50) {
+    this.maxSize = maxSize;
+  }
+
+  get(key: string): PreprocessorResult | undefined {
+    const entry = this.cache.get(key);
+    if (entry) {
+      // Move to end (most recently used)
+      this.cache.delete(key);
+      this.cache.set(key, entry);
+      return entry.result;
+    }
+    return undefined;
+  }
+
+  set(key: string, result: PreprocessorResult): void {
+    // Remove if already exists
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
+
+    // Remove oldest if cache is full
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) {
+        this.cache.delete(firstKey);
+      }
+    }
+
+    // Add new entry
+    this.cache.set(key, {
+      result,
+      timestamp: Date.now(),
+    });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+/**
+ * PreprocessorEngine class with LRU caching and lazy loading
+ */
+export class PreprocessorEngine {
+  private cache: LRUCache;
+  private lessModule: any = null;
+  private stylusModule: any = null;
+
+  constructor(cacheSize: number = 50) {
+    this.cache = new LRUCache(cacheSize);
+  }
+
+  /**
+   * Generate cache key from engine and content hash
+   */
+  private generateCacheKey(engine: PreprocessorType, content: string): string {
+    // Simple hash function for content
+    let hash = 0;
+    for (let i = 0; i < content.length; i++) {
+      const char = content.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return `${engine}:${hash.toString(36)}`;
+  }
+
+  /**
+   * Lazy load Less preprocessor
+   */
+  private async loadLess(): Promise<any> {
+    if (!this.lessModule) {
+      try {
+        this.lessModule = await import("less");
+      } catch (error) {
+        throw new Error(
+          `Failed to load Less preprocessor: ${(error as Error).message}`,
+        );
+      }
+    }
+    return this.lessModule;
+  }
+
+  /**
+   * Lazy load Stylus preprocessor
+   */
+  private async loadStylus(): Promise<any> {
+    if (!this.stylusModule) {
+      try {
+        this.stylusModule = await import("stylus");
+      } catch (error) {
+        throw new Error(
+          `Failed to load Stylus preprocessor: ${(error as Error).message}`,
+        );
+      }
+    }
+    return this.stylusModule;
+  }
+
+  /**
+   * Process CSS with Less preprocessor
+   */
+  private async processLess(text: string): Promise<PreprocessorResult> {
+    try {
+      const less = await this.loadLess();
+      const result = await less.default.render(text);
+
+      const warnings: string[] = [];
+      const errors: string[] = [];
+
+      // Extract warnings if available
+      if (result.warnings && Array.isArray(result.warnings)) {
+        result.warnings.forEach((warning: any) => {
+          const location =
+            warning.line && warning.column
+              ? ` (Line ${warning.line}, Column ${warning.column})`
+              : "";
+          warnings.push(`Warning: ${warning.message}${location}`);
+        });
+      }
+
+      // Handle both object result (real Less) and direct string result (for mocking)
+      const css = typeof result === "string" ? result : result.css;
+
+      return {
+        css: css || "",
+        warnings,
+        errors,
+      };
+    } catch (error: unknown) {
+      const err = error as any;
+
+      // Check if this is a module import error or compilation error
+      if (err.message && err.message.includes("Module not found")) {
+        return {
+          css: "",
+          warnings: [],
+          errors: [`Failed to process with less: ${err.message}`],
+        };
+      }
+
+      // This is a Less compilation error
+      const location =
+        err.line && err.column
+          ? ` (Line ${err.line}, Column ${err.column})`
+          : "";
+      const filename = err.filename ? ` in ${err.filename}` : "";
+
+      return {
+        css: "",
+        warnings: [],
+        errors: [
+          `Less compilation failed: ${err.message}${location}${filename}`,
+        ],
+      };
+    }
+  }
+
+  /**
+   * Process CSS with Stylus preprocessor
+   */
+  private async processStylus(text: string): Promise<PreprocessorResult> {
+    try {
+      const stylus = await this.loadStylus();
+
+      return new Promise<PreprocessorResult>((resolve) => {
+        stylus.default.render(text, (err: any, css: string) => {
+          if (err) {
+            const location =
+              err.line && err.column
+                ? ` (Line ${err.line}, Column ${err.column})`
+                : "";
+
+            resolve({
+              css: "",
+              warnings: [],
+              errors: [`Stylus compilation failed: ${err.message}${location}`],
+            });
+          } else {
+            resolve({
+              css: css || "",
+              warnings: [],
+              errors: [],
+            });
+          }
+        });
+      });
+    } catch (error: unknown) {
+      return {
+        css: "",
+        warnings: [],
+        errors: [`Failed to process with stylus: ${(error as Error).message}`],
+      };
+    }
+  }
+
+  /**
+   * Process text with specified preprocessor engine
+   */
+  async process(
+    text: string,
+    engine: PreprocessorType,
+  ): Promise<PreprocessorResult> {
+    // Handle empty or whitespace-only input
+    if (!text || text.trim() === "") {
+      return {
+        css: text,
+        warnings: [],
+        errors: [],
+      };
+    }
+
+    // Check cache first
+    const cacheKey = this.generateCacheKey(engine, text);
+    const cachedResult = this.cache.get(cacheKey);
+    if (cachedResult) {
+      return cachedResult;
+    }
+
+    let result: PreprocessorResult;
+
+    try {
+      switch (engine) {
+        case "less":
+          result = await this.processLess(text);
+          break;
+        case "stylus":
+          result = await this.processStylus(text);
+          break;
+        case "none":
+        default:
+          result = {
+            css: text,
+            warnings: [],
+            errors: [],
+          };
+          break;
+      }
+    } catch (error: unknown) {
+      result = {
+        css: text, // Fallback to original text
+        warnings: [],
+        errors: [
+          `Failed to process with ${engine}: ${(error as Error).message}`,
+        ],
+      };
+    }
+
+    // Cache the result
+    this.cache.set(cacheKey, result);
+
+    return result;
+  }
+
+  /**
+   * Clear the preprocessor cache
+   */
+  clearCache(): void {
+    this.cache.clear();
+  }
+}
