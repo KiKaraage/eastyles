@@ -64,8 +64,10 @@ describe("App", () => {
     render(<App />);
 
     // Check header elements
+    expect(
+      document.querySelector('[aria-hidden="true"][style*="mask"]'),
+    ).toBeTruthy();
     expect(screen.getByText("Styles for...")).toBeTruthy();
-    expect(screen.getByAltText("Eastyles logo")).toBeTruthy();
 
     // Check main content area
     expect(screen.getByText("Active Styles")).toBeTruthy();

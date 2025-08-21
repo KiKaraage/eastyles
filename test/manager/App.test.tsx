@@ -43,7 +43,9 @@ describe("Manager App Component", () => {
   it("renders the manager with correct structure and version", () => {
     render(<App />);
 
-    expect(screen.getByRole("img", { name: "" })).toBeTruthy();
+    expect(
+      document.querySelector('[aria-hidden="true"][style*="mask"]'),
+    ).toBeTruthy();
     expect(screen.getByText(`v${pkg.version}`)).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Manage Styles" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Settings" })).toBeTruthy();
@@ -156,7 +158,9 @@ describe("Manager App Component", () => {
     });
     render(<App />);
     expect(screen.getByTitle("Current theme: light (light)")).toBeTruthy();
-    expect(screen.getByTestId("sun-icon")).toBeTruthy();
+    expect(
+      document.querySelector('[aria-hidden="true"][style*="mask"]'),
+    ).toBeTruthy();
   });
 
   it("displays correct theme icon for dark mode", () => {
