@@ -152,7 +152,7 @@ describe("ErrorBoundary Component", () => {
         canRetry: expect.any(Boolean),
         resetError: expect.any(Function),
       }),
-      undefined,
+      {}, // React context (empty object)
     );
   });
 

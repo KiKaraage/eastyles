@@ -4,13 +4,20 @@ import {
   RenderOptions,
   RenderResult,
 } from "@testing-library/react";
-import React, { ReactElement } from "react";
-import { withErrorBoundary } from "../components/ui/ErrorBoundary";
+import { ReactElement } from "react";
 
-// Custom render function that wraps components with the ErrorBoundary
+// Custom render function that ensures proper DOM container setup
 function customRender(ui: ReactElement, options?: RenderOptions): RenderResult {
-  const WrappedComponent = withErrorBoundary(() => ui);
-  return rtlRender(<WrappedComponent />, options);
+  // Create a container if none is provided
+  const container =
+    options?.container ||
+    (() => {
+      const div = document.createElement("div");
+      document.body.appendChild(div);
+      return div;
+    })();
+
+  return rtlRender(ui, { ...options, container });
 }
 
 // Re-export everything from @testing-library/react

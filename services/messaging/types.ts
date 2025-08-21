@@ -13,6 +13,31 @@ export interface PopupMessageResponses {
   };
 }
 
+// Response types for apply page messages
+export interface ApplyMessageResponses {
+  PARSE_USERCSS: {
+    success: boolean;
+    error?: string;
+    meta?: {
+      name: string;
+      namespace: string;
+      version: string;
+      description: string;
+      author: string;
+      sourceUrl: string;
+      domains: string[];
+    };
+    css?: string;
+    warnings?: string[];
+    errors?: string[];
+  };
+  INSTALL_STYLE: {
+    success: boolean;
+    error?: string;
+    styleId?: string;
+  };
+}
+
 /**
  * Messages sent from the background script to other components.
  */
@@ -107,9 +132,44 @@ export type ManagerMessages =
     };
 
 /**
+ * Messages sent from the apply page to the background script.
+ */
+export type ApplyMessages =
+  | {
+      type: "PARSE_USERCSS";
+      payload: {
+        text: string;
+        sourceUrl?: string;
+      };
+    }
+  | {
+      type: "INSTALL_STYLE";
+      payload: {
+        meta: {
+          name: string;
+          namespace: string;
+          version: string;
+          description: string;
+          author: string;
+          sourceUrl: string;
+          domains: string[];
+        };
+        compiledCss: string;
+        variables: Array<{
+          name: string;
+          type: string;
+          default: string;
+          min?: number;
+          max?: number;
+          options?: string[];
+        }>;
+      };
+    };
+
+/**
  * Union type of all possible message types that can be received by the background script.
  */
-export type ReceivedMessages = PopupMessages | ManagerMessages;
+export type ReceivedMessages = PopupMessages | ManagerMessages | ApplyMessages;
 
 /**
  * Union type of all possible message types that can be sent from the background script.

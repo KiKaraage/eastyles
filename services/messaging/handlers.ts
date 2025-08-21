@@ -495,6 +495,139 @@ const handleThemeChanged: MessageHandler = async (message) => {
 };
 
 /**
+ * Handler for PARSE_USERCSS messages.
+ */
+const handleParseUserCSS: MessageHandler = async (message) => {
+  const parseMessage = message as Extract<
+    ReceivedMessages,
+    { type: "PARSE_USERCSS" }
+  >;
+  console.log("Parse UserCSS requested:", parseMessage.payload);
+
+  try {
+    // TODO: Implement actual UserCSS parsing when processor service is available
+    // For now, return mock data
+    const { text, sourceUrl } = parseMessage.payload;
+
+    // Basic validation
+    if (!text || typeof text !== "string") {
+      throw new Error("Invalid UserCSS text: must be a non-empty string");
+    }
+
+    // Mock parsing logic - extract basic metadata
+    const nameMatch = text.match(/@name\s+(.+)/);
+    const namespaceMatch = text.match(/@namespace\s+(.+)/);
+    const versionMatch = text.match(/@version\s+(.+)/);
+    const descriptionMatch = text.match(/@description\s+(.+)/);
+    const authorMatch = text.match(/@author\s+(.+)/);
+
+    // Extract CSS content (everything after the metadata block)
+    const cssMatch = text.match(/==\/UserStyle==\s*\n?(.*)/s);
+    const css = cssMatch ? cssMatch[1].trim() : text;
+
+    // Extract domains from @-moz-document or similar
+    const domainMatches = text.match(/@-moz-document\s+[^}]*url\(["']([^"']+)["']\)/g) || [];
+    const domains = domainMatches.map(match => {
+      const urlMatch = match.match(/url\(["']([^"']+)["']\)/);
+      if (urlMatch) {
+        try {
+          return new URL(urlMatch[1]).hostname;
+        } catch {
+          return urlMatch[1];
+        }
+      }
+      return '';
+    }).filter(Boolean);
+
+    return {
+      success: true,
+      meta: {
+        name: nameMatch ? nameMatch[1].trim() : 'Unknown Style',
+        namespace: namespaceMatch ? namespaceMatch[1].trim() : '',
+        version: versionMatch ? versionMatch[1].trim() : '1.0.0',
+        description: descriptionMatch ? descriptionMatch[1].trim() : '',
+        author: authorMatch ? authorMatch[1].trim() : '',
+        sourceUrl: sourceUrl || '',
+        domains: domains
+      },
+      css: css,
+      warnings: [],
+      errors: []
+    };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+};
+
+/**
+ * Handler for INSTALL_STYLE messages.
+ */
+const handleInstallStyle: MessageHandler = async (message) => {
+  const installMessage = message as Extract<
+    ReceivedMessages,
+    { type: "INSTALL_STYLE" }
+  >;
+  console.log("Install style requested:", installMessage.payload);
+
+  try {
+    const { meta, compiledCss, variables } = installMessage.payload;
+
+    // Basic validation
+    if (!meta || !meta.name) {
+      throw new Error("Invalid style metadata: name is required");
+    }
+
+    if (!compiledCss || typeof compiledCss !== "string") {
+      throw new Error("Invalid compiled CSS: must be a non-empty string");
+    }
+
+    // Validate variables if provided
+    if (variables && Array.isArray(variables)) {
+      for (const variable of variables) {
+        if (!variable.name || !variable.type) {
+          throw new Error("Invalid variable: name and type are required");
+        }
+      }
+    }
+
+    // Import storage client dynamically to avoid circular dependencies
+    const { storageClient } = await import("@services/storage/client");
+
+    // Create the style object for storage
+    const styleData = {
+      name: meta.name,
+      code: compiledCss,
+      description: meta.description,
+      domains: meta.domains,
+      variables: variables || [],
+      enabled: true,
+      version: meta.version ? parseInt(meta.version) || 1 : 1,
+    };
+
+    // Add the style to storage
+    const savedStyle = await storageClient.addStyle(styleData);
+
+    console.log("Style installed successfully:", savedStyle.id);
+
+    return {
+      success: true,
+      styleId: savedStyle.id
+    };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to install style:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+};
+
+/**
  * Registry of all message handlers.
  */
 const handlerRegistry: HandlerRegistry = {
@@ -510,6 +643,8 @@ const handlerRegistry: HandlerRegistry = {
   REQUEST_IMPORT: withErrorHandling(handleRequestImport),
   RESET_SETTINGS: withErrorHandling(handleResetSettings),
   GET_ALL_STYLES: withErrorHandling(handleGetAllStyles),
+  PARSE_USERCSS: withErrorHandling(handleParseUserCSS),
+  INSTALL_STYLE: withErrorHandling(handleInstallStyle),
 };
 
 /**
@@ -638,6 +773,8 @@ export class MessageHandlerService {
       "REQUEST_IMPORT",
       "RESET_SETTINGS",
       "GET_ALL_STYLES",
+      "PARSE_USERCSS",
+      "INSTALL_STYLE",
     ];
 
     const missingHandlers: string[] = [];
@@ -726,5 +863,7 @@ export {
   handleRequestImport,
   handleResetSettings,
   handleGetAllStyles,
+  handleParseUserCSS,
+  handleInstallStyle,
   withErrorHandling,
 };

@@ -18,6 +18,11 @@ export enum PopupMessageType {
   THEME_CHANGED = "THEME_CHANGED",
 }
 
+export enum ApplyMessageType {
+  PARSE_USERCSS = "PARSE_USERCSS",
+  INSTALL_STYLE = "INSTALL_STYLE",
+}
+
 /**
  * Message payload types
  */
@@ -46,6 +51,57 @@ export interface PopupMessageResponses {
   [PopupMessageType.THEME_CHANGED]: { success: boolean; error?: string };
 }
 
+export interface ApplyMessagePayloads {
+  [ApplyMessageType.PARSE_USERCSS]: {
+    text: string;
+    sourceUrl?: string;
+  };
+  [ApplyMessageType.INSTALL_STYLE]: {
+    meta: {
+      name: string;
+      namespace: string;
+      version: string;
+      description: string;
+      author: string;
+      sourceUrl: string;
+      domains: string[];
+    };
+    compiledCss: string;
+    variables: Array<{
+      name: string;
+      type: string;
+      default: string;
+      min?: number;
+      max?: number;
+      options?: string[];
+    }>;
+  };
+}
+
+export interface ApplyMessageResponses {
+  [ApplyMessageType.PARSE_USERCSS]: {
+    success: boolean;
+    error?: string;
+    meta?: {
+      name: string;
+      namespace: string;
+      version: string;
+      description: string;
+      author: string;
+      sourceUrl: string;
+      domains: string[];
+    };
+    css?: string;
+    warnings?: string[];
+    errors?: string[];
+  };
+  [ApplyMessageType.INSTALL_STYLE]: {
+    success: boolean;
+    error?: string;
+    styleId?: string;
+  };
+}
+
 /**
  * Message interface
  */
@@ -60,27 +116,27 @@ export interface PopupMessage<T extends PopupMessageType> {
  */
 export interface UseMessageReturn {
   /** Send a message to background script */
-  sendMessage: <T extends PopupMessageType>(
+  sendMessage: <T extends MessageType>(
     type: T,
-    payload: PopupMessagePayloads[T],
-  ) => Promise<PopupMessageResponses[T]>;
+    payload: MessagePayloads[T],
+  ) => Promise<MessageResponses[T]>;
 
   /** Send a message without waiting for response */
-  sendNotification: <T extends PopupMessageType>(
+  sendNotification: <T extends MessageType>(
     type: T,
-    payload: PopupMessagePayloads[T],
+    payload: MessagePayloads[T],
   ) => void;
 
   /** Listen for messages from background script */
-  onMessage: <T extends PopupMessageType>(
+  onMessage: <T extends MessageType>(
     type: T,
-    callback: (payload: PopupMessagePayloads[T]) => void,
+    callback: (payload: MessagePayloads[T]) => void,
   ) => () => void;
 
   /** Listen for responses to messages */
-  onResponse: <T extends PopupMessageType>(
+  onResponse: <T extends MessageType>(
     responseId: string,
-    callback: (response: PopupMessageResponses[T]) => void,
+    callback: (response: MessageResponses[T]) => void,
   ) => () => void;
 
   /** Current connection status */
@@ -91,13 +147,28 @@ export interface UseMessageReturn {
 }
 
 /**
+ * Union type for all message types
+ */
+export type MessageType = PopupMessageType | ApplyMessageType;
+
+/**
+ * Union type for all message payloads
+ */
+export type MessagePayloads = PopupMessagePayloads & ApplyMessagePayloads;
+
+/**
+ * Union type for all message responses
+ */
+export type MessageResponses = PopupMessageResponses & ApplyMessageResponses;
+
+/**
  * Hook for message passing functionality
  */
 export function useMessage(): UseMessageReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [pendingMessages, setPendingMessages] = useState(0);
   const [messageHandlers, setMessageHandlers] = useState<
-    Map<PopupMessageType, ((payload: unknown) => void)[]>
+    Map<MessageType, ((payload: unknown) => void)[]>
   >(new Map());
   const [responseHandlers, setResponseHandlers] = useState<
     Map<string, ((response: unknown) => void)[]>
@@ -168,10 +239,10 @@ export function useMessage(): UseMessageReturn {
 
   // Send message to background script
   const sendMessage = useCallback(
-    async <T extends PopupMessageType>(
+    async <T extends MessageType>(
       type: T,
-      payload: PopupMessagePayloads[T],
-    ): Promise<PopupMessageResponses[T]> => {
+      payload: MessagePayloads[T],
+    ): Promise<MessageResponses[T]> => {
       const dynamicIsConnected = getIsConnected();
       console.log(
         `[useMessage] Attempting to send message:`,
@@ -184,7 +255,7 @@ export function useMessage(): UseMessageReturn {
 
       try {
         const responseId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-        const message: PopupMessage<T> = { type, payload, responseId };
+        const message: { type: T; payload: MessagePayloads[T]; responseId?: string } = { type, payload, responseId };
 
         // Create promise for response
         return new Promise((resolve, reject) => {
@@ -212,7 +283,7 @@ export function useMessage(): UseMessageReturn {
                 `[useMessage] Received response for ${type}:`,
                 response,
               );
-              resolve(response as PopupMessageResponses[T]);
+              resolve(response as MessageResponses[T]);
             });
             newHandlers.set(responseId, handlers);
             return newHandlers;
@@ -241,7 +312,7 @@ export function useMessage(): UseMessageReturn {
             );
             setTimeout(() => {
               cleanupHandlers();
-              resolve({ success: true } as PopupMessageResponses[T]);
+              resolve({ success: true } as MessageResponses[T]);
             }, 100);
           }
         });
@@ -254,7 +325,7 @@ export function useMessage(): UseMessageReturn {
 
   // Send notification without waiting for response
   const sendNotification = useCallback(
-    <T extends PopupMessageType>(type: T, payload: PopupMessagePayloads[T]) => {
+    <T extends MessageType>(type: T, payload: MessagePayloads[T]) => {
       const dynamicIsConnected = getIsConnected();
       console.log(
         `[useMessage] Sending notification:`,
@@ -264,7 +335,7 @@ export function useMessage(): UseMessageReturn {
         dynamicIsConnected,
       );
 
-      const message: PopupMessage<T> = { type, payload };
+      const message: { type: T; payload: MessagePayloads[T] } = { type, payload };
 
       if (dynamicIsConnected && browser.runtime?.sendMessage) {
         browser.runtime.sendMessage(message).catch((error) => {
@@ -280,15 +351,15 @@ export function useMessage(): UseMessageReturn {
 
   // Listen for messages from background script
   const onMessage = useCallback(
-    <T extends PopupMessageType>(
+    <T extends MessageType>(
       type: T,
-      callback: (payload: PopupMessagePayloads[T]) => void,
+      callback: (payload: MessagePayloads[T]) => void,
     ) => {
       setMessageHandlers((prev) => {
         const newHandlers = new Map(prev);
-        const handlers = newHandlers.get(type) || [];
+        const handlers = newHandlers.get(type as MessageType) || [];
         handlers.push(callback as (payload: unknown) => void);
-        newHandlers.set(type, handlers);
+        newHandlers.set(type as MessageType, handlers);
         return newHandlers;
       });
 
@@ -296,14 +367,14 @@ export function useMessage(): UseMessageReturn {
       return () => {
         setMessageHandlers((prev) => {
           const newHandlers = new Map(prev);
-          const handlers = newHandlers.get(type) || [];
+          const handlers = newHandlers.get(type as MessageType) || [];
           const index = handlers.indexOf(
             callback as (payload: unknown) => void,
           );
           if (index > -1) {
             handlers.splice(index, 1);
           }
-          newHandlers.set(type, handlers);
+          newHandlers.set(type as MessageType, handlers);
           return newHandlers;
         });
       };
@@ -313,9 +384,9 @@ export function useMessage(): UseMessageReturn {
 
   // Listen for responses to messages
   const onResponse = useCallback(
-    <T extends PopupMessageType>(
+    <T extends MessageType>(
       responseId: string,
-      callback: (response: PopupMessageResponses[T]) => void,
+      callback: (response: MessageResponses[T]) => void,
     ) => {
       setResponseHandlers((prev) => {
         const newHandlers = new Map(prev);
@@ -472,5 +543,56 @@ export function usePopupActions() {
     openSettings,
     getStyles,
     toggleStyle,
+  };
+}
+
+/**
+ * Hook for Apply Page message passing functionality
+ */
+export function useApplyActions() {
+  const { sendMessage } = useMessage();
+
+  const parseUserCSS = useCallback(
+    async (text: string, sourceUrl?: string) => {
+      console.log("[useApplyActions] parseUserCSS called, text length:", text.length);
+      return sendMessage(ApplyMessageType.PARSE_USERCSS, { text, sourceUrl });
+    },
+    [sendMessage],
+  );
+
+  const installStyle = useCallback(
+    async (
+      meta: {
+        name: string;
+        namespace: string;
+        version: string;
+        description: string;
+        author: string;
+        sourceUrl: string;
+        domains: string[];
+      },
+      compiledCss: string,
+      variables: Array<{
+        name: string;
+        type: string;
+        default: string;
+        min?: number;
+        max?: number;
+        options?: string[];
+      }>
+    ) => {
+      console.log("[useApplyActions] installStyle called, style:", meta.name);
+      return sendMessage(ApplyMessageType.INSTALL_STYLE, {
+        meta,
+        compiledCss,
+        variables,
+      });
+    },
+    [sendMessage],
+  );
+
+  return {
+    parseUserCSS,
+    installStyle,
   };
 }

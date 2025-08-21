@@ -2,7 +2,7 @@
 // test/setup.ts - Enhanced version with proper WXT storage mocking
 // This file sets up the testing environment for Vitest
 
-import { vi, beforeAll, afterEach } from "vitest";
+import { vi, beforeAll, afterEach, beforeEach } from "vitest";
 
 // region: Type Definitions for Mocks
 interface MockBrowserStorageArea {
@@ -318,6 +318,25 @@ vi.mock("@services/storage/client", async () => {
 afterEach(() => {
   vi.clearAllMocks();
   resetStorage();
+
+  // Clean up DOM completely
+  if (typeof document !== "undefined" && document.body) {
+    document.body.innerHTML = "";
+    // Remove any event listeners or observers
+    if (typeof document.body.hasChildNodes === "function" && document.body.hasChildNodes()) {
+      Array.from(document.body.childNodes).forEach((child) => {
+        document.body.removeChild(child);
+      });
+    }
+  }
+});
+
+// Setup DOM container for React Testing Library
+beforeEach(() => {
+  // Ensure document.body exists and is clean
+  if (typeof document !== "undefined" && document.body) {
+    document.body.innerHTML = "";
+  }
 });
 
 // Mock the logger module
