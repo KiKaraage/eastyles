@@ -174,8 +174,8 @@ class LRUCache {
  */
 export class PreprocessorEngine {
   private cache: LRUCache;
-  private lessModule: any = null;
-  private stylusModule: any = null;
+  private lessModule: unknown = null;
+  private stylusModule: unknown = null;
 
   constructor(cacheSize: number = 50) {
     this.cache = new LRUCache(cacheSize);
@@ -198,7 +198,7 @@ export class PreprocessorEngine {
   /**
    * Lazy load Less preprocessor
    */
-  private async loadLess(): Promise<any> {
+  private async loadLess(): Promise<unknown> {
     if (!this.lessModule) {
       try {
         this.lessModule = await import("less");
@@ -214,7 +214,7 @@ export class PreprocessorEngine {
   /**
    * Lazy load Stylus preprocessor
    */
-  private async loadStylus(): Promise<any> {
+  private async loadStylus(): Promise<unknown> {
     if (!this.stylusModule) {
       try {
         this.stylusModule = await import("stylus");
@@ -232,7 +232,16 @@ export class PreprocessorEngine {
    */
   private async processLess(text: string): Promise<PreprocessorResult> {
     try {
-      const less = await this.loadLess();
+      const less = (await this.loadLess()) as {
+        default: {
+          render: (
+            text: string,
+          ) => Promise<{
+            css: string;
+            warnings?: { message: string; line?: number; column?: number }[];
+          }>;
+        };
+      };
       const result = await less.default.render(text);
 
       const warnings: string[] = [];
@@ -240,13 +249,15 @@ export class PreprocessorEngine {
 
       // Extract warnings if available
       if (result.warnings && Array.isArray(result.warnings)) {
-        result.warnings.forEach((warning: any) => {
-          const location =
-            warning.line && warning.column
-              ? ` (Line ${warning.line}, Column ${warning.column})`
-              : "";
-          warnings.push(`Warning: ${warning.message}${location}`);
-        });
+        result.warnings.forEach(
+          (warning: { message: string; line?: number; column?: number }) => {
+            const location =
+              warning.line && warning.column
+                ? ` (Line ${warning.line}, Column ${warning.column})`
+                : "";
+            warnings.push(`Warning: ${warning.message}${location}`);
+          },
+        );
       }
 
       // Handle both object result (real Less) and direct string result (for mocking)
@@ -258,7 +269,12 @@ export class PreprocessorEngine {
         errors,
       };
     } catch (error: unknown) {
-      const err = error as any;
+      const err = error as {
+        message: string;
+        line?: number;
+        column?: number;
+        filename?: string;
+      };
 
       // Check if this is a module import error or compilation error
       if (err.message && err.message.includes("Module not found")) {
@@ -291,29 +307,47 @@ export class PreprocessorEngine {
    */
   private async processStylus(text: string): Promise<PreprocessorResult> {
     try {
-      const stylus = await this.loadStylus();
+      const stylus = (await this.loadStylus()) as {
+        default: {
+          render: (
+            text: string,
+            callback: (
+              err: { message: string; line?: number; column?: number } | null,
+              css: string,
+            ) => void,
+          ) => void;
+        };
+      };
 
       return new Promise<PreprocessorResult>((resolve) => {
-        stylus.default.render(text, (err: any, css: string) => {
-          if (err) {
-            const location =
-              err.line && err.column
-                ? ` (Line ${err.line}, Column ${err.column})`
-                : "";
+        stylus.default.render(
+          text,
+          (
+            err: { message: string; line?: number; column?: number } | null,
+            css: string,
+          ) => {
+            if (err) {
+              const location =
+                err.line && err.column
+                  ? ` (Line ${err.line}, Column ${err.column})`
+                  : "";
 
-            resolve({
-              css: "",
-              warnings: [],
-              errors: [`Stylus compilation failed: ${err.message}${location}`],
-            });
-          } else {
-            resolve({
-              css: css || "",
-              warnings: [],
-              errors: [],
-            });
-          }
-        });
+              resolve({
+                css: "",
+                warnings: [],
+                errors: [
+                  `Stylus compilation failed: ${err.message}${location}`,
+                ],
+              });
+            } else {
+              resolve({
+                css: css || "",
+                warnings: [],
+                errors: [],
+              });
+            }
+          },
+        );
       });
     } catch (error: unknown) {
       return {

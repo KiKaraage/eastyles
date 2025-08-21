@@ -37,7 +37,7 @@ export function parseUserCSS(raw: string): ParseResult {
   const errors: string[] = [];
   let css = raw;
   let meta: StyleMeta;
-  let domains: string[] = [];
+  const domains: string[] = [];
 
   try {
     // Extract metadata block with flexible matching
@@ -49,7 +49,6 @@ export function parseUserCSS(raw: string): ParseResult {
       );
     }
 
-    const metadataBlock = metadataBlockMatch[0];
     const metadataContent = metadataBlockMatch[1];
     const lineStart =
       (raw.substring(0, metadataBlockMatch.index!).match(/\n/g) || []).length +
@@ -102,7 +101,9 @@ export function parseUserCSS(raw: string): ParseResult {
 
     // Handle special -moz-document directive that doesn't start with @
     // Look for -moz-document directive not preceded by @
-    const mozDocumentMatch = metadataContent.match(/(?:^|\n)(-moz-document)[^\S\r\n]*([\s\S]*?)(?=\n@|\n==\/UserStyle==|$)/);
+    const mozDocumentMatch = metadataContent.match(
+      /(?:^|\n)(-moz-document)[^\S\r\n]*([\s\S]*?)(?=\n@|\n==\/UserStyle==|$)/,
+    );
     if (mozDocumentMatch) {
       const [, directive, value] = mozDocumentMatch;
       if (!seenDirectives.has(directive)) {
@@ -127,7 +128,7 @@ export function parseUserCSS(raw: string): ParseResult {
         const urlMatches = mozDocumentRules.match(
           /url\(["']?(https?:\/\/[^"')]+)["']?\)/g,
         );
-        
+
         const urlPrefixMatches = mozDocumentRules.match(
           /url-prefix\(["']?(https?:\/\/[^"')]+)["']?\)/g,
         );
@@ -140,13 +141,13 @@ export function parseUserCSS(raw: string): ParseResult {
             if (urlMatch) {
               try {
                 domains.push(new URL(urlMatch[1]).hostname);
-              } catch (e) {
+              } catch {
                 // Ignore invalid URLs
               }
             }
           });
         }
-        
+
         if (urlPrefixMatches) {
           urlPrefixMatches.forEach((match) => {
             const urlMatch = match.match(
@@ -155,7 +156,7 @@ export function parseUserCSS(raw: string): ParseResult {
             if (urlMatch) {
               try {
                 domains.push(new URL(urlMatch[1]).hostname);
-              } catch (e) {
+              } catch {
                 // Ignore invalid URLs
               }
             }
@@ -273,32 +274,39 @@ export function parseUserCSS(raw: string): ParseResult {
  * 3. Preprocess CSS
  * 4. Return combined result
  */
-export async function processUserCSS(raw: string): Promise<ParseResult & { compiledCss: string; preprocessorErrors: string[] }> {
+export async function processUserCSS(
+  raw: string,
+): Promise<
+  ParseResult & { compiledCss: string; preprocessorErrors: string[] }
+> {
   // Step 1: Parse the UserCSS
   const parseResult = parseUserCSS(raw);
-  
+
   // If parsing failed, return early
   if (parseResult.errors.length > 0) {
     return {
       ...parseResult,
       compiledCss: "",
-      preprocessorErrors: []
+      preprocessorErrors: [],
     };
   }
-  
+
   // Step 2: Detect preprocessor using the raw content to find @preprocessor directive
   const preprocessorDetection = detectPreprocessor(raw);
   const preprocessorType = preprocessorDetection.type;
-  
+
   // Step 3: Preprocess CSS
   const engine = new PreprocessorEngine();
-  const preprocessResult: PreprocessorResult = await engine.process(parseResult.css, preprocessorType);
-  
+  const preprocessResult: PreprocessorResult = await engine.process(
+    parseResult.css,
+    preprocessorType,
+  );
+
   // Step 4: Return combined result
   return {
     ...parseResult,
     compiledCss: preprocessResult.css,
-    preprocessorErrors: preprocessResult.errors
+    preprocessorErrors: preprocessResult.errors,
   };
 }
 

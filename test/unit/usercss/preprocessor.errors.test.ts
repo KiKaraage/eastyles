@@ -29,16 +29,20 @@ describe("Preprocessor Error Mapping", () => {
     });
 
     // Re-import to get the mocked version
-    const { PreprocessorEngine } = await import("@services/usercss/preprocessor");
+    const { PreprocessorEngine } = await import(
+      "@services/usercss/preprocessor"
+    );
     const freshEngine = new PreprocessorEngine();
-    
+
     const result = await freshEngine.process(
       ".test { color: invalid-color; }",
-      "less"
+      "less",
     );
 
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]).toContain("Less compilation failed: Unrecognised input");
+    expect(result.errors[0]).toContain(
+      "Less compilation failed: Unrecognised input",
+    );
     expect(result.errors[0]).toContain("(Line 5, Column 10)");
     expect(result.errors[0]).toContain("in test.less");
   });
@@ -50,7 +54,10 @@ describe("Preprocessor Error Mapping", () => {
         default: {
           render: (
             _text: string,
-            callback: (err: any, css: string) => void,
+            callback: (
+              err: { message: string; line: number; column: number },
+              css: string,
+            ) => void,
           ) => {
             callback(
               {
@@ -66,16 +73,20 @@ describe("Preprocessor Error Mapping", () => {
     });
 
     // Re-import to get the mocked version
-    const { PreprocessorEngine } = await import("@services/usercss/preprocessor");
+    const { PreprocessorEngine } = await import(
+      "@services/usercss/preprocessor"
+    );
     const freshEngine = new PreprocessorEngine();
-    
+
     const result = await freshEngine.process(
       "body\n  color: red;\n  ;",
-      "stylus"
+      "stylus",
     );
 
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]).toContain('Stylus compilation failed: expected "indent", got ";"');
+    expect(result.errors[0]).toContain(
+      'Stylus compilation failed: expected "indent", got ";"',
+    );
     expect(result.errors[0]).toContain("(Line 3, Column 5)");
   });
 
@@ -83,10 +94,10 @@ describe("Preprocessor Error Mapping", () => {
     // Since we can't easily mock the module import without Vitest errors,
     // let's test a simplified case that verifies the error format
     const result = await engine.process("", "none");
-    
+
     // For the "none" engine, we expect no errors
     expect(result.errors).toHaveLength(0);
-    
+
     // Note: Testing actual module loading errors would require more complex
     // setup that's beyond the scope of this unit test
   });

@@ -135,9 +135,14 @@ describe("PreprocessorEngine", () => {
 `;
 
       // Mock Less compilation error
-      const error = new Error("variable @undefined-var is undefined");
-      (error as any).line = 2;
-      (error as any).column = 10;
+      const error = new Error(
+        "variable @undefined-var is undefined",
+      ) as Error & {
+        line: number;
+        column: number;
+      };
+      error.line = 2;
+      error.column = 10;
       mockLessRender.mockRejectedValue(error);
 
       const result = await engine.process(inputCss, "less");
@@ -157,10 +162,14 @@ describe("PreprocessorEngine", () => {
 `;
 
       // Mock Less compilation with plugin error
-      const error = new Error("Plugin error: custom plugin failed");
-      (error as any).line = 1;
-      (error as any).column = 1;
-      (error as any).filename = "plugin.js";
+      const error = new Error("Plugin error: custom plugin failed") as Error & {
+        line: number;
+        column: number;
+        filename: string;
+      };
+      error.line = 1;
+      error.column = 1;
+      error.filename = "plugin.js";
       mockLessRender.mockRejectedValue(error);
 
       const result = await engine.process(inputCss, "less");
@@ -189,11 +198,13 @@ font-size = 16px
   color: #333;
   font-size: 16px;
 }`);
-      mockStylusRender.mockImplementation((text: string, callback: any) => {
-        stylusPromise.then((css) => {
-          callback(null, css);
-        });
-      });
+      mockStylusRender.mockImplementation(
+        (text: string, callback: (err: null, css: string) => void) => {
+          stylusPromise.then((css) => {
+            callback(null, css);
+          });
+        },
+      );
 
       const result = await engine.process(inputCss, "stylus");
 
@@ -217,11 +228,13 @@ font-size = 16px
       const stylusPromise = Promise.resolve(`.container {
   color: red;
 }`);
-      mockStylusRender.mockImplementation((text: string, callback: any) => {
-        stylusPromise.then((css) => {
-          callback(null, css);
-        });
-      });
+      mockStylusRender.mockImplementation(
+        (text: string, callback: (err: null, css: string) => void) => {
+          stylusPromise.then((css) => {
+            callback(null, css);
+          });
+        },
+      );
 
       const result = await engine.process(inputCss, "stylus");
 
@@ -237,15 +250,22 @@ font-size = 16px
 `;
 
       // Mock Stylus compilation error
-      const error = new Error('variable "undefined-var" is not defined');
-      (error as any).line = 2;
-      (error as any).column = 3;
+      const error = new Error(
+        'variable "undefined-var" is not defined',
+      ) as Error & {
+        line: number;
+        column: number;
+      };
+      error.line = 2;
+      error.column = 3;
       const stylusPromise = Promise.reject(error);
-      mockStylusRender.mockImplementation((text: string, callback: any) => {
-        stylusPromise.catch((err) => {
-          callback(err);
-        });
-      });
+      mockStylusRender.mockImplementation(
+        (text: string, callback: (err: Error) => void) => {
+          stylusPromise.catch((err) => {
+            callback(err);
+          });
+        },
+      );
 
       const result = await engine.process(inputCss, "stylus");
 
@@ -264,15 +284,20 @@ font-size = 16px
 `;
 
       // Mock Stylus syntax error
-      const error = new Error("SyntaxError: Expected ':'");
-      (error as any).line = 3;
-      (error as any).column = 3;
+      const error = new Error("SyntaxError: Expected ':'") as Error & {
+        line: number;
+        column: number;
+      };
+      error.line = 3;
+      error.column = 3;
       const stylusPromise = Promise.reject(error);
-      mockStylusRender.mockImplementation((text: string, callback: any) => {
-        stylusPromise.catch((err) => {
-          callback(err);
-        });
-      });
+      mockStylusRender.mockImplementation(
+        (text: string, callback: (err: Error) => void) => {
+          stylusPromise.catch((err) => {
+            callback(err);
+          });
+        },
+      );
 
       const result = await engine.process(inputCss, "stylus");
 
@@ -332,11 +357,13 @@ font-size = 16px
       const stylusPromise = Promise.resolve(`.stylus {
   color: #333;
 }`);
-      mockStylusRender.mockImplementation((text: string, callback: any) => {
-        stylusPromise.then((css) => {
-          callback(null, css);
-        });
-      });
+      mockStylusRender.mockImplementation(
+        (text: string, callback: (err: null, css: string) => void) => {
+          stylusPromise.then((css) => {
+            callback(null, css);
+          });
+        },
+      );
 
       // Process with different engines
       await engine.process(lessInput, "less");
