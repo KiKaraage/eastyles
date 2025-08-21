@@ -132,6 +132,7 @@ describe("Storage Schema", () => {
       const validExportData: ExportData = {
         settings: DEFAULT_SETTINGS,
         styles: [],
+        userCSSStyles: [],
         timestamp: Date.now(),
         version: "1.0.0",
         exportVersion: "1.0.0",
@@ -146,6 +147,7 @@ describe("Storage Schema", () => {
       const invalidExportData = {
         settings: { invalid: true },
         styles: [],
+        userCSSStyles: [],
         timestamp: Date.now(),
         version: "1.0.0",
         exportVersion: "1.0.0",

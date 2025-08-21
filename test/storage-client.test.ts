@@ -317,6 +317,7 @@ describe("EastylesStorageClient", () => {
             version: 1,
           },
         ],
+        userCSSStyles: [],
         timestamp: Date.now(),
         version: "1.0.0",
         exportVersion: "1.0.0",
@@ -335,6 +336,7 @@ describe("EastylesStorageClient", () => {
       const invalidData = {
         settings: { invalid: "data" },
         styles: "not-an-array",
+        userCSSStyles: [],
         timestamp: Date.now(),
         version: "1.0.0",
         exportVersion: "1.0.0",
