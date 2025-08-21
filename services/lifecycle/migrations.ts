@@ -36,6 +36,19 @@ export const MIGRATION_STEPS: Record<string, Migration[]> = {
       // Add any new settings or modifications here
     }),
   ],
+  "2.0.0": [
+    // Migration for UserCSS support - initialize UserCSS storage structure
+    (settings) => {
+      // Note: Actual migration of legacy styles to UserCSS format will be handled
+      // by the storage client when UserCSS methods are called for the first time
+      // This migration step ensures the settings structure is ready for UserCSS features
+      return {
+        ...settings,
+        // Add any new settings needed for UserCSS support
+        userCSSSupportEnabled: true,
+      };
+    },
+  ],
 };
 
 export class MigrationService {
@@ -189,6 +202,7 @@ export class MigrationService {
     const toParts = toVersion.split(".").map(Number);
 
     // Compare major, minor, and patch versions
+    // Return true only if fromVersion < toVersion (user is upgrading to this migration)
     for (let i = 0; i < Math.max(fromParts.length, toParts.length); i++) {
       const from = i < fromParts.length ? fromParts[i] : 0;
       const to = i < toParts.length ? toParts[i] : 0;
@@ -211,10 +225,6 @@ export class MigrationService {
 
     try {
       console.log("[runMigrations] Entering try block.");
-      logger.info?.(
-        ErrorSource.BACKGROUND,
-        `Running migrations from ${previousVersion} to ${currentVersion}`,
-      );
 
       // Get current settings
       let currentSettings = await storageClient.getSettings();
@@ -245,7 +255,22 @@ export class MigrationService {
 
       // Apply migrations sequentially for all versions between previous and current
       for (const version of migrationVersions) {
-        if (this.shouldRunMigration(previousVersion, version)) {
+        // A migration should run if:
+        // 1. The user's previous version is less than the migration version, AND
+        // 2. The migration version is less than or equal to the current extension version
+        const userNeedsMigration = this.shouldRunMigration(previousVersion, version);
+        const migrationIsForCurrentVersion = this.shouldRunMigration(version, currentVersion) || version === currentVersion;
+        const shouldRun = userNeedsMigration && migrationIsForCurrentVersion;
+
+        if (shouldRun) {
+          // Only log that we're running migrations if we actually need to run them
+          if (!migrationsApplied) {
+            logger.info?.(
+              ErrorSource.BACKGROUND,
+              `Running migrations from ${previousVersion} to ${currentVersion}`,
+            );
+          }
+
           this.debug(`Applying migrations for version ${version}`);
 
           for (const migration of MIGRATION_STEPS[version]) {

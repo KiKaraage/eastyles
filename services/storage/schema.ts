@@ -3,6 +3,8 @@
  * Defines TypeScript interfaces for all data structures stored in browser storage
  */
 
+import { DomainRule, VariableDescriptor, Asset } from '../usercss/types';
+
 /**
  * Core settings stored in extension storage
  */
@@ -18,7 +20,7 @@ export interface SettingsStorage {
 }
 
 /**
- * Individual user style definition
+ * Individual user style definition (legacy)
  */
 export interface UserStyle {
   /** Unique identifier for the style */
@@ -42,13 +44,49 @@ export interface UserStyle {
 }
 
 /**
+ * UserCSS style record with full metadata support
+ */
+export interface UserCSSStyle {
+  /** Unique identifier for the style */
+  id: string;
+  /** Human-readable name of the style */
+  name: string;
+  /** Namespace for the style (helps avoid conflicts) */
+  namespace: string;
+  /** Version of the style */
+  version: string;
+  /** Description of what the style does */
+  description: string;
+  /** Author of the style */
+  author: string;
+  /** URL where the style can be found or updated */
+  sourceUrl: string;
+  /** Domain matching rules */
+  domains: DomainRule[];
+  /** Compiled CSS ready for injection */
+  compiledCss: string;
+  /** User-configurable variables with their current values */
+  variables: Record<string, VariableDescriptor>;
+  /** Additional assets (fonts, images, etc.) */
+  assets: Asset[];
+  /** Timestamp when style was installed */
+  installedAt: number;
+  /** Whether the style is currently enabled */
+  enabled: boolean;
+  /** Original source code of the UserCSS */
+  source: string;
+}
+
+/**
  * Complete export data structure for backup/restore functionality
  */
 export interface ExportData {
   /** User settings */
   settings: SettingsStorage;
-  /** Array of user styles */
+  /** Array of legacy user styles */
   styles: UserStyle[];
+  /** Array of UserCSS styles */
+  userCSSStyles: UserCSSStyle[];
   /** Timestamp when export was created */
   timestamp: number;
   /** Extension version that created this export */
@@ -118,7 +156,34 @@ export function isUserStyle(obj: unknown): obj is UserStyle {
 }
 
 /**
- * Type guard to check if an object is valid ExportData
+ * Type guard to check if an object is a valid UserCSSStyle
+ */
+export function isUserCSSStyle(obj: unknown): obj is UserCSSStyle {
+  if (!obj || typeof obj !== "object") return false;
+
+  const style = obj as Record<string, unknown>;
+
+  return (
+    typeof style.id === "string" &&
+    typeof style.name === "string" &&
+    typeof style.namespace === "string" &&
+    typeof style.version === "string" &&
+    typeof style.description === "string" &&
+    typeof style.author === "string" &&
+    typeof style.sourceUrl === "string" &&
+    Array.isArray(style.domains) &&
+    style.domains.every((rule) => typeof rule === "object" && rule !== null) &&
+    typeof style.compiledCss === "string" &&
+    typeof style.variables === "object" && style.variables !== null &&
+    Array.isArray(style.assets) &&
+    typeof style.installedAt === "number" &&
+    typeof style.enabled === "boolean" &&
+    typeof style.source === "string"
+  );
+}
+
+/**
+ * Type guard to check if an object is a valid ExportData
  */
 export function isExportData(obj: unknown): obj is ExportData {
   if (!obj || typeof obj !== "object") return false;
@@ -129,6 +194,8 @@ export function isExportData(obj: unknown): obj is ExportData {
     isSettingsStorage(exportData.settings) &&
     Array.isArray(exportData.styles) &&
     exportData.styles.every((style) => isUserStyle(style)) &&
+    Array.isArray(exportData.userCSSStyles) &&
+    exportData.userCSSStyles.every((style) => isUserCSSStyle(style)) &&
     typeof exportData.timestamp === "number" &&
     typeof exportData.version === "string" &&
     typeof exportData.exportVersion === "string"
@@ -219,6 +286,57 @@ export function validateUserStyle(data: unknown): ValidationResult {
 }
 
 /**
+ * Validates UserCSS style data
+ */
+export function validateUserCSSStyle(data: unknown): ValidationResult {
+  const result: ValidationResult = { isValid: true, errors: [] };
+
+  if (!isUserCSSStyle(data)) {
+    result.isValid = false;
+    result.errors.push("Invalid UserCSS style format");
+    return result;
+  }
+
+  // Additional validation rules
+  if (!data.id.trim()) {
+    result.errors.push("Style ID cannot be empty");
+  }
+
+  if (!data.name.trim()) {
+    result.errors.push("Style name cannot be empty");
+  }
+
+  if (!data.namespace.trim()) {
+    result.errors.push("Style namespace cannot be empty");
+  }
+
+  if (!data.version.trim()) {
+    result.errors.push("Style version cannot be empty");
+  }
+
+  if (!data.author.trim()) {
+    result.errors.push("Style author cannot be empty");
+  }
+
+  if (data.installedAt > Date.now()) {
+    result.errors.push("installedAt cannot be in the future");
+  }
+
+  // Validate domains
+  data.domains.forEach((rule, index) => {
+    if (!rule.kind || !rule.pattern) {
+      result.errors.push(`Domain rule at index ${index} is invalid`);
+    }
+  });
+
+  if (result.errors.length > 0) {
+    result.isValid = false;
+  }
+
+  return result;
+}
+
+/**
  * Validates export data
  */
 export function validateExportData(data: unknown): ValidationResult {
@@ -238,12 +356,22 @@ export function validateExportData(data: unknown): ValidationResult {
     );
   }
 
-  // Validate nested styles
+  // Validate nested legacy styles
   data.styles.forEach((style, index) => {
     const styleValidation = validateUserStyle(style);
     if (!styleValidation.isValid) {
       result.errors.push(
-        ...styleValidation.errors.map((error) => `Style ${index}: ${error}`),
+        ...styleValidation.errors.map((error) => `Legacy Style ${index}: ${error}`),
+      );
+    }
+  });
+
+  // Validate nested UserCSS styles
+  data.userCSSStyles.forEach((style, index) => {
+    const styleValidation = validateUserCSSStyle(style);
+    if (!styleValidation.isValid) {
+      result.errors.push(
+        ...styleValidation.errors.map((error) => `UserCSS Style ${index}: ${error}`),
       );
     }
   });
@@ -273,6 +401,32 @@ export function createUserStyle(
     updatedAt: partial.updatedAt || now,
     description: partial.description,
     version: partial.version || 1,
+  };
+}
+
+/**
+ * Creates a new UserCSSStyle with sensible defaults
+ */
+export function createUserCSSStyle(
+  partial: Partial<UserCSSStyle> & Pick<UserCSSStyle, "name" | "source">,
+): UserCSSStyle {
+  const now = Date.now();
+
+  return {
+    id: partial.id || `usercss_${now}_${Math.random().toString(36).substr(2, 9)}`,
+    name: partial.name,
+    namespace: partial.namespace || "user",
+    version: partial.version || "1.0.0",
+    description: partial.description || "",
+    author: partial.author || "Unknown",
+    sourceUrl: partial.sourceUrl || "",
+    domains: partial.domains || [],
+    compiledCss: partial.compiledCss || "",
+    variables: partial.variables || {},
+    assets: partial.assets || [],
+    installedAt: partial.installedAt || now,
+    enabled: partial.enabled ?? true,
+    source: partial.source,
   };
 }
 

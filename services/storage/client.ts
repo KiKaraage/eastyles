@@ -393,6 +393,7 @@ export class EastylesStorageClient implements StorageClient {
       const exportData: ExportData = {
         settings,
         styles,
+        userCSSStyles: [], // TODO: Implement UserCSS styles export when storage is ready
         timestamp: Date.now(),
         version: settings.version,
         exportVersion: "1.0.0",
@@ -425,6 +426,7 @@ export class EastylesStorageClient implements StorageClient {
           stylesStorage.setValue(data.styles),
         ]);
         this.debug("Imported data (overwrite):", data.styles.length, "styles");
+        // TODO: Handle userCSSStyles import when storage is ready
       } else {
         // Merge mode: combine with existing data
         const existingStyles = await this.getStyles();
@@ -447,6 +449,7 @@ export class EastylesStorageClient implements StorageClient {
           stylesStorage.setValue(mergedStyles),
         ]);
         this.debug("Imported data (merge):", data.styles.length, "styles");
+        // TODO: Handle userCSSStyles merge when storage is ready
       }
 
       // Update debug mode if it changed
@@ -465,6 +468,7 @@ export class EastylesStorageClient implements StorageClient {
       ]);
       this.debugEnabled = DEFAULT_SETTINGS.isDebuggingEnabled ?? false;
       this.debug("Reset all data");
+      // TODO: Reset UserCSS styles when storage is ready
     } catch (error) {
       this.debugError("Failed to reset all data:", error);
       throw new Error(`Failed to reset all data: ${error}`);
