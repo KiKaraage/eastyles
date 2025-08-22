@@ -18,11 +18,11 @@ import { browser } from "wxt/browser";
 vi.mock("wxt/browser", () => ({
   browser: {
     scripting: {
-      insertCSS: vi.fn(),
-      removeCSS: vi.fn(),
+      insertCSS: vi.fn(() => Promise.resolve()),
+      removeCSS: vi.fn(() => Promise.resolve()),
     },
     tabs: {
-      query: vi.fn(),
+      query: vi.fn(() => Promise.resolve([{ id: 123, active: true, currentWindow: true }])),
     },
   },
 }));
@@ -58,8 +58,8 @@ describe("UserCSSInjector", () => {
 
     // Setup document mock with proper typing
     mockDocument = {
-      head: mockHead as HTMLElement,
-      documentElement: mockHead as HTMLElement,
+      head: mockHead as unknown as HTMLElement,
+      documentElement: mockHead as unknown as HTMLElement,
       adoptedStyleSheets: [],
       createElement: vi.fn().mockImplementation((tag: string) => {
         if (tag === "style") {
@@ -90,7 +90,7 @@ describe("UserCSSInjector", () => {
       replaceSync: vi.fn(),
       insertRule: vi.fn(),
       deleteRule: vi.fn(),
-    } as CSSStyleSheet;
+    } as unknown as CSSStyleSheet;
 
     // Set global mocks
     Object.defineProperty(global, "document", {
@@ -105,12 +105,7 @@ describe("UserCSSInjector", () => {
       configurable: true,
     });
 
-    // Mock browser APIs with proper resolved values
-    vi.mocked(browser.scripting.insertCSS).mockResolvedValue(undefined);
-    vi.mocked(browser.scripting.removeCSS).mockResolvedValue(undefined);
-    vi.mocked(browser.tabs.query).mockResolvedValue([
-      { id: 123 } as chrome.tabs.Tab,
-    ]);
+    // Browser APIs are already mocked in the vi.mock call above
 
     injector = new UserCSSInjector();
   });
@@ -236,16 +231,29 @@ describe("UserCSSInjector", () => {
 
   describe("Scripting API Injection", () => {
     beforeEach(() => {
-      // Force scripting API method by removing adoptedStyleSheets
+      // Force scripting API method by removing adoptedStyleSheets and CSSStyleSheet
       delete mockDocument.adoptedStyleSheets;
+
+      // Mock CSSStyleSheet to be undefined to force scripting API
+      const originalCSSStyleSheet = global.CSSStyleSheet;
+      Object.defineProperty(global, "CSSStyleSheet", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
 
       // Ensure scripting API is available
       vi.mocked(browser.scripting.insertCSS).mockResolvedValue(undefined);
-      vi.mocked(browser.tabs.query).mockResolvedValue([
-        { id: 123 } as chrome.tabs.Tab,
-      ]);
+      // tabs.query is already mocked in the vi.mock call
 
       injector = new UserCSSInjector();
+
+      // Restore CSSStyleSheet after injector creation
+      Object.defineProperty(global, "CSSStyleSheet", {
+        value: originalCSSStyleSheet,
+        writable: true,
+        configurable: true,
+      });
     });
 
     it("should inject CSS using chrome.scripting.insertCSS", async () => {
@@ -420,7 +428,7 @@ describe("UserCSSInjector", () => {
 
       // Mock console.warn to capture calls
       const originalWarn = console.warn;
-      const warnCalls: any[] = [];
+      const warnCalls: unknown[] = [];
       console.warn = (...args) => {
         warnCalls.push(args);
         // Also call original for visibility
@@ -442,8 +450,8 @@ describe("UserCSSInjector", () => {
 
       // Should have warned about exceeding budget
       expect(warnCalls.length).toBeGreaterThan(0);
-      expect(warnCalls.some(call => 
-        call[0] && typeof call[0] === 'string' && 
+      expect(warnCalls.some((call: unknown) =>
+        Array.isArray(call) && call[0] && typeof call[0] === 'string' &&
         call[0].includes("CSS injection batch exceeded performance budget")
       )).toBe(true);
 
@@ -456,15 +464,12 @@ describe("UserCSSInjector", () => {
     });
 
     it("should flush batch immediately on update", async () => {
-      // Use real timers for this test to avoid timeout issues
-      vi.useRealTimers();
-      
       const css1 = "body { color: red; }";
       const css2 = "body { color: blue; }";
       const styleId = "test-style";
 
       // Start an injection (will be batched)
-      const injectPromise = injector.inject(css1, styleId);
+      injector.inject(css1, styleId);
 
       // Should not have processed yet
       expect(mockDocument.adoptedStyleSheets).toHaveLength(0);
@@ -474,9 +479,6 @@ describe("UserCSSInjector", () => {
 
       // Should have processed the injection
       expect(mockDocument.adoptedStyleSheets).toHaveLength(1);
-      
-      // Re-enable fake timers for other tests
-      vi.useFakeTimers();
     });
 
     it("should allow manual batch flushing", async () => {
@@ -504,7 +506,7 @@ describe("UserCSSInjector", () => {
         "Refused to apply inline style because it violates the following Content Security Policy directive: \"style-src 'self'\"",
       );
       const detectedError = (
-        injector as Record<string, unknown>
+        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
       ).detectCSPError(cspError);
 
       expect(detectedError).toBeInstanceOf(CSPError);
@@ -517,7 +519,7 @@ describe("UserCSSInjector", () => {
         "Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self'\"",
       );
       const detectedError = (
-        injector as Record<string, unknown>
+        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
       ).detectCSPError(cspError);
 
       expect(detectedError).toBeInstanceOf(CSPError);
@@ -530,7 +532,7 @@ describe("UserCSSInjector", () => {
         "Refused to apply inline style because it violates CSP directive: style-src 'self' 'unsafe-inline'",
       );
       const detectedError = (
-        injector as Record<string, unknown>
+        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
       ).detectCSPError(cspError);
 
       expect(detectedError).toBeInstanceOf(CSPError);
@@ -540,7 +542,7 @@ describe("UserCSSInjector", () => {
     it("should return null for non-CSP errors", () => {
       const regularError = new Error("Some other error");
       const detectedError = (
-        injector as Record<string, unknown>
+        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
       ).detectCSPError(regularError);
 
       expect(detectedError).toBeNull();
@@ -559,7 +561,7 @@ describe("UserCSSInjector", () => {
       });
 
       const fallbackMethods = (
-        injector as Record<string, unknown>
+        injector as unknown as { getCSPFallbackMethods: (error: CSPError) => string[] }
       ).getCSPFallbackMethods(cspError);
       expect(fallbackMethods).toEqual([
         "scripting-api",

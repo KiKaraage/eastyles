@@ -324,8 +324,14 @@ export class UserCSSInjector implements CSSInjector {
   async update(styleId: string, css: string): Promise<void> {
     const registered = this.registry.get(styleId);
     if (!registered) {
-      // If not registered, treat as new injection
-      return this.inject(css, styleId);
+      // Check if there's a pending injection for this styleId in the batch queue
+      if (this.batchQueue.has(styleId)) {
+        // Process the batch immediately to register the style
+        await this.flushBatch();
+      } else {
+        // If not registered and not in batch queue, treat as new injection
+        return this.inject(css, styleId);
+      }
     }
 
     // For updates, we want immediate processing to avoid delays
@@ -346,7 +352,7 @@ export class UserCSSInjector implements CSSInjector {
           await this.updateStyleElement(registered as HTMLStyleElement, css);
           break;
       }
-    } catch (error) {
+    } catch {
       // Fallback to remove and re-inject
       await this.remove(styleId);
       await this.injectImmediate(css, styleId);
@@ -357,6 +363,10 @@ export class UserCSSInjector implements CSSInjector {
     if (this.batchTimer) {
       clearTimeout(this.batchTimer);
       this.batchTimer = null;
+    }
+    
+    // If there are items in the batch queue, process them
+    if (this.batchQueue.size > 0) {
       await this.processBatch();
     }
   }
@@ -576,7 +586,7 @@ export class UserCSSInjector implements CSSInjector {
 
     // If we get here, all methods failed
     const error = new Error("All CSS injection methods failed");
-    (error as any).errors = errors; // Attach the underlying errors for debugging
+    (error as Error & { errors: Error[] }).errors = errors; // Attach the underlying errors for debugging
     throw error;
   }
 }
