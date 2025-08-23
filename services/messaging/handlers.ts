@@ -5,6 +5,8 @@
 
 import { browser } from "@wxt-dev/browser";
 import { ReceivedMessages, ErrorDetails } from "./types";
+import { storageClient } from "../storage/client";
+import { UserCSSStyle } from "../storage/schema";
 
 /**
  * Helper function to keep service worker alive using browser.tabs API
@@ -628,6 +630,61 @@ const handleInstallStyle: MessageHandler = async (message) => {
 };
 
 /**
+ * Handle variable updates for UserCSS styles
+ */
+const handleUpdateVariables: MessageHandler = async (message) => {
+  try {
+    const { styleId, variables } = (message as { payload: { styleId: string; variables: Record<string, string> } }).payload;
+
+    // Update variables using the variable persistence service
+    const { variablePersistenceService } = await import('../usercss/variable-service');
+    await variablePersistenceService.updateVariables(styleId, variables);
+
+    return {
+      success: true,
+    };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to update variables:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
+ * Handle queries for styles applicable to a specific URL
+ */
+const handleQueryStylesForUrl: MessageHandler = async (message) => {
+  try {
+    const { url } = (message as { payload: { url: string } }).payload;
+
+    // Get all UserCSS styles
+    const userCSSStyles = await storageClient.getUserCSSStyles();
+
+    // Filter styles that match the URL using domain detection
+    const { domainDetector } = await import('../usercss/domain-detector');
+    const matchingStyles = userCSSStyles.filter((style: UserCSSStyle) => {
+      if (!style.enabled) return false;
+      return domainDetector.matches(url, style.domains);
+    });
+
+    return {
+      success: true,
+      styles: matchingStyles,
+    };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to query styles for URL:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
  * Registry of all message handlers.
  */
 const handlerRegistry: HandlerRegistry = {
@@ -644,7 +701,9 @@ const handlerRegistry: HandlerRegistry = {
   RESET_SETTINGS: withErrorHandling(handleResetSettings),
   GET_ALL_STYLES: withErrorHandling(handleGetAllStyles),
   PARSE_USERCSS: withErrorHandling(handleParseUserCSS),
-  INSTALL_STYLE: withErrorHandling(handleInstallStyle),
+   INSTALL_STYLE: withErrorHandling(handleInstallStyle),
+   UPDATE_VARIABLES: withErrorHandling(handleUpdateVariables),
+   QUERY_STYLES_FOR_URL: withErrorHandling(handleQueryStylesForUrl),
 };
 
 /**

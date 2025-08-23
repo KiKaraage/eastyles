@@ -57,14 +57,22 @@ export type BackgroundMessages =
         error: ErrorDetails;
       };
     }
-  | {
-      type: "STORAGE_UPDATED";
-      payload: {
-        key: string;
-        newValue: unknown;
-        oldValue: unknown;
-      };
-    };
+   | {
+       type: "STORAGE_UPDATED";
+       payload: {
+         key: string;
+         newValue: unknown;
+         oldValue: unknown;
+       };
+     }
+   | {
+       type: "VARIABLES_UPDATED";
+       payload: {
+         styleId: string;
+         variables: Record<string, string>;
+         timestamp: number;
+       };
+     };
 
 /**
  * Messages sent from the popup to the background script.
@@ -110,12 +118,19 @@ export type PopupMessages =
   | {
       type: "GET_CURRENT_TAB";
     }
-  | {
-      type: "TOGGLE_THEME";
-    }
-  | {
-      type: "RESET_SETTINGS";
-    };
+   | {
+       type: "TOGGLE_THEME";
+     }
+   | {
+       type: "RESET_SETTINGS";
+     }
+   | {
+       type: "UPDATE_VARIABLES";
+       payload: {
+         styleId: string;
+         variables: Record<string, string>;
+       };
+     };
 
 /**
  * Messages sent from the manager page to the background script.

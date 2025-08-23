@@ -38,6 +38,11 @@ export interface ContentController {
   onStyleRemove(styleId: string): Promise<void>;
 
   /**
+   * Handle variable updates for a specific style
+   */
+  onVariablesUpdate(styleId: string, variables: Record<string, string>): Promise<void>;
+
+  /**
    * Get currently applied styles
    */
   getAppliedStyles(): Map<string, UserCSSStyle>;
@@ -378,11 +383,56 @@ export class UserCSSContentController implements ContentController {
   }
 
   /**
+   * Handle variable updates for a specific style
+   */
+  async onVariablesUpdate(styleId: string, variables: Record<string, string>): Promise<void> {
+    this.debug('Variable update received:', styleId, variables);
+
+    try {
+      const appliedStyle = this.appliedStyles.get(styleId);
+      if (!appliedStyle) {
+        this.debug('Style not applied, ignoring variable update:', styleId);
+        return;
+      }
+
+      // Update the style's variables
+      const updatedStyle = {
+        ...appliedStyle,
+        variables: { ...appliedStyle.variables }
+      };
+
+      // Update variable values
+      for (const [varName, varValue] of Object.entries(variables)) {
+        if (updatedStyle.variables[varName]) {
+          updatedStyle.variables[varName] = {
+            ...updatedStyle.variables[varName],
+            value: varValue
+          };
+        }
+      }
+
+      // Re-apply the style with updated variables
+      await this.applyStyle(updatedStyle);
+
+      this.debug('Variables updated and style re-applied:', styleId);
+    } catch (error) {
+      logger.error?.(
+        ErrorSource.CONTENT,
+        'Failed to handle variable update',
+        {
+          error: error instanceof Error ? error.message : String(error),
+          styleId
+        }
+      );
+    }
+  }
+
+  /**
    * Get currently applied styles
    */
    getAppliedStyles(): Map<string, UserCSSStyle> {
-     return new Map(this.appliedStyles);
-   }
+    return new Map(this.appliedStyles);
+  }
 
    /**
     * Log performance metrics

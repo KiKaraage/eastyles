@@ -7,14 +7,17 @@ import { storage } from "@wxt-dev/storage";
 import {
   SettingsStorage,
   UserStyle,
+  UserCSSStyle,
   ExportData,
   DEFAULT_SETTINGS,
   STORAGE_KEYS,
   validateSettings,
   validateUserStyle,
+  validateUserCSSStyle,
   validateExportData,
   mergeSettings,
   createUserStyle,
+  createUserCSSStyle,
 } from "./schema";
 
 /**
@@ -44,6 +47,17 @@ export interface StorageClient {
   removeStyle(id: string): Promise<void>;
   enableStyle(id: string, enabled: boolean): Promise<void>;
 
+  // UserCSS styles management
+  getUserCSSStyles(): Promise<UserCSSStyle[]>;
+  getUserCSSStyle(id: string): Promise<UserCSSStyle | null>;
+  addUserCSSStyle(
+    style: Partial<UserCSSStyle> & Pick<UserCSSStyle, "name" | "source">,
+  ): Promise<UserCSSStyle>;
+  updateUserCSSStyle(id: string, updates: Partial<UserCSSStyle>): Promise<UserCSSStyle>;
+  removeUserCSSStyle(id: string): Promise<void>;
+  enableUserCSSStyle(id: string, enabled: boolean): Promise<void>;
+  updateUserCSSStyleVariables(id: string, variables: Record<string, unknown>): Promise<UserCSSStyle>;
+
   // Batch operations
   getMultipleStyles(ids: string[]): Promise<UserStyle[]>;
   updateMultipleStyles(
@@ -65,6 +79,9 @@ export interface StorageClient {
   watchStyles(
     callback: (newStyles: UserStyle[], oldStyles?: UserStyle[]) => void,
   ): () => void;
+  watchUserCSSStyles(
+    callback: (newStyles: UserCSSStyle[], oldStyles?: UserCSSStyle[]) => void,
+  ): () => void;
 }
 
 /**
@@ -79,6 +96,11 @@ const settingsStorage = storage.defineItem<SettingsStorage>(
 );
 
 const stylesStorage = storage.defineItem<UserStyle[]>(STORAGE_KEYS.STYLES, {
+  fallback: [],
+  version: 1,
+});
+
+const userCSSStylesStorage = storage.defineItem<UserCSSStyle[]>(STORAGE_KEYS.USERCSS_STYLES, {
   fallback: [],
   version: 1,
 });
@@ -385,21 +407,22 @@ export class EastylesStorageClient implements StorageClient {
   // Import/Export functionality
   async exportAll(): Promise<ExportData> {
     try {
-      const [settings, styles] = await Promise.all([
+      const [settings, styles, userCSSStyles] = await Promise.all([
         this.getSettings(),
         this.getStyles(),
+        this.getUserCSSStyles(),
       ]);
 
       const exportData: ExportData = {
         settings,
         styles,
-        userCSSStyles: [], // TODO: Implement UserCSS styles export when storage is ready
+        userCSSStyles,
         timestamp: Date.now(),
         version: settings.version,
         exportVersion: "1.0.0",
       };
 
-      this.debug("Exported data:", exportData.styles.length, "styles");
+      this.debug("Exported data:", exportData.styles.length, "legacy styles,", exportData.userCSSStyles.length, "UserCSS styles");
       return exportData;
     } catch (error) {
       this.debugError("Failed to export data:", error);
@@ -424,15 +447,20 @@ export class EastylesStorageClient implements StorageClient {
         await Promise.all([
           settingsStorage.setValue(data.settings),
           stylesStorage.setValue(data.styles),
+          userCSSStylesStorage.setValue(data.userCSSStyles),
         ]);
-        this.debug("Imported data (overwrite):", data.styles.length, "styles");
-        // TODO: Handle userCSSStyles import when storage is ready
+        this.debug("Imported data (overwrite):", data.styles.length, "legacy styles,", data.userCSSStyles.length, "UserCSS styles");
       } else {
         // Merge mode: combine with existing data
-        const existingStyles = await this.getStyles();
-        const mergedStyles = [...existingStyles];
+        const [existingStyles, existingUserCSSStyles] = await Promise.all([
+          this.getStyles(),
+          this.getUserCSSStyles(),
+        ]);
 
-        // Add or update styles from import
+        const mergedStyles = [...existingStyles];
+        const mergedUserCSSStyles = [...existingUserCSSStyles];
+
+        // Add or update legacy styles from import
         for (const importedStyle of data.styles) {
           const existingIndex = mergedStyles.findIndex(
             (s) => s.id === importedStyle.id,
@@ -444,12 +472,24 @@ export class EastylesStorageClient implements StorageClient {
           }
         }
 
+        // Add or update UserCSS styles from import
+        for (const importedStyle of data.userCSSStyles) {
+          const existingIndex = mergedUserCSSStyles.findIndex(
+            (s) => s.id === importedStyle.id,
+          );
+          if (existingIndex !== -1) {
+            mergedUserCSSStyles[existingIndex] = importedStyle;
+          } else {
+            mergedUserCSSStyles.push(importedStyle);
+          }
+        }
+
         await Promise.all([
           this.updateSettings(data.settings),
           stylesStorage.setValue(mergedStyles),
+          userCSSStylesStorage.setValue(mergedUserCSSStyles),
         ]);
-        this.debug("Imported data (merge):", data.styles.length, "styles");
-        // TODO: Handle userCSSStyles merge when storage is ready
+        this.debug("Imported data (merge):", data.styles.length, "legacy styles,", data.userCSSStyles.length, "UserCSS styles");
       }
 
       // Update debug mode if it changed
@@ -465,10 +505,10 @@ export class EastylesStorageClient implements StorageClient {
       await Promise.all([
         settingsStorage.setValue(DEFAULT_SETTINGS),
         stylesStorage.setValue([]),
+        userCSSStylesStorage.setValue([]),
       ]);
       this.debugEnabled = DEFAULT_SETTINGS.isDebuggingEnabled ?? false;
       this.debug("Reset all data");
-      // TODO: Reset UserCSS styles when storage is ready
     } catch (error) {
       this.debugError("Failed to reset all data:", error);
       throw new Error(`Failed to reset all data: ${error}`);
@@ -508,6 +548,179 @@ export class EastylesStorageClient implements StorageClient {
       return () => {}; // Return no-op function
     }
   }
+
+  watchUserCSSStyles(
+    callback: (newStyles: UserCSSStyle[], oldStyles?: UserCSSStyle[]) => void,
+  ): () => void {
+    try {
+      this.debug("Setting up UserCSS styles watcher");
+      return userCSSStylesStorage.watch((newValue, oldValue) => {
+        this.debug("UserCSS styles watcher callback triggered", newValue, oldValue);
+        callback(newValue, oldValue);
+      });
+    } catch (error) {
+      this.debugError("Failed to setup UserCSS styles watcher:", error);
+      return () => {}; // Return no-op function
+    }
+  }
+
+  // UserCSS styles management
+  async getUserCSSStyles(): Promise<UserCSSStyle[]> {
+    try {
+      const styles = await userCSSStylesStorage.getValue();
+      this.debug("Retrieved UserCSS styles:", styles.length, "items");
+
+      // Validate each style
+      const validStyles = styles.filter((style) => {
+        const validation = validateUserCSSStyle(style);
+        if (!validation.isValid) {
+          this.debugError(
+            `Invalid UserCSS style detected (${style.id}):`,
+            validation.errors,
+          );
+          return false;
+        }
+        return true;
+      });
+
+      if (validStyles.length !== styles.length) {
+        // Save cleaned styles back
+        await userCSSStylesStorage.setValue(validStyles);
+      }
+
+      return validStyles;
+    } catch (error) {
+      this.debugError("Failed to get UserCSS styles:", error);
+      return [];
+    }
+  }
+
+  async getUserCSSStyle(id: string): Promise<UserCSSStyle | null> {
+    try {
+      const styles = await this.getUserCSSStyles();
+      const style = styles.find((s) => s.id === id);
+      this.debug("Retrieved UserCSS style:", id, style ? "found" : "not found");
+      return style || null;
+    } catch (error) {
+      this.debugError("Failed to get UserCSS style:", error);
+      return null;
+    }
+  }
+
+  async addUserCSSStyle(
+    styleData: Partial<UserCSSStyle> & Pick<UserCSSStyle, "name" | "source">,
+  ): Promise<UserCSSStyle> {
+    try {
+      const newStyle = createUserCSSStyle(styleData);
+      const validation = validateUserCSSStyle(newStyle);
+
+      if (!validation.isValid) {
+        throw new Error(`Invalid UserCSS style data: ${validation.errors.join(", ")}`);
+      }
+
+      const styles = await this.getUserCSSStyles();
+
+      // Check for duplicate names
+      if (styles.some((s) => s.name === newStyle.name)) {
+        throw new Error(`UserCSS style with name "${newStyle.name}" already exists`);
+      }
+
+      styles.push(newStyle);
+      await userCSSStylesStorage.setValue(styles);
+
+      this.debug("Added UserCSS style:", newStyle.id);
+      return newStyle;
+    } catch (error) {
+      this.debugError("Failed to add UserCSS style:", error);
+      throw new Error(`Failed to add UserCSS style: ${error}`);
+    }
+  }
+
+  async updateUserCSSStyle(
+    id: string,
+    updates: Partial<UserCSSStyle>,
+  ): Promise<UserCSSStyle> {
+    try {
+      const styles = await this.getUserCSSStyles();
+      const styleIndex = styles.findIndex((s) => s.id === id);
+
+      if (styleIndex === -1) {
+        throw new Error(`UserCSS style with ID "${id}" not found`);
+      }
+
+      const updatedStyle = {
+        ...styles[styleIndex],
+        ...updates,
+      };
+
+      const validation = validateUserCSSStyle(updatedStyle);
+      if (!validation.isValid) {
+        throw new Error(`Invalid UserCSS style data: ${validation.errors.join(", ")}`);
+      }
+
+      styles[styleIndex] = updatedStyle;
+      await userCSSStylesStorage.setValue(styles);
+
+      this.debug("Updated UserCSS style:", id);
+      return updatedStyle;
+    } catch (error) {
+      this.debugError("Failed to update UserCSS style:", error);
+      throw new Error(`Failed to update UserCSS style: ${error}`);
+    }
+  }
+
+  async removeUserCSSStyle(id: string): Promise<void> {
+    try {
+      const styles = await this.getUserCSSStyles();
+      const filteredStyles = styles.filter((s) => s.id !== id);
+
+      if (filteredStyles.length === styles.length) {
+        throw new Error(`UserCSS style with ID "${id}" not found`);
+      }
+
+      await userCSSStylesStorage.setValue(filteredStyles);
+      this.debug("Removed UserCSS style:", id);
+    } catch (error) {
+      this.debugError("Failed to remove UserCSS style:", error);
+      throw new Error(`Failed to remove UserCSS style: ${error}`);
+    }
+  }
+
+  async enableUserCSSStyle(id: string, enabled: boolean): Promise<void> {
+    try {
+      await this.updateUserCSSStyle(id, { enabled });
+      this.debug("UserCSS style enabled state changed:", id, enabled);
+    } catch (error) {
+      this.debugError("Failed to change UserCSS style enabled state:", error);
+      throw error;
+    }
+  }
+
+  async updateUserCSSStyleVariables(id: string, variables: Record<string, unknown>): Promise<UserCSSStyle> {
+    try {
+      const style = await this.getUserCSSStyle(id);
+      if (!style) {
+        throw new Error(`UserCSS style with ID "${id}" not found`);
+      }
+
+      const updatedVariables = { ...style.variables };
+
+      // Update only the variables that are provided
+      for (const [varName, varValue] of Object.entries(variables)) {
+        if (updatedVariables[varName]) {
+          updatedVariables[varName] = {
+            ...updatedVariables[varName],
+            value: String(varValue),
+          };
+        }
+      }
+
+      return await this.updateUserCSSStyle(id, { variables: updatedVariables });
+    } catch (error) {
+      this.debugError("Failed to update UserCSS style variables:", error);
+      throw new Error(`Failed to update UserCSS style variables: ${error}`);
+    }
+  }
 }
 
 /**
@@ -520,10 +733,25 @@ export const storageClient = new EastylesStorageClient();
  */
 export const getSettings = () => storageClient.getSettings();
 export const updateSettings = (settings: Partial<SettingsStorage>) =>
-  storageClient.updateSettings(settings);
+   storageClient.updateSettings(settings);
 export const getThemeMode = () => storageClient.getThemeMode();
 export const setThemeMode = (mode: "light" | "dark" | "system") =>
-  storageClient.setThemeMode(mode);
+   storageClient.setThemeMode(mode);
 export const getDebugMode = () => storageClient.getDebugMode();
 export const setDebugMode = (enabled: boolean) =>
-  storageClient.setDebugMode(enabled);
+   storageClient.setDebugMode(enabled);
+
+// UserCSS convenience functions
+export const getUserCSSStyles = () => storageClient.getUserCSSStyles();
+export const getUserCSSStyle = (id: string) => storageClient.getUserCSSStyle(id);
+export const addUserCSSStyle = (style: Partial<UserCSSStyle> & Pick<UserCSSStyle, "name" | "source">) =>
+   storageClient.addUserCSSStyle(style);
+export const updateUserCSSStyle = (id: string, updates: Partial<UserCSSStyle>) =>
+   storageClient.updateUserCSSStyle(id, updates);
+export const removeUserCSSStyle = (id: string) => storageClient.removeUserCSSStyle(id);
+export const enableUserCSSStyle = (id: string, enabled: boolean) =>
+   storageClient.enableUserCSSStyle(id, enabled);
+export const updateUserCSSStyleVariables = (id: string, variables: Record<string, unknown>) =>
+   storageClient.updateUserCSSStyleVariables(id, variables);
+export const watchUserCSSStyles = (callback: (newStyles: UserCSSStyle[], oldStyles?: UserCSSStyle[]) => void) =>
+   storageClient.watchUserCSSStyles(callback);
