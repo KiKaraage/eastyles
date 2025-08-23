@@ -1,0 +1,162 @@
+{
+  "appName": {
+    "message": "Eastyles",
+    "description": "The application name"
+  },
+  "appDescription": {
+    "message": "Easy web styling for everyone",
+    "description": "The application description. You can alter this to fit the languages better, but emphasis on the `Easy web styling` part."
+  },
+  "saveButton": {
+    "message": "Save Style",
+    "description": "Button text for saving a style"
+  },
+  "cancelButton": {
+    "message": "Cancel",
+    "description": "Button text for canceling an action"
+  },
+  "applyButton": {
+    "message": "Apply to Site",
+    "description": "Button text for applying styles to current site"
+  },
+  "removeButton": {
+    "message": "Remove Style",
+    "description": "Button text for removing a style"
+  },
+  "configureButton": {
+    "message": "Configure",
+    "description": "Button text for configuring style variables"
+  },
+  "deleteButton": {
+    "message": "Delete",
+    "description": "Button text for deleting a style"
+  },
+  "loading": {
+    "message": "Loading...",
+    "description": "Loading indicator text"
+  },
+  "error": {
+    "message": "Error",
+    "description": "Generic error message"
+  },
+  "success": {
+    "message": "Success",
+    "description": "Generic success message"
+  },
+  "styleInstalled": {
+    "message": "Style saved successfully",
+    "description": "Success message when a style is saved"
+  },
+  "styleRemoved": {
+    "message": "Style removed successfully",
+    "description": "Success message when a style is removed"
+  },
+  "styleDeleted": {
+    "message": "Style deleted successfully",
+    "description": "Success message when a style is deleted"
+  },
+  "noStylesFound": {
+    "message": "No styles found",
+    "description": "Message when no styles are available"
+  },
+  "dragDropHint": {
+    "message": "Drag and drop .user.css file here",
+    "description": "Hint text for drag and drop area"
+  },
+  "orClickToBrowse": {
+    "message": "or click to browse",
+    "description": "Alternative text for file selection"
+  },
+  "styleName": {
+    "message": "Style Name",
+    "description": "Label for style name field"
+  },
+  "styleDescription": {
+    "message": "Description",
+    "description": "Label for style description field"
+  },
+  "author": {
+    "message": "Author",
+    "description": "Label for author field"
+  },
+  "version": {
+    "message": "Version",
+    "description": "Label for version field"
+  },
+  "domains": {
+    "message": "Domains",
+    "description": "Label for domains field"
+  },
+  "variables": {
+    "message": "Variables",
+    "description": "Label for variables section"
+  },
+  "enabled": {
+    "message": "Enabled",
+    "description": "Label for enabled status"
+  },
+  "disabled": {
+    "message": "Disabled",
+    "description": "Label for disabled status"
+  },
+  "lastUpdated": {
+    "message": "Last Updated",
+    "description": "Label for last updated timestamp"
+  },
+  "installDate": {
+    "message": "Install Date",
+    "description": "Label for style save date"
+  },
+  "ERR_STORAGE_QUOTA": {
+    "message": "Storage capacity exceeded. Please remove some styles to free up space.",
+    "description": "Error message when storage capacity is exceeded"
+  },
+  "ERR_STORAGE_INVALID_DATA": {
+    "message": "Invalid storage data: $1",
+    "description": "Error message for invalid storage data with details"
+  },
+  "ERR_MESSAGE_TIMEOUT": {
+    "message": "Message timed out after $1 attempts: $2",
+    "description": "Error message for message timeout with attempts and message type"
+  },
+  "ERR_MESSAGE_INVALID": {
+    "message": "Invalid message: $1",
+    "description": "Error message for invalid message with reason"
+  },
+  "ERR_FILE_FORMAT_INVALID": {
+    "message": "Invalid file format: $2. Only $1 formats can be accepted",
+    "description": "Error message for invalid file format with expected and actual format"
+  },
+  "ERR_DATA_CORRUPTED": {
+    "message": "Data corrupted: $1",
+    "description": "Error message for corrupted data with details"
+  },
+  "ERR_BROWSER_API": {
+    "message": "Browser API error in $1.$2: $3",
+    "description": "Error message for browser API errors with API, operation, and error details"
+  },
+  "ERR_PERMISSION_DENIED": {
+    "message": "Permission denied: $1",
+    "description": "Error message for permission denied errors with permission name"
+  },
+  "ERR_PARSE_METADATA": {
+    "message": "Failed to parse style metadata",
+    "description": "Error message for metadata parsing failures"
+  },
+  "ERR_PREPROCESSOR_COMPILE": {
+    "message": "Failed to compile preprocessor code",
+    "description": "Error message for preprocessor compilation failures"
+  },
+  "ERR_INJECTION_CSP": {
+    "message": "Content Security Policy blocked style injection",
+    "description": "Error message for CSP blocking style injection"
+  },
+  "ERR_PERMISSION_REQUIRED": {
+    "message": "Permission required: $1",
+    "description": "Error message for missing permissions with permission name"
+  },
+  "ERR_FONT_LOAD": {
+    "message": "Failed to load font: $1",
+    "description": "Error message for font loading failures with font name"
+  }
+}

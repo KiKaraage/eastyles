@@ -3,6 +3,7 @@ import { withErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { browser } from "wxt/browser";
 import { List, Plus, Settings } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
+import { useI18n } from "../../hooks/useI18n";
 
 interface PopupState {
   isLoading: boolean;
@@ -15,6 +16,9 @@ const App = () => {
 
   // Theme hook to sync with user's preference from settings
   const { isDark } = useTheme();
+
+  // Internationalization hook
+  const { t } = useI18n();
 
   // Helper function to close popup
   // Using window.close() directly as it's supported in extension popups across browsers
@@ -68,7 +72,7 @@ const App = () => {
               aria-hidden="true"
             />
             <h3 className="text-lg font-bold text-base-content">
-              Styles for...
+              {t('appName')}
             </h3>
           </div>
         </div>
@@ -79,7 +83,7 @@ const App = () => {
         {state.isLoading ? (
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
             <div className="loading loading-spinner loading-lg"></div>
-            <p className="text-base-content/70">Loading...</p>
+            <p className="text-base-content/70">{t('loading')}</p>
           </div>
         ) : (
           <div className="space-y-4 px-2">
@@ -104,7 +108,7 @@ const App = () => {
               className="btn btn-secondary w-full justify-start normal-case"
             >
               <Plus className="w-5 h-5 mr-3 flex-shrink-0" />
-              <span className="truncate">Add New Style</span>
+              <span className="truncate">{t('saveButton')}</span>
             </button>
           </div>
         )}
@@ -120,7 +124,7 @@ const App = () => {
             className="btn btn-ghost btn-sm normal-case flex-1 justify-start mr-2"
           >
             <List className="w-4 h-4 mr-2" />
-            <span>Manage</span>
+            <span>{t('configureButton')}</span>
           </button>
 
           <button

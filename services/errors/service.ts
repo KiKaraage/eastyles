@@ -3,6 +3,8 @@
  * Provides centralized error management with classification, logging, and reporting.
  */
 
+import { i18nService } from '../i18n/service';
+
 /**
  * Error severity levels for classification and handling.
  */
@@ -109,7 +111,7 @@ export class StorageError extends ExtensionError {
 export class StorageQuotaExceededError extends StorageError {
   constructor(context?: Record<string, unknown>) {
     super(
-      "Storage quota exceeded. Please clear some data or reduce storage usage.",
+      i18nService.t('ERR_STORAGE_QUOTA'),
       ErrorSeverity.NOTIFY,
       context,
     );
@@ -121,7 +123,7 @@ export class StorageQuotaExceededError extends StorageError {
  */
 export class StorageInvalidDataError extends StorageError {
   constructor(message: string, context?: Record<string, unknown>) {
-    super(`Invalid storage data: ${message}`, ErrorSeverity.NOTIFY, context);
+    super(i18nService.t('ERR_STORAGE_INVALID_DATA', [message]), ErrorSeverity.NOTIFY, context);
   }
 }
 
@@ -148,7 +150,7 @@ export class MessageTimeoutError extends MessageError {
     context?: Record<string, unknown>,
   ) {
     super(
-      `Message timeout after ${attempts} attempts: ${messageType}`,
+      i18nService.t('ERR_MESSAGE_TIMEOUT', [attempts.toString(), messageType]),
       ErrorSeverity.NOTIFY,
       { messageType, attempts, ...context },
     );
@@ -160,7 +162,7 @@ export class MessageTimeoutError extends MessageError {
  */
 export class MessageInvalidError extends MessageError {
   constructor(reason: string, context?: Record<string, unknown>) {
-    super(`Invalid message: ${reason}`, ErrorSeverity.NOTIFY, context);
+    super(i18nService.t('ERR_MESSAGE_INVALID', [reason]), ErrorSeverity.NOTIFY, context);
   }
 }
 
@@ -177,35 +179,35 @@ export class ImportExportError extends ExtensionError {
   }
 }
 
-/**
- * Invalid file format error.
- */
-export class InvalidFileFormatError extends ImportExportError {
-  constructor(
-    expectedFormat: string,
-    actualFormat?: string,
-    context?: Record<string, unknown>,
-  ) {
-    const message = actualFormat
-      ? `Invalid file format: expected ${expectedFormat}, got ${actualFormat}`
-      : `Invalid file format: expected ${expectedFormat}`;
+  /**
+   * Invalid file format error.
+   */
+  export class InvalidFileFormatError extends ImportExportError {
+    constructor(
+      expectedFormat: string,
+      actualFormat?: string,
+      context?: Record<string, unknown>,
+    ) {
+      const message = actualFormat
+        ? i18nService.t('ERR_FILE_FORMAT_INVALID', [expectedFormat, actualFormat])
+        : i18nService.t('ERR_FILE_FORMAT_INVALID', [expectedFormat, '']);
 
-    super(message, ErrorSeverity.NOTIFY, {
-      expectedFormat,
-      actualFormat,
-      ...context,
-    });
+      super(message, ErrorSeverity.NOTIFY, {
+        expectedFormat,
+        actualFormat,
+        ...context,
+      });
+    }
   }
-}
 
-/**
- * Data corruption error.
- */
-export class DataCorruptedError extends ImportExportError {
-  constructor(details: string, context?: Record<string, unknown>) {
-    super(`Data corrupted: ${details}`, ErrorSeverity.NOTIFY, context);
+  /**
+   * Data corruption error.
+   */
+  export class DataCorruptedError extends ImportExportError {
+    constructor(details: string, context?: Record<string, unknown>) {
+      super(i18nService.t('ERR_DATA_CORRUPTED', [details]), ErrorSeverity.NOTIFY, context);
+    }
   }
-}
 
 /**
  * Runtime errors for general application failures.
@@ -220,37 +222,89 @@ export class RuntimeError extends ExtensionError {
   }
 }
 
-/**
- * Browser API errors.
- */
-export class BrowserAPIError extends RuntimeError {
-  constructor(
-    api: string,
-    operation: string,
-    originalError?: Error,
-    context?: Record<string, unknown>,
-  ) {
-    const message = `Browser API error in ${api}.${operation}: ${originalError?.message || "Unknown error"}`;
-    super(message, ErrorSeverity.NOTIFY, {
-      api,
-      operation,
-      originalError: originalError?.message,
-      ...context,
-    });
+  /**
+   * Browser API errors.
+   */
+  export class BrowserAPIError extends RuntimeError {
+    constructor(
+      api: string,
+      operation: string,
+      originalError?: Error,
+      context?: Record<string, unknown>,
+    ) {
+      const errorMessage = originalError?.message || "Unknown error";
+      const message = i18nService.t('ERR_BROWSER_API', [api, operation, errorMessage]);
+      super(message, ErrorSeverity.NOTIFY, {
+        api,
+        operation,
+        originalError: originalError?.message,
+        ...context,
+      });
+    }
   }
-}
 
-/**
- * Permission denied error.
- */
-export class PermissionDeniedError extends RuntimeError {
-  constructor(permission: string, context?: Record<string, unknown>) {
-    super(`Permission denied: ${permission}`, ErrorSeverity.FATAL, {
-      permission,
-      ...context,
-    });
+  /**
+   * Permission denied error.
+   */
+  export class PermissionDeniedError extends RuntimeError {
+    constructor(permission: string, context?: Record<string, unknown>) {
+      super(i18nService.t('ERR_PERMISSION_DENIED', [permission]), ErrorSeverity.FATAL, {
+        permission,
+        ...context,
+      });
+    }
   }
-}
+
+  /**
+   * Permission required error.
+   */
+  export class PermissionRequiredError extends RuntimeError {
+    constructor(permission: string, context?: Record<string, unknown>) {
+      super(i18nService.t('ERR_PERMISSION_REQUIRED', [permission]), ErrorSeverity.NOTIFY, {
+        permission,
+        ...context,
+      });
+    }
+  }
+
+  /**
+   * Metadata parsing error.
+   */
+  export class ParseMetadataError extends RuntimeError {
+    constructor(context?: Record<string, unknown>) {
+      super(i18nService.t('ERR_PARSE_METADATA'), ErrorSeverity.NOTIFY, context);
+    }
+  }
+
+  /**
+   * Preprocessor compilation error.
+   */
+  export class PreprocessorCompileError extends RuntimeError {
+    constructor(context?: Record<string, unknown>) {
+      super(i18nService.t('ERR_PREPROCESSOR_COMPILE'), ErrorSeverity.NOTIFY, context);
+    }
+  }
+
+  /**
+   * CSS injection CSP error.
+   */
+  export class InjectionCSPError extends RuntimeError {
+    constructor(context?: Record<string, unknown>) {
+      super(i18nService.t('ERR_INJECTION_CSP'), ErrorSeverity.NOTIFY, context);
+    }
+  }
+
+  /**
+   * Font loading error.
+   */
+  export class FontLoadError extends RuntimeError {
+    constructor(fontName: string, context?: Record<string, unknown>) {
+      super(i18nService.t('ERR_FONT_LOAD', [fontName]), ErrorSeverity.NOTIFY, {
+        fontName,
+        ...context,
+      });
+    }
+  }
 
 /**
  * Error classification and handling service.
