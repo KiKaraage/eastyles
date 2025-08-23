@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import Settings from "../../components/features/Settings";
+import ManagerPage from "../../components/features/manager/ManagerPage";
 import { useTheme } from "../../hooks/useTheme";
 import { SunLight, HalfMoon, Computer } from "iconoir-react";
 import pkg from "../../package.json";
-
-const ManageStyles = () => <div>Manage Styles Content</div>;
 
 const App = () => {
   const { themeMode, effectiveTheme, toggleTheme } = useTheme();
@@ -119,7 +118,7 @@ const App = () => {
       {/* Main Content */}
       <div className="flex-1 p-4">
         <div className="mt-4">
-          {activeTab === "manage-styles" && <ManageStyles />}
+          {activeTab === "manage-styles" && <ManagerPage />}
           {activeTab === "settings" && <Settings />}
         </div>
       </div>
