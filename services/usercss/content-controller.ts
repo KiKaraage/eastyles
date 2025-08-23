@@ -12,6 +12,9 @@ import { domainDetector } from './domain-detector';
 import { UserCSSStyle } from '../storage/schema';
 import { logger } from '../errors/logger';
 import { ErrorSource } from '../errors/service';
+import { cssInjector } from './css-injector';
+import { resolveVariables } from './variables';
+import { browser } from 'wxt/browser';
 
 export interface ContentController {
   /**
@@ -41,10 +44,11 @@ export interface ContentController {
 }
 
 export class UserCSSContentController implements ContentController {
-  private appliedStyles = new Map<string, UserCSSStyle>();
-  private currentUrl = '';
-  private debugEnabled = false;
-  public domainDetector = domainDetector; // Expose for testing
+   private appliedStyles = new Map<string, UserCSSStyle>();
+   private currentUrl = '';
+   private debugEnabled = false;
+   private performanceEnabled = true;
+   public domainDetector = domainDetector; // Expose for testing
 
   constructor(debug = false) {
     this.debugEnabled = debug;
@@ -139,35 +143,63 @@ export class UserCSSContentController implements ContentController {
   /**
    * Query active styles and apply matching ones
    */
-  private async queryAndApplyStyles(): Promise<void> {
-    try {
-      // Query active styles from background
-      const activeStyles = await this.queryActiveStyles();
+   private async queryAndApplyStyles(): Promise<void> {
+     const startTime = performance.now();
 
-      // Remove styles that no longer match
-      await this.removeNonMatchingStyles(activeStyles);
+     try {
+       // Query active styles from background
+       const activeStyles = await this.queryActiveStyles();
 
-      // Apply new matching styles
-      await this.applyMatchingStyles(activeStyles);
+       // Remove styles that no longer match
+       await this.removeNonMatchingStyles(activeStyles);
 
-    } catch (error) {
-      logger.error?.(
-        ErrorSource.CONTENT,
-        'Failed to query and apply styles',
-        { error: error instanceof Error ? error.message : String(error) }
-      );
-    }
-  }
+       // Apply new matching styles
+       await this.applyMatchingStyles(activeStyles);
+
+       // Log performance
+       this.logPerformance('queryAndApplyStyles', startTime);
+
+     } catch (error) {
+       logger.error?.(
+         ErrorSource.CONTENT,
+         'Failed to query and apply styles',
+         { error: error instanceof Error ? error.message : String(error) }
+       );
+     }
+   }
 
   /**
    * Query active styles from background script
    */
-  private async queryActiveStyles(): Promise<UserCSSStyle[]> {
-    // TODO: Implement message passing to background to get active styles
-    // For now, return empty array
-    this.debug('Querying active styles (TODO: implement message passing)');
-    return [];
-  }
+   private async queryActiveStyles(): Promise<UserCSSStyle[]> {
+     try {
+       this.debug('Querying active styles from background');
+
+       // Send message to background script to get styles for current URL
+       const response = await browser.runtime.sendMessage({
+         type: 'QUERY_STYLES_FOR_URL',
+         payload: { url: this.currentUrl }
+       });
+
+       if (response.success && response.styles) {
+         this.debug(`Received ${response.styles.length} styles from background`);
+         return response.styles as UserCSSStyle[];
+       } else {
+         this.debug('No styles received from background or query failed');
+         return [];
+       }
+     } catch (error) {
+       logger.error?.(
+         ErrorSource.CONTENT,
+         'Failed to query active styles from background',
+         {
+           error: error instanceof Error ? error.message : String(error),
+           url: this.currentUrl
+         }
+       );
+       return [];
+     }
+   }
 
   /**
    * Remove styles that no longer match the current URL
@@ -228,48 +260,69 @@ export class UserCSSContentController implements ContentController {
   /**
    * Apply a single style
    */
-  private async applyStyle(style: UserCSSStyle): Promise<void> {
-    try {
-      // TODO: Implement CSS injection
-      this.debug('Applying style (TODO: implement CSS injection):', style.id);
+   private async applyStyle(style: UserCSSStyle): Promise<void> {
+     try {
+       this.debug('Applying style:', style.id);
 
-      // Mark as applied
-      this.appliedStyles.set(style.id, style);
+       // Resolve variables in the CSS
+       let finalCss = style.compiledCss;
+       if (style.variables && Object.keys(style.variables).length > 0) {
+         // Create values object from variable descriptors
+         const values: Record<string, string> = {};
+         for (const [name, variable] of Object.entries(style.variables)) {
+           // Use current value if set, otherwise use default
+           values[name] = variable.value || variable.default || '';
+         }
 
-    } catch (error) {
-      logger.error?.(
-        ErrorSource.CONTENT,
-        'Failed to apply style',
-        {
-          error: error instanceof Error ? error.message : String(error),
-          styleId: style.id
-        }
-      );
-    }
-  }
+         // Resolve variables in CSS
+         finalCss = resolveVariables(style.compiledCss, values);
+         this.debug('Variables resolved for style:', style.id);
+       }
+
+       // Inject the CSS using the CSS injector
+       await cssInjector.inject(finalCss, style.id);
+
+       // Mark as applied
+       this.appliedStyles.set(style.id, style);
+
+       this.debug('Style applied successfully:', style.id);
+     } catch (error) {
+       logger.error?.(
+         ErrorSource.CONTENT,
+         'Failed to apply style',
+         {
+           error: error instanceof Error ? error.message : String(error),
+           styleId: style.id
+         }
+       );
+     }
+   }
 
   /**
    * Remove a single style
    */
-  private async removeStyle(styleId: string): Promise<void> {
-    try {
-      // TODO: Implement CSS removal
-      this.debug('Removing style (TODO: implement CSS removal):', styleId);
+   private async removeStyle(styleId: string): Promise<void> {
+     try {
+       this.debug('Removing style:', styleId);
 
-      // Remove from applied styles
-      this.appliedStyles.delete(styleId);
+       // Remove CSS using the CSS injector
+       await cssInjector.remove(styleId);
 
-    } catch (error) {
-      logger.error?.(
-        ErrorSource.CONTENT,
-        'Failed to remove style',
-        {
-          error: error instanceof Error ? error.message : String(error),
-          styleId
-        }
-      );
-    }
-  }
+       // Remove from applied styles
+       this.appliedStyles.delete(styleId);
+
+       this.debug('Style removed successfully:', styleId);
+     } catch (error) {
+       logger.error?.(
+         ErrorSource.CONTENT,
+         'Failed to remove style',
+         {
+           error: error instanceof Error ? error.message : String(error),
+           styleId
+         }
+       );
+     }
+   }
 
   /**
    * Handle style updates from background
@@ -327,10 +380,37 @@ export class UserCSSContentController implements ContentController {
   /**
    * Get currently applied styles
    */
-  getAppliedStyles(): Map<string, UserCSSStyle> {
-    return new Map(this.appliedStyles);
-  }
-}
+   getAppliedStyles(): Map<string, UserCSSStyle> {
+     return new Map(this.appliedStyles);
+   }
+
+   /**
+    * Log performance metrics
+    */
+   private logPerformance(operation: string, startTime: number): void {
+     if (!this.performanceEnabled) {
+       return;
+     }
+
+     const endTime = performance.now();
+     const duration = endTime - startTime;
+
+     // Log warning if operation exceeds 200ms budget
+     if (duration > 200) {
+       logger.error?.(
+         ErrorSource.CONTENT,
+         `Performance budget exceeded for ${operation}`,
+         {
+           operation,
+           duration: `${duration.toFixed(2)}ms`,
+           budget: '200ms'
+         }
+       );
+     } else {
+       this.debug(`Performance: ${operation} completed in ${duration.toFixed(2)}ms`);
+     }
+   }
+ }
 
 // Default instance
 export const contentController = new UserCSSContentController();

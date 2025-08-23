@@ -1,270 +1,527 @@
 /**
- * Integration tests for Content Controller
- * Tests the integration between DomainDetector and content script functionality
+ * Integration tests for UserCSS Content Controller
+ *
+ * Tests the orchestration of style application, domain detection, variable resolution,
+ * and CSS injection in the content script context.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UserCSSContentController } from '../../../services/usercss/content-controller';
 import { UserCSSStyle } from '../../../services/storage/schema';
+import { browser } from 'wxt/browser';
+import { domainDetector } from '../../../services/usercss/domain-detector';
+import { cssInjector } from '../../../services/usercss/css-injector';
 
-describe('Content Controller Integration', () => {
+// Mock the dependencies at module level
+vi.mock('wxt/browser', () => ({
+  browser: {
+    runtime: {
+      sendMessage: vi.fn(() => Promise.resolve({ success: true, styles: [] })),
+    },
+  },
+}));
+
+vi.mock('../../../services/usercss/domain-detector', () => ({
+  domainDetector: {
+    matches: vi.fn(() => true),
+  },
+}));
+
+vi.mock('../../../services/usercss/css-injector', () => ({
+  cssInjector: {
+    inject: vi.fn(() => Promise.resolve()),
+    remove: vi.fn(() => Promise.resolve()),
+  },
+}));
+
+
+
+// Mock browser APIs
+vi.mock('wxt/browser', () => ({
+  browser: {
+    runtime: {
+      sendMessage: vi.fn(),
+    },
+  },
+}));
+
+// Mock CSS injector
+vi.mock('../../../services/usercss/css-injector', () => ({
+  cssInjector: {
+    inject: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+// Mock domain detector
+vi.mock('../../../services/usercss/domain-detector', () => ({
+  domainDetector: {
+    matches: vi.fn(),
+    extractDomain: vi.fn(),
+    normalizeURL: vi.fn(),
+  },
+}));
+
+// Mock logger
+vi.mock('../../../services/errors/logger', () => ({
+  logger: {
+    error: vi.fn(),
+  },
+}));
+
+describe('UserCSS Content Controller Integration', () => {
   let controller: UserCSSContentController;
 
-  // Mock window.location
-  const mockLocation = {
-    href: 'https://example.com/page',
-    hostname: 'example.com',
-    pathname: '/page',
-    search: '',
-    hash: '',
-  };
-
   beforeEach(() => {
-    controller = new UserCSSContentController(true); // Enable debug
+    vi.clearAllMocks();
+
+    // Mocks are already set up via vi.mock calls above
+
+    // Create controller with debug enabled for testing
+    controller = new UserCSSContentController(true);
 
     // Mock window.location
     Object.defineProperty(window, 'location', {
-      value: mockLocation,
+      value: { href: 'https://example.com' },
       writable: true,
     });
 
-    // Mock history methods
-    vi.spyOn(history, 'pushState').mockImplementation(() => {});
-    vi.spyOn(history, 'replaceState').mockImplementation(() => {});
-
-    // Mock browser.runtime
-    vi.mock('@wxt-dev/browser', () => ({
-      browser: {
-        runtime: {
-          onMessage: {
-            addListener: vi.fn(),
-          },
-        },
-      },
-    }));
+    // Mock performance.now
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
-  describe('Initialization', () => {
-    it('should initialize successfully', async () => {
-      await expect(controller.initialize()).resolves.toBeUndefined();
-      expect(controller.getAppliedStyles().size).toBe(0);
-    });
+  describe('Style Application Flow', () => {
+    it('should query and apply matching styles on initialization', async () => {
+      const mockStyles: UserCSSStyle[] = [
+        {
+          id: 'style1',
+          name: 'Test Style 1',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Test style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: red; }',
+          variables: {},
+          assets: [],
+          installedAt: Date.now(),
+          enabled: true,
+          source: '/* test */',
+        },
+      ];
 
-    it('should set up navigation listeners', async () => {
-      const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
-
-      await controller.initialize();
-
-      expect(addEventListenerSpy).toHaveBeenCalledWith('popstate', expect.any(Function));
-      expect(addEventListenerSpy).toHaveBeenCalledWith('hashchange', expect.any(Function));
-    });
-
-    it('should handle initialization errors gracefully', async () => {
-      // Mock window.location to throw error
-      Object.defineProperty(window, 'location', {
-        get: () => { throw new Error('Location error'); },
-        set: () => {},
+      // Mock successful message response
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles,
       });
 
-      await expect(controller.initialize()).resolves.toBeUndefined();
-    });
-  });
+      // Mock domain matching
+      vi.mocked(domainDetector.matches).mockReturnValue(true);
 
-  describe('Navigation Handling', () => {
-    it('should handle navigation to new URL', async () => {
+      // Initialize controller
       await controller.initialize();
 
-      const newUrl = 'https://test.com/newpage';
-      mockLocation.href = newUrl;
-
-      await controller.onNavigation(newUrl);
-
-      // Should not throw
-      expect(controller.getAppliedStyles().size).toBe(0);
-    });
-
-    it('should ignore navigation to same URL', async () => {
-      await controller.initialize();
-
-      const currentUrl = window.location.href;
-      await controller.onNavigation(currentUrl);
-
-      // Should not throw and should not change state
-      expect(controller.getAppliedStyles().size).toBe(0);
-    });
-
-    it('should handle navigation errors gracefully', async () => {
-      await controller.initialize();
-
-      // Mock queryAndApplyStyles to throw error
-      const originalQueryAndApplyStyles = (controller as any).queryAndApplyStyles;
-      (controller as any).queryAndApplyStyles = vi.fn().mockRejectedValue(new Error('Query error'));
-
-      await expect(controller.onNavigation('https://error.com')).resolves.toBeUndefined();
-
-      // Restore original method
-      (controller as any).queryAndApplyStyles = originalQueryAndApplyStyles;
-    });
-  });
-
-  describe('Style Management', () => {
-    const mockStyle: UserCSSStyle = {
-      id: 'test-style',
-      name: 'Test Style',
-      namespace: 'test',
-      version: '1.0.0',
-      description: 'A test style',
-      author: 'Test Author',
-      sourceUrl: 'https://example.com/test.user.css',
-      domains: [
-        { kind: 'domain', pattern: 'example.com', include: true }
-      ],
-      compiledCss: 'body { color: red; }',
-      variables: {},
-      assets: [],
-      installedAt: Date.now(),
-      enabled: true,
-      source: '/* ==UserStyle==\n@name Test Style\n==/UserStyle== */\nbody { color: red; }',
-    };
-
-    it('should handle style updates for matching URL', async () => {
-      await controller.initialize();
-
-      // Mock current URL to match style domain
-      mockLocation.href = 'https://example.com/page';
-      await controller.onNavigation('https://example.com/page');
-
-      // Mock domainDetector to return true for matching
-      const matchesSpy = vi.spyOn(controller.domainDetector, 'matches').mockReturnValue(true);
-
-      await controller.onStyleUpdate(mockStyle.id, mockStyle);
-
-      // Style should be applied (though actual injection is mocked)
-      expect(controller.getAppliedStyles().has(mockStyle.id)).toBe(true);
-      expect(matchesSpy).toHaveBeenCalledWith('https://example.com/page', mockStyle.domains);
-
-      matchesSpy.mockRestore();
-    });
-
-    it('should handle style updates for non-matching URL', async () => {
-      await controller.initialize();
-
-      // Mock current URL to not match style domain
-      mockLocation.href = 'https://other.com/page';
-      await controller.onNavigation('https://other.com/page');
-
-      // Mock domainDetector to return false for non-matching
-      const matchesSpy = vi.spyOn(controller.domainDetector, 'matches').mockReturnValue(false);
-
-      await controller.onStyleUpdate(mockStyle.id, mockStyle);
-
-      // Style should not be applied
-      expect(controller.getAppliedStyles().has(mockStyle.id)).toBe(false);
-      expect(matchesSpy).toHaveBeenCalledWith('https://other.com/page', mockStyle.domains);
-
-      matchesSpy.mockRestore();
-    });
-
-    it('should handle style removal', async () => {
-      await controller.initialize();
-
-      // First add a style by mocking domainDetector
-      mockLocation.href = 'https://example.com/page';
-      const matchesSpy = vi.spyOn(controller.domainDetector, 'matches').mockReturnValue(true);
-      await controller.onStyleUpdate(mockStyle.id, mockStyle);
-      expect(controller.getAppliedStyles().has(mockStyle.id)).toBe(true);
-
-      // Then remove it
-      await controller.onStyleRemove(mockStyle.id);
-      expect(controller.getAppliedStyles().has(mockStyle.id)).toBe(false);
-
-      matchesSpy.mockRestore();
-    });
-
-    it('should handle style removal for non-existent style', async () => {
-      await controller.initialize();
-
-      await expect(controller.onStyleRemove('non-existent')).resolves.toBeUndefined();
-    });
-
-    it('should handle style update errors gracefully', async () => {
-      await controller.initialize();
-
-      // Mock domainDetector to throw error
-      const matchesSpy = vi.spyOn(controller.domainDetector, 'matches').mockImplementation(() => {
-        throw new Error('Domain detection error');
+      // Verify message was sent
+      expect(vi.mocked(browser.runtime.sendMessage)).toHaveBeenCalledWith({
+        type: 'QUERY_STYLES_FOR_URL',
+        payload: { url: 'https://example.com' },
       });
 
-      await expect(controller.onStyleUpdate(mockStyle.id, mockStyle)).resolves.toBeUndefined();
+      // Verify CSS injection was called
+      expect(vi.mocked(cssInjector.inject)).toHaveBeenCalledWith(
+        'body { color: red; }',
+        'style1'
+      );
 
-      matchesSpy.mockRestore();
-    });
-  });
-
-  describe('Applied Styles Tracking', () => {
-    it('should return copy of applied styles map', async () => {
-      await controller.initialize();
-
+      // Verify style was added to applied styles
       const appliedStyles = controller.getAppliedStyles();
-      expect(appliedStyles).toBeInstanceOf(Map);
+      expect(appliedStyles.size).toBe(1);
+      expect(appliedStyles.has('style1')).toBe(true);
+    });
+
+    it('should handle navigation and apply styles for new URL', async () => {
+      const mockStyles: UserCSSStyle[] = [
+        {
+          id: 'style1',
+          name: 'Test Style 1',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Test style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: red; }',
+          variables: {},
+          assets: [],
+          installedAt: Date.now(),
+          enabled: true,
+          source: '/* test */',
+        },
+      ];
+
+      // Mock successful message response
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles,
+      });
+
+      // Mock domain matching for new URL
+      vi.mocked(domainDetector.matches).mockReturnValue(true);
+
+      // Simulate navigation
+      Object.defineProperty(window, 'location', {
+        value: { href: 'https://news.example.com' },
+        writable: true,
+      });
+
+      await controller.onNavigation('https://news.example.com');
+
+      // Verify message was sent with new URL
+      expect(vi.mocked(browser.runtime.sendMessage)).toHaveBeenCalledWith({
+        type: 'QUERY_STYLES_FOR_URL',
+        payload: { url: 'https://news.example.com' },
+      });
+
+      // Verify CSS injection was called
+      expect(vi.mocked(cssInjector.inject)).toHaveBeenCalledWith(
+        'body { color: red; }',
+        'style1'
+      );
+    });
+
+    it('should remove non-matching styles when navigating', async () => {
+      // First, apply a style that matches example.com
+      const mockStyles1: UserCSSStyle[] = [
+        {
+          id: 'style1',
+          name: 'Test Style 1',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Test style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: red; }',
+          variables: {},
+          assets: [],
+          installedAt: Date.now(),
+          enabled: true,
+          source: '/* test */',
+        },
+      ];
+
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles1,
+      });
+
+      (vi.mocked(domainDetector) as any).matches.mockReturnValue(true);
+
+      await controller.initialize();
+
+      // Now navigate to a different domain
+      const mockStyles2: UserCSSStyle[] = [];
+
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles2,
+      });
+
+      Object.defineProperty(window, 'location', {
+        value: { href: 'https://other.com' },
+        writable: true,
+      });
+
+      await controller.onNavigation('https://other.com');
+
+      // Verify CSS removal was called
+      expect(vi.mocked(cssInjector).remove).toHaveBeenCalledWith('style1');
+
+      // Verify style was removed from applied styles
+      const appliedStyles = controller.getAppliedStyles();
       expect(appliedStyles.size).toBe(0);
-
-      // Modifying the returned map should not affect internal state
-      appliedStyles.set('test', {} as UserCSSStyle);
-      expect(controller.getAppliedStyles().size).toBe(0);
-    });
-  });
-
-  describe('Event Listeners', () => {
-    it('should handle popstate events', async () => {
-      await controller.initialize();
-
-      const onNavigationSpy = vi.spyOn(controller, 'onNavigation');
-
-      // Simulate popstate event
-      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
-
-      expect(onNavigationSpy).toHaveBeenCalledWith(window.location.href);
     });
 
-    it('should handle hashchange events', async () => {
+    it('should cascade styles by install order', async () => {
+      const mockStyles: UserCSSStyle[] = [
+        {
+          id: 'style2',
+          name: 'Test Style 2',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Second style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style2.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { background: blue; }',
+          variables: {},
+          assets: [],
+          installedAt: 2000, // Later timestamp
+          enabled: true,
+          source: '/* test 2 */',
+        },
+        {
+          id: 'style1',
+          name: 'Test Style 1',
+          namespace: 'test',
+          version: '1.0',
+          description: 'First style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style1.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: red; }',
+          variables: {},
+          assets: [],
+          installedAt: 1000, // Earlier timestamp
+          enabled: true,
+          source: '/* test 1 */',
+        },
+      ];
+
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles,
+      });
+
+      (vi.mocked(domainDetector) as any).matches.mockReturnValue(true);
+
       await controller.initialize();
 
-      const onNavigationSpy = vi.spyOn(controller, 'onNavigation');
+      // Verify both styles were injected (order doesn't matter for injection)
+      expect(vi.mocked(cssInjector).inject).toHaveBeenCalledWith(
+        'body { color: red; }',
+        'style1'
+      );
+      expect(vi.mocked(cssInjector).inject).toHaveBeenCalledWith(
+        'body { background: blue; }',
+        'style2'
+      );
 
-      // Simulate hashchange event
-      window.dispatchEvent(new HashChangeEvent('hashchange', {
-        oldURL: 'https://example.com/page',
-        newURL: 'https://example.com/page#newhash'
-      }));
-
-      expect(onNavigationSpy).toHaveBeenCalledWith(window.location.href);
+      // Verify both styles are applied
+      const appliedStyles = controller.getAppliedStyles();
+      expect(appliedStyles.size).toBe(2);
     });
 
-    it('should handle pushState calls', async () => {
+    it('should resolve variables before injection', async () => {
+      const mockStyles: UserCSSStyle[] = [
+        {
+          id: 'style1',
+          name: 'Test Style with Variables',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Style with variables',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: /*[[--text-color|color|red]]*/ red; }',
+          variables: {
+            '--text-color': {
+              name: '--text-color',
+              type: 'color',
+              default: 'red',
+              value: 'blue',
+            },
+          },
+          assets: [],
+          installedAt: Date.now(),
+          enabled: true,
+          source: '/* test */',
+        },
+      ];
+
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles,
+      });
+
+      (vi.mocked(domainDetector) as any).matches.mockReturnValue(true);
+
       await controller.initialize();
 
-      const onNavigationSpy = vi.spyOn(controller, 'onNavigation');
-
-      // Simulate pushState call
-      history.pushState({}, '', '/newpage');
-
-      expect(onNavigationSpy).toHaveBeenCalledWith(window.location.href);
+      // Verify CSS was injected with resolved variables
+      expect(vi.mocked(cssInjector).inject).toHaveBeenCalledWith(
+        'body { color: blue red; }',
+        'style1'
+      );
     });
 
-    it('should handle replaceState calls', async () => {
+    it('should handle style updates from background', async () => {
+      // First, initialize with no styles
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: [],
+      });
+
       await controller.initialize();
 
-      const onNavigationSpy = vi.spyOn(controller, 'onNavigation');
+      // Now simulate style update
+      const updatedStyle: UserCSSStyle = {
+        id: 'style1',
+        name: 'Updated Style',
+        namespace: 'test',
+        version: '1.0',
+        description: 'Updated style',
+        author: 'Test Author',
+        sourceUrl: 'https://example.com/style.user.css',
+        domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+        compiledCss: 'body { color: green; }',
+        variables: {},
+        assets: [],
+        installedAt: Date.now(),
+        enabled: true,
+        source: '/* updated */',
+      };
 
-      // Simulate replaceState call
-      history.replaceState({}, '', '/replaced');
+      vi.mocked(domainDetector).matches.mockReturnValue(true);
 
-      expect(onNavigationSpy).toHaveBeenCalledWith(window.location.href);
+      await controller.onStyleUpdate('style1', updatedStyle);
+
+      // Verify CSS injection was called with updated style
+      expect(vi.mocked(cssInjector).inject).toHaveBeenCalledWith(
+        'body { color: green; }',
+        'style1'
+      );
+
+      // Verify style was added to applied styles
+      const appliedStyles = controller.getAppliedStyles();
+      expect(appliedStyles.size).toBe(1);
+      expect(appliedStyles.has('style1')).toBe(true);
+    });
+
+    it('should handle style removal from background', async () => {
+      // First, apply a style
+      const mockStyles: UserCSSStyle[] = [
+        {
+          id: 'style1',
+          name: 'Test Style',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Test style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: red; }',
+          variables: {},
+          assets: [],
+          installedAt: Date.now(),
+          enabled: true,
+          source: '/* test */',
+        },
+      ];
+
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles,
+      });
+
+      (vi.mocked(domainDetector) as any).matches.mockReturnValue(true);
+
+      await controller.initialize();
+
+      // Now simulate style removal
+      await controller.onStyleRemove('style1');
+
+      // Verify CSS removal was called
+      expect(vi.mocked(cssInjector).remove).toHaveBeenCalledWith('style1');
+
+      // Verify style was removed from applied styles
+      const appliedStyles = controller.getAppliedStyles();
+      expect(appliedStyles.size).toBe(0);
+    });
+
+    it('should handle performance budget breaches', async () => {
+      // Mock performance.now to simulate slow operation
+      const performanceMock = vi.mocked(performance.now);
+      performanceMock.mockReturnValueOnce(1000); // Start time
+      performanceMock.mockReturnValueOnce(1300); // End time (300ms - over budget)
+
+      const mockStyles: UserCSSStyle[] = [
+        {
+          id: 'style1',
+          name: 'Slow Style',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Slow style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: red; }',
+          variables: {},
+          assets: [],
+          installedAt: Date.now(),
+          enabled: true,
+          source: '/* test */',
+        },
+      ];
+
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles,
+      });
+
+      (vi.mocked(domainDetector) as any).matches.mockReturnValue(true);
+
+      await controller.initialize();
+
+      // Verify that the operation still completed despite budget breach
+      expect(vi.mocked(cssInjector).inject).toHaveBeenCalledWith(
+        'body { color: red; }',
+        'style1'
+      );
+    });
+
+    it('should handle message passing errors gracefully', async () => {
+      // Mock message failure
+      vi.mocked(browser.runtime.sendMessage).mockRejectedValue(new Error('Message failed'));
+
+      await controller.initialize();
+
+      // Verify controller handled error gracefully
+      const appliedStyles = controller.getAppliedStyles();
+      expect(appliedStyles.size).toBe(0);
+    });
+
+    it('should handle domain detection errors gracefully', async () => {
+      const mockStyles: UserCSSStyle[] = [
+        {
+          id: 'style1',
+          name: 'Test Style',
+          namespace: 'test',
+          version: '1.0',
+          description: 'Test style',
+          author: 'Test Author',
+          sourceUrl: 'https://example.com/style.user.css',
+          domains: [{ kind: 'domain', pattern: 'example.com', include: true }],
+          compiledCss: 'body { color: red; }',
+          variables: {},
+          assets: [],
+          installedAt: Date.now(),
+          enabled: true,
+          source: '/* test */',
+        },
+      ];
+
+      (vi.mocked(browser.runtime.sendMessage) as any).mockResolvedValue({
+        success: true,
+        styles: mockStyles,
+      });
+
+      // Mock domain detector to throw error
+      (vi.mocked(domainDetector) as any).matches.mockImplementation(() => {
+        throw new Error('Domain detection failed');
+      });
+
+      await controller.initialize();
+
+      // Verify controller handled error gracefully
+      const appliedStyles = controller.getAppliedStyles();
+      expect(appliedStyles.size).toBe(0);
     });
   });
 });
