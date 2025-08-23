@@ -4,14 +4,17 @@ import { browser } from "wxt/browser";
 import { List, Plus, Settings } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useI18n } from "../../hooks/useI18n";
+import { FontSelector } from "../../components/features/FontSelector";
 
 interface PopupState {
   isLoading: boolean;
+  showFontSelector: boolean;
 }
 
 const App = () => {
   const [state, setState] = useState<PopupState>({
     isLoading: false,
+    showFontSelector: false,
   });
 
   // Theme hook to sync with user's preference from settings
@@ -53,6 +56,19 @@ const App = () => {
     // TODO: Implement add new style functionality
     console.log("Add new style clicked - implementation needed");
     setState((prev) => ({ ...prev, isLoading: false }));
+  };
+
+  const handleOpenFontSelector = () => {
+    setState((prev) => ({ ...prev, showFontSelector: true }));
+  };
+
+  const handleCloseFontSelector = () => {
+    setState((prev) => ({ ...prev, showFontSelector: false }));
+  };
+
+  const handleFontApplied = (application: unknown) => {
+    console.log("Font applied:", application);
+    // TODO: Handle successful font application
   };
 
   return (
@@ -110,6 +126,27 @@ const App = () => {
               <Plus className="w-5 h-5 mr-3 flex-shrink-0" />
               <span className="truncate">{t('saveButton')}</span>
             </button>
+
+            {/* Apply Font Button */}
+            <button
+              onClick={handleOpenFontSelector}
+              className="btn btn-primary w-full justify-start normal-case"
+            >
+              <span className="text-lg mr-3 flex-shrink-0">Aa</span>
+              <span className="truncate">{t('font.applyButton')}</span>
+            </button>
+
+            {/* Font Selector Modal */}
+            {state.showFontSelector && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-base-100 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                  <FontSelector
+                    onFontApplied={handleFontApplied}
+                    onClose={handleCloseFontSelector}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
