@@ -4,9 +4,18 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "types": ["node", "react", "react-dom"],
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
     "paths": {
       "@services/*": ["services/*"]
-    }
+    },
+    "strict": true
   },
   "include": ["**/*.ts", "**/*.tsx", "test", "vitest.config.ts"]
 }

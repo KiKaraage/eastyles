@@ -1,9 +1,17 @@
 import { defineConfig } from "wxt";
 import tailwindcss from "@tailwindcss/vite";
+import path from "path";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: ["@wxt-dev/module-react", "@wxt-dev/webextension-polyfill", "@wxt-dev/i18n/module"],
+  modules: [
+    "@wxt-dev/module-react",
+    "@wxt-dev/webextension-polyfill",
+    "@wxt-dev/i18n/module",
+  ],
+  i18n: {
+    localesDir: "public/_locales",
+  },
   manifest: {
     permissions: ["storage", "contextMenus"],
     default_locale: "en",
@@ -28,10 +36,18 @@ export default defineConfig({
   },
   vite: () => ({
     plugins: [tailwindcss()],
+    resolve: {
+      alias: {
+        "@services": path.resolve(__dirname, "./services"),
+      },
+    },
   }),
   imports: {
     eslintrc: {
       enabled: false,
     },
+  },
+  alias: {
+    "@services": path.resolve(__dirname, "./services"),
   },
 });
