@@ -10,7 +10,7 @@ export interface I18nMessage {
 
 export class I18nService {
   private cache: Map<string, string> = new Map();
-  private fallbackLocale = 'en';
+  private fallbackLocale = "en";
 
   /**
    * Get the user's preferred language
@@ -19,7 +19,7 @@ export class I18nService {
     try {
       return browser.i18n.getUILanguage() || this.fallbackLocale;
     } catch (error) {
-      console.warn('Failed to get UI language, using fallback:', error);
+      console.warn("Failed to get UI language, using fallback:", error);
       return this.fallbackLocale;
     }
   }
@@ -65,7 +65,7 @@ export class I18nService {
     try {
       const message = browser.i18n.getMessage(key);
       return Boolean(message);
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -83,7 +83,7 @@ export class I18nService {
   getAvailableLocales(): string[] {
     // This is a simplified approach - in a real implementation,
     // you might want to detect available locales from the _locales directory
-    return ['en', 'id']; // Add more locales as you create them
+    return ["en", "id"]; // Add more locales as you create them
   }
 }
 

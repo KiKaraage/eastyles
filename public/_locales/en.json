@@ -47,120 +47,8 @@
     "message": "Style saved successfully",
     "description": "Success message when a style is saved"
   },
-   "styleRemoved": {
-     "message": "Style removed successfully",
-     "description": "Success message when a style is removed"
-   },
-   "font": {
-     "selector": {
-       "title": {
-         "message": "Apply Font",
-         "description": "Title for the font selector dialog"
-       }
-     },
-     "tabs": {
-       "builtin": {
-         "message": "Built-in Fonts",
-         "description": "Tab label for built-in fonts"
-       },
-       "custom": {
-         "message": "Custom Font",
-         "description": "Tab label for custom fonts"
-       }
-     },
-     "builtin": {
-       "description": {
-         "message": "Choose from our collection of carefully selected fonts",
-         "description": "Description for built-in fonts section"
-       }
-     },
-     "custom": {
-       "description": {
-         "message": "Enter the name of a font installed on your system",
-         "description": "Description for custom fonts section"
-       },
-       "inputLabel": {
-         "message": "Font Name",
-         "description": "Label for custom font input field"
-       },
-       "placeholder": {
-         "message": "e.g., Arial, Times New Roman, Comic Sans MS",
-         "description": "Placeholder text for custom font input"
-       },
-       "checkButton": {
-         "message": "Check",
-         "description": "Button text to check font availability"
-       },
-       "previewLabel": {
-         "message": "Preview",
-         "description": "Label for font preview section"
-       },
-       "available": {
-         "message": "Font is available and ready to use",
-         "description": "Message when custom font is available"
-       },
-       "notAvailable": {
-         "message": "Font not found on your system",
-         "description": "Message when custom font is not available"
-       }
-     },
-     "categories": {
-       "sans-serif": {
-         "message": "Sans Serif",
-         "description": "Font category name"
-       },
-       "serif": {
-         "message": "Serif",
-         "description": "Font category name"
-       },
-       "monospace": {
-         "message": "Monospace",
-         "description": "Font category name"
-       },
-       "display": {
-         "message": "Display",
-         "description": "Font category name"
-       },
-       "handwriting": {
-         "message": "Handwriting",
-         "description": "Font category name"
-       }
-     },
-     "error": {
-       "emptyName": {
-         "message": "Please enter a font name",
-         "description": "Error when font name is empty"
-       },
-       "notAvailable": {
-         "message": "Font '$name$' is not available on your system",
-         "description": "Error when custom font is not available"
-       },
-       "checkFailed": {
-         "message": "Failed to check font availability",
-         "description": "Error when font check fails"
-       },
-       "parseFailed": {
-         "message": "Failed to process font style",
-         "description": "Error when font UserCSS parsing fails"
-       },
-       "installFailed": {
-         "message": "Failed to install font style",
-         "description": "Error when font style installation fails"
-       },
-       "applyFailed": {
-         "message": "Failed to apply font",
-         "description": "Generic error when font application fails"
-       }
-     },
-     "applying": {
-       "message": "Applying...",
-       "description": "Loading text when applying font"
-     },
-     "applyButton": {
-       "message": "Apply Font",
-       "description": "Button text to apply selected font"
-     }
-   },
+  "styleRemoved": {
+    "message": "Style removed successfully",
     "description": "Success message when a style is removed"
   },
   "styleDeleted": {
@@ -219,6 +107,102 @@
     "message": "Install Date",
     "description": "Label for style save date"
   },
+  "font.selector.title": {
+    "message": "Apply Font",
+    "description": "Title for the font selector dialog"
+  },
+  "font.tabs.builtin": {
+    "message": "Built-in Fonts",
+    "description": "Tab label for built-in fonts"
+  },
+  "font.tabs.custom": {
+    "message": "Custom Font",
+    "description": "Tab label for custom fonts"
+  },
+  "font.builtin.description": {
+    "message": "Choose from our collection of carefully selected fonts",
+    "description": "Description for built-in fonts section"
+  },
+  "font.custom.description": {
+    "message": "Enter the name of a font installed on your system",
+    "description": "Description for custom fonts section"
+  },
+  "font.custom.inputLabel": {
+    "message": "Font Name",
+    "description": "Label for custom font input field"
+  },
+  "font.custom.placeholder": {
+    "message": "e.g., Arial, Times New Roman, Comic Sans MS",
+    "description": "Placeholder text for custom font input"
+  },
+  "font.custom.checkButton": {
+    "message": "Check",
+    "description": "Button text to check font availability"
+  },
+  "font.custom.previewLabel": {
+    "message": "Preview",
+    "description": "Label for font preview section"
+  },
+  "font.custom.available": {
+    "message": "Font is available and ready to use",
+    "description": "Message when custom font is available"
+  },
+  "font.custom.notAvailable": {
+    "message": "Font not found on your system",
+    "description": "Message when custom font is not available"
+  },
+  "font.categories.sans-serif": {
+    "message": "Sans Serif",
+    "description": "Font category name"
+  },
+  "font.categories.serif": {
+    "message": "Serif",
+    "description": "Font category name"
+  },
+  "font.categories.monospace": {
+    "message": "Monospace",
+    "description": "Font category name"
+  },
+  "font.categories.display": {
+    "message": "Display",
+    "description": "Font category name"
+  },
+  "font.categories.handwriting": {
+    "message": "Handwriting",
+    "description": "Font category name"
+  },
+  "font.error.emptyName": {
+    "message": "Please enter a font name",
+    "description": "Error when font name is empty"
+  },
+  "font.error.notAvailable": {
+    "message": "Font '$name$' is not available on your system",
+    "description": "Error when custom font is not available"
+  },
+  "font.error.checkFailed": {
+    "message": "Failed to check font availability",
+    "description": "Error when font check fails"
+  },
+  "font.error.parseFailed": {
+    "message": "Failed to process font style",
+    "description": "Error when font UserCSS parsing fails"
+  },
+  "font.error.installFailed": {
+    "message": "Failed to install font style",
+    "description": "Error when font style installation fails"
+  },
+  "font.error.applyFailed": {
+    "message": "Failed to apply font",
+    "description": "Generic error when font application fails"
+  },
+  "font.applying": {
+    "message": "Applying...",
+    "description": "Loading text when applying font"
+  },
+  "font.applyButton": {
+    "message": "Apply Font",
+    "description": "Button text to apply selected font"
+  },
   "ERR_STORAGE_QUOTA": {
     "message": "Storage capacity exceeded. Please remove some styles to free up space.",
     "description": "Error message when storage capacity is exceeded"
@@ -270,5 +254,17 @@
   "ERR_FONT_LOAD": {
     "message": "Failed to load font: $1",
     "description": "Error message for font loading failures with font name"
+  },
+  "stylesFor": {
+    "message": "Styles for...",
+    "description": "Header text for styles section"
+  },
+  "manageButton": {
+    "message": "Manage",
+    "description": "Manage button text"
+  },
+  "addNewStyle": {
+    "message": "Add New Style",
+    "description": "Add new style button text"
   }
 }
