@@ -33,39 +33,39 @@ export function extractDomains(css: string): DomainRule[] {
 
   while ((match = mozDocumentRegex.exec(css)) !== null) {
     const conditionList = match[1];
-    
+
     // Process each condition in the condition list
-    const conditions = conditionList.split(',').map(c => c.trim());
-    
+    const conditions = conditionList.split(",").map((c) => c.trim());
+
     for (const condition of conditions) {
       // Check each pattern type
       for (const [type, regex] of Object.entries(DOMAIN_PATTERNS)) {
         // Create a new regex instance to avoid state issues
-        const patternRegex = new RegExp(regex.source, 'g');
+        const patternRegex = new RegExp(regex.source, "g");
         let patternResult;
-        
+
         while ((patternResult = patternRegex.exec(condition)) !== null) {
           const patternValue = patternResult[1];
-          
+
           // Validate regex patterns
-          if (type === 'regexp') {
+          if (type === "regexp") {
             try {
               new RegExp(patternValue);
               rules.push({
-                kind: 'regexp' as const,
+                kind: "regexp" as const,
                 pattern: patternValue,
-                include: true
+                include: true,
               });
-            } catch (e) {
+            } catch {
               // Skip invalid regex patterns
               continue;
             }
           } else {
             // For other types, just add the rule
             rules.push({
-              kind: mapType(type) as DomainRule['kind'],
+              kind: mapType(type) as DomainRule["kind"],
               pattern: patternValue,
-              include: true
+              include: true,
             });
           }
         }
@@ -81,16 +81,16 @@ export function extractDomains(css: string): DomainRule[] {
  */
 function mapType(cssType: string): string {
   switch (cssType) {
-    case 'url':
-      return 'url';
-    case 'urlPrefix':
-      return 'url-prefix';
-    case 'domain':
-      return 'domain';
-    case 'regexp':
-      return 'regexp';
+    case "url":
+      return "url";
+    case "urlPrefix":
+      return "url-prefix";
+    case "domain":
+      return "domain";
+    case "regexp":
+      return "regexp";
     default:
-      return 'domain'; // fallback
+      return "domain"; // fallback
   }
 }
 
@@ -100,13 +100,13 @@ function mapType(cssType: string): string {
 export function normalizePattern(pattern: string): string {
   try {
     // If it's a full URL, extract just the hostname
-    if (pattern.includes('://')) {
+    if (pattern.includes("://")) {
       const url = new URL(pattern);
       return url.hostname;
     }
     // Remove leading/trailing whitespace
     return pattern.trim();
-  } catch (e) {
+  } catch {
     // If URL parsing fails, return as-is
     return pattern.trim();
   }

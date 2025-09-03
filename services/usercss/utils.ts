@@ -1,6 +1,3 @@
-import { StyleMeta } from '../types';
-import { getPositionFromIndex } from '../processor';
-
 /**
  * Validates a URL string
  * @param url The URL to validate
@@ -20,21 +17,11 @@ export function isValidUrl(url: string): boolean {
  * @returns A new UUID v4 string
  */
 export function generateId(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
-}
-
-/**
- * Gets the position (line, column) of an index in a text string
- * @param text The text to search in
- * @param index The index to get the position for
- * @returns An object with line and column properties
- */
-export function getErrorPosition(text: string, index: number): { line: number; column: number } {
-  return getPositionFromIndex(text, index);
 }
 
 /**
@@ -46,16 +33,16 @@ export function extractDomainsFromUrl(url: string): string[] {
   try {
     const urlObj = new URL(url);
     const domains: string[] = [];
-    
+
     // Add the full hostname
     domains.push(urlObj.hostname);
-    
+
     // Add subdomains
-    const parts = urlObj.hostname.split('.');
+    const parts = urlObj.hostname.split(".");
     for (let i = 1; i < parts.length; i++) {
-      domains.push(parts.slice(i).join('.'));
+      domains.push(parts.slice(i).join("."));
     }
-    
+
     return domains;
   } catch {
     return [];

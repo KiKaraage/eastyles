@@ -8,13 +8,13 @@
  * - Handling style updates and removals
  */
 
-import { domainDetector } from './domain-detector';
-import { UserCSSStyle } from '../storage/schema';
-import { logger } from '../errors/logger';
-import { ErrorSource } from '../errors/service';
-import { cssInjector } from './css-injector';
-import { resolveVariables } from './variables';
-import { browser } from 'wxt/browser';
+import { domainDetector } from "./domain-detector";
+import { UserCSSStyle } from "../storage/schema";
+import { logger } from "../errors/logger";
+import { ErrorSource } from "../errors/service";
+import { cssInjector } from "./css-injector";
+import { resolveVariables } from "./variables";
+import { browser } from "wxt/browser";
 
 export interface ContentController {
   /**
@@ -40,7 +40,10 @@ export interface ContentController {
   /**
    * Handle variable updates for a specific style
    */
-  onVariablesUpdate(styleId: string, variables: Record<string, string>): Promise<void>;
+  onVariablesUpdate(
+    styleId: string,
+    variables: Record<string, string>,
+  ): Promise<void>;
 
   /**
    * Get currently applied styles
@@ -49,11 +52,12 @@ export interface ContentController {
 }
 
 export class UserCSSContentController implements ContentController {
-   private appliedStyles = new Map<string, UserCSSStyle>();
-   private currentUrl = '';
-   private debugEnabled = false;
-   private performanceEnabled = true;
-   public domainDetector = domainDetector; // Expose for testing
+  private appliedStyles = new Map<string, UserCSSStyle>();
+  private currentUrl = "";
+  private debugEnabled = false;
+  private retryCount = 0;
+  private maxRetries = 3;
+  public domainDetector = domainDetector; // Expose for testing
 
   constructor(debug = false) {
     this.debugEnabled = debug;
@@ -69,11 +73,14 @@ export class UserCSSContentController implements ContentController {
    * Initialize the content controller
    */
   async initialize(): Promise<void> {
-    this.debug('Initializing content controller');
+    this.debug("Initializing content controller");
 
     try {
       // Get current URL
       this.currentUrl = window.location.href;
+
+      // Check CSP headers that might affect CSS injection
+      this.checkCSPHeaders();
 
       // Query active styles for current URL
       await this.queryAndApplyStyles();
@@ -81,12 +88,12 @@ export class UserCSSContentController implements ContentController {
       // Set up navigation listener
       this.setupNavigationListener();
 
-      this.debug('Content controller initialized successfully');
+      this.debug("Content controller initialized successfully");
     } catch (error) {
       logger.error?.(
         ErrorSource.CONTENT,
-        'Failed to initialize content controller',
-        { error: error instanceof Error ? error.message : String(error) }
+        "Failed to initialize content controller",
+        { error: error instanceof Error ? error.message : String(error) },
       );
     }
   }
@@ -96,7 +103,7 @@ export class UserCSSContentController implements ContentController {
    */
   private setupNavigationListener(): void {
     // Listen for popstate events (browser back/forward)
-    window.addEventListener('popstate', () => {
+    window.addEventListener("popstate", () => {
       this.onNavigation(window.location.href);
     });
 
@@ -115,7 +122,7 @@ export class UserCSSContentController implements ContentController {
     };
 
     // Also listen for hash changes
-    window.addEventListener('hashchange', () => {
+    window.addEventListener("hashchange", () => {
       this.onNavigation(window.location.href);
     });
   }
@@ -128,89 +135,198 @@ export class UserCSSContentController implements ContentController {
       return; // No change
     }
 
-    this.debug('Navigation detected:', url);
+    this.debug("Navigation detected:", url);
     this.currentUrl = url;
 
     try {
       await this.queryAndApplyStyles();
     } catch (error) {
-      logger.error?.(
-        ErrorSource.CONTENT,
-        'Failed to handle navigation',
-        {
-          error: error instanceof Error ? error.message : String(error),
-          url
-        }
-      );
+      logger.error?.(ErrorSource.CONTENT, "Failed to handle navigation", {
+        error: error instanceof Error ? error.message : String(error),
+        url,
+      });
     }
   }
 
   /**
    * Query active styles and apply matching ones
    */
-   private async queryAndApplyStyles(): Promise<void> {
-     const startTime = performance.now();
+  private async queryAndApplyStyles(): Promise<void> {
+    const totalStartTime = performance.now();
+    const performanceSpans: Array<{ operation: string; duration: number }> = [];
 
-     try {
-       // Query active styles from background
-       const activeStyles = await this.queryActiveStyles();
+    try {
+      // Query active styles from background with timeout
+      const queryStartTime = performance.now();
+      const queryPromise = this.queryActiveStyles();
+      const timeoutPromise = new Promise<UserCSSStyle[]>((_, reject) => {
+        setTimeout(() => reject(new Error("Query timeout")), 5000); // 5 second timeout
+      });
 
-       // Remove styles that no longer match
-       await this.removeNonMatchingStyles(activeStyles);
+      const activeStyles = await Promise.race([queryPromise, timeoutPromise]);
+      const queryDuration = performance.now() - queryStartTime;
+      performanceSpans.push({
+        operation: "queryActiveStyles",
+        duration: queryDuration,
+      });
 
-       // Apply new matching styles
-       await this.applyMatchingStyles(activeStyles);
+      // Remove styles that no longer match
+      const removeStartTime = performance.now();
+      await this.removeNonMatchingStyles(activeStyles);
+      const removeDuration = performance.now() - removeStartTime;
+      performanceSpans.push({
+        operation: "removeNonMatchingStyles",
+        duration: removeDuration,
+      });
 
-       // Log performance
-       this.logPerformance('queryAndApplyStyles', startTime);
+      // Apply new matching styles
+      const applyStartTime = performance.now();
+      await this.applyMatchingStyles(activeStyles);
+      const applyDuration = performance.now() - applyStartTime;
+      performanceSpans.push({
+        operation: "applyMatchingStyles",
+        duration: applyDuration,
+      });
 
-     } catch (error) {
-       logger.error?.(
-         ErrorSource.CONTENT,
-         'Failed to query and apply styles',
-         { error: error instanceof Error ? error.message : String(error) }
-       );
-     }
-   }
+      // Log applied styles
+      this.debug(
+        `Applied ${this.appliedStyles.size} styles:`,
+        Array.from(this.appliedStyles.keys()),
+      );
+
+      // Log performance with detailed spans
+      const totalDuration = performance.now() - totalStartTime;
+      const performanceData = {
+        totalDuration: `${totalDuration.toFixed(2)}ms`,
+        spans: performanceSpans.map(
+          (s) => `${s.operation}: ${s.duration.toFixed(2)}ms`,
+        ),
+        budget: "1000ms",
+        appliedStylesCount: this.appliedStyles.size,
+      };
+
+      if (totalDuration > 1000) {
+        // Performance budget exceeded - log as warning via ErrorService
+        logger.warn?.(
+          ErrorSource.CONTENT,
+          "Performance budget exceeded",
+          performanceData,
+        );
+      } else {
+        this.debug(
+          `Performance: queryAndApplyStyles completed in ${totalDuration.toFixed(2)}ms`,
+          performanceData,
+        );
+      }
+    } catch (error) {
+      const totalDuration = performance.now() - totalStartTime;
+      logger.error?.(ErrorSource.CONTENT, "Failed to query and apply styles", {
+        error: error instanceof Error ? error.message : String(error),
+        duration: `${totalDuration.toFixed(2)}ms`,
+        spans: performanceSpans,
+      });
+    }
+  }
 
   /**
    * Query active styles from background script
    */
-   private async queryActiveStyles(): Promise<UserCSSStyle[]> {
-     try {
-       this.debug('Querying active styles from background');
+  private async queryActiveStyles(): Promise<UserCSSStyle[]> {
+    try {
+      this.debug(
+        "Querying active styles from background for URL:",
+        this.currentUrl,
+      );
 
-       // Send message to background script to get styles for current URL
-       const response = await browser.runtime.sendMessage({
-         type: 'QUERY_STYLES_FOR_URL',
-         payload: { url: this.currentUrl }
-       });
+      // Check if background script is available first
+      if (!browser.runtime?.id) {
+        this.debug("Background script not available (no runtime.id)");
+        return [];
+      }
 
-       if (response.success && response.styles) {
-         this.debug(`Received ${response.styles.length} styles from background`);
-         return response.styles as UserCSSStyle[];
-       } else {
-         this.debug('No styles received from background or query failed');
-         return [];
-       }
-     } catch (error) {
-       logger.error?.(
-         ErrorSource.CONTENT,
-         'Failed to query active styles from background',
-         {
-           error: error instanceof Error ? error.message : String(error),
-           url: this.currentUrl
-         }
-       );
-       return [];
-     }
-   }
+      // Send message to background script to get styles for current URL
+      console.log("[ContentController] Sending QUERY_STYLES_FOR_URL message");
+      const response = (await browser.runtime.sendMessage({
+        type: "QUERY_STYLES_FOR_URL",
+        payload: { url: this.currentUrl },
+      })) as {
+        success: boolean;
+        error?: string;
+        styles?: UserCSSStyle[];
+      };
+
+      console.log("[ContentController] Raw response received:", response);
+      console.log("[ContentController] Response type:", typeof response);
+
+      if (response && response.success && response.styles) {
+        this.debug(
+          `Received ${response.styles.length} styles from background:`,
+          response.styles.map((s) => s.id),
+        );
+        this.retryCount = 0; // Reset retry count on success
+        return response.styles;
+      } else {
+        this.debug("No styles received from background or query failed");
+        return [];
+      }
+    } catch (error) {
+      // Handle connection errors gracefully
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      if (
+        errorMessage.includes("Could not establish connection") ||
+        errorMessage.includes("Receiving end does not exist") ||
+        errorMessage.includes("Message timeout") ||
+        errorMessage.includes("out of scope")
+      ) {
+        this.retryCount++;
+
+        if (this.retryCount >= this.maxRetries) {
+          logger.error?.(
+            ErrorSource.CONTENT,
+            `Background script not available after ${this.maxRetries} retries, giving up`,
+            {
+              error: errorMessage,
+              url: this.currentUrl,
+              retryCount: this.retryCount,
+            },
+          );
+          this.retryCount = 0; // Reset for next attempt
+          return [];
+        }
+
+        logger.error?.(
+          ErrorSource.CONTENT,
+          `Background script not available, retrying in 2 seconds (${this.retryCount}/${this.maxRetries})`,
+          {
+            error: errorMessage,
+            url: this.currentUrl,
+          },
+        );
+        // Retry after a delay
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return this.queryActiveStyles();
+      } else {
+        logger.error?.(
+          ErrorSource.CONTENT,
+          "Failed to query active styles from background",
+          {
+            error: errorMessage,
+            url: this.currentUrl,
+          },
+        );
+        return [];
+      }
+    }
+  }
 
   /**
    * Remove styles that no longer match the current URL
    */
-  private async removeNonMatchingStyles(activeStyles: UserCSSStyle[]): Promise<void> {
-    const activeStyleIds = new Set(activeStyles.map(style => style.id));
+  private async removeNonMatchingStyles(
+    activeStyles: UserCSSStyle[],
+  ): Promise<void> {
+    const activeStyleIds = new Set(activeStyles.map((style) => style.id));
     const stylesToRemove: string[] = [];
 
     for (const [styleId, style] of this.appliedStyles) {
@@ -232,22 +348,33 @@ export class UserCSSContentController implements ContentController {
     }
 
     if (stylesToRemove.length > 0) {
-      this.debug('Removed non-matching styles:', stylesToRemove);
+      this.debug("Removed non-matching styles:", stylesToRemove);
     }
   }
 
   /**
    * Apply styles that match the current URL
    */
-  private async applyMatchingStyles(activeStyles: UserCSSStyle[]): Promise<void> {
+  private async applyMatchingStyles(
+    activeStyles: UserCSSStyle[],
+  ): Promise<void> {
     const stylesToApply: UserCSSStyle[] = [];
 
     for (const style of activeStyles) {
       if (!this.appliedStyles.has(style.id)) {
-        // Style not yet applied, check if it matches
+        // Additional domain filtering safeguard - only apply enabled styles that match the domain
+        if (!style.enabled) {
+          this.debug(`Style ${style.id} is disabled, skipping application`);
+          continue;
+        }
+
         const matches = domainDetector.matches(this.currentUrl, style.domains);
         if (matches) {
           stylesToApply.push(style);
+        } else {
+          this.debug(
+            `Style ${style.id} doesn't match current domain, skipping`,
+          );
         }
       }
     }
@@ -258,82 +385,174 @@ export class UserCSSContentController implements ContentController {
     }
 
     if (stylesToApply.length > 0) {
-      this.debug('Applied matching styles:', stylesToApply.map(s => s.id));
+      this.debug(
+        "Applied matching styles:",
+        stylesToApply.map((s) => s.id),
+      );
     }
   }
 
   /**
    * Apply a single style
    */
-   private async applyStyle(style: UserCSSStyle): Promise<void> {
-     try {
-       this.debug('Applying style:', style.id);
+  private async applyStyle(style: UserCSSStyle): Promise<void> {
+    const styleStartTime = performance.now();
+    try {
+      console.log("[ContentController] Starting to apply style:", style.id);
+      console.log("[ContentController] Style details:", {
+        id: style.id,
+        name: style.name,
+        domains: style.domains,
+        cssLength: style.compiledCss.length,
+        hasVariables: !!(
+          style.variables && Object.keys(style.variables).length > 0
+        ),
+      });
 
-       // Resolve variables in the CSS
-       let finalCss = style.compiledCss;
-       if (style.variables && Object.keys(style.variables).length > 0) {
-         // Create values object from variable descriptors
-         const values: Record<string, string> = {};
-         for (const [name, variable] of Object.entries(style.variables)) {
-           // Use current value if set, otherwise use default
-           values[name] = variable.value || variable.default || '';
-         }
+      this.debug(
+        "Applying style:",
+        style.id,
+        "CSS length:",
+        style.compiledCss.length,
+      );
 
-         // Resolve variables in CSS
-         finalCss = resolveVariables(style.compiledCss, values);
-         this.debug('Variables resolved for style:', style.id);
-       }
+      // Resolve variables in the CSS
+      let finalCss = style.compiledCss;
+      if (style.variables && Object.keys(style.variables).length > 0) {
+        // Create values object from variable descriptors
+        const values: Record<string, string> = {};
+        for (const [name, variable] of Object.entries(style.variables)) {
+          // Use current value if set, otherwise use default
+          values[name] = variable.value || variable.default || "";
+        }
 
-       // Inject the CSS using the CSS injector
-       await cssInjector.inject(finalCss, style.id);
+        console.log(
+          "[ContentController] Resolving variables for style:",
+          style.id,
+          "variables:",
+          values,
+        );
+        // Resolve variables in CSS
+        finalCss = resolveVariables(style.compiledCss, values);
+        this.debug(
+          "Variables resolved for style:",
+          style.id,
+          "final CSS length:",
+          finalCss.length,
+        );
+        console.log(
+          "[ContentController] Variables resolved, final CSS preview:",
+          finalCss.substring(0, 200) + "...",
+        );
+      } else {
+        console.log(
+          "[ContentController] No variables to resolve for style:",
+          style.id,
+        );
+      }
 
-       // Mark as applied
-       this.appliedStyles.set(style.id, style);
+      // Preprocess CSS to fix browser compatibility issues
+      finalCss = this.preprocessCSS(finalCss);
 
-       this.debug('Style applied successfully:', style.id);
-     } catch (error) {
-       logger.error?.(
-         ErrorSource.CONTENT,
-         'Failed to apply style',
-         {
-           error: error instanceof Error ? error.message : String(error),
-           styleId: style.id
-         }
-       );
-     }
-   }
+      // Inject the CSS using the CSS injector
+      console.log(
+        "[ContentController] Injecting CSS for style:",
+        style.id,
+        "final CSS length:",
+        finalCss.length,
+      );
+      console.log(
+        "[ContentController] Final CSS content preview:",
+        finalCss.substring(0, 300) + (finalCss.length > 300 ? "..." : ""),
+      );
+
+      // Check if CSS contains valid selectors
+      const selectorMatches = finalCss.match(/\{[^}]*\}/g);
+      console.log(
+        "[ContentController] CSS rule blocks found:",
+        selectorMatches?.length || 0,
+      );
+
+      await cssInjector.inject(finalCss, style.id);
+      console.log(
+        "[ContentController] CSS injection completed for style:",
+        style.id,
+      );
+
+      // Mark as applied
+      this.appliedStyles.set(style.id, style);
+
+      // Log performance for individual style application
+      const styleDuration = performance.now() - styleStartTime;
+      if (styleDuration > 300) {
+        // Individual style taking too long - log as warning
+        logger.warn?.(
+          ErrorSource.CONTENT,
+          `Individual style application exceeded threshold: ${styleDuration.toFixed(2)}ms`,
+          {
+            styleId: style.id,
+            styleName: style.name,
+            duration: `${styleDuration.toFixed(2)}ms`,
+            threshold: "300ms",
+            cssLength: style.compiledCss.length,
+            hasVariables: !!(
+              style.variables && Object.keys(style.variables).length > 0
+            ),
+          },
+        );
+      } else {
+        this.debug(
+          `Style ${style.id} applied in ${styleDuration.toFixed(2)}ms`,
+        );
+      }
+
+      // Verify the style was actually applied by checking if it's in the DOM
+      this.verifyStyleApplication(style.id);
+
+      this.debug("Style applied successfully:", style.id);
+    } catch (error) {
+      const styleDuration = performance.now() - styleStartTime;
+      console.error(
+        "[ContentController] Failed to apply style:",
+        style.id,
+        error,
+      );
+      logger.error?.(ErrorSource.CONTENT, "Failed to apply style", {
+        error: error instanceof Error ? error.message : String(error),
+        styleId: style.id,
+        duration: `${styleDuration.toFixed(2)}ms`,
+        cssLength: style.compiledCss.length,
+      });
+    }
+  }
 
   /**
    * Remove a single style
    */
-   private async removeStyle(styleId: string): Promise<void> {
-     try {
-       this.debug('Removing style:', styleId);
+  private async removeStyle(styleId: string): Promise<void> {
+    try {
+      this.debug("Removing style:", styleId);
 
-       // Remove CSS using the CSS injector
-       await cssInjector.remove(styleId);
+      // Remove CSS using the CSS injector
+      await cssInjector.remove(styleId);
 
-       // Remove from applied styles
-       this.appliedStyles.delete(styleId);
+      // Remove from applied styles
+      this.appliedStyles.delete(styleId);
 
-       this.debug('Style removed successfully:', styleId);
-     } catch (error) {
-       logger.error?.(
-         ErrorSource.CONTENT,
-         'Failed to remove style',
-         {
-           error: error instanceof Error ? error.message : String(error),
-           styleId
-         }
-       );
-     }
-   }
+      this.debug("Style removed successfully:", styleId);
+    } catch (error) {
+      logger.error?.(ErrorSource.CONTENT, "Failed to remove style", {
+        error: error instanceof Error ? error.message : String(error),
+        styleId,
+      });
+    }
+  }
 
   /**
    * Handle style updates from background
    */
   async onStyleUpdate(styleId: string, style: UserCSSStyle): Promise<void> {
-    this.debug('Style update received:', styleId);
+    this.debug("Style update received:", styleId);
 
     try {
       // Check if style matches current URL
@@ -349,14 +568,10 @@ export class UserCSSContentController implements ContentController {
         }
       }
     } catch (error) {
-      logger.error?.(
-        ErrorSource.CONTENT,
-        'Failed to handle style update',
-        {
-          error: error instanceof Error ? error.message : String(error),
-          styleId
-        }
-      );
+      logger.error?.(ErrorSource.CONTENT, "Failed to handle style update", {
+        error: error instanceof Error ? error.message : String(error),
+        styleId,
+      });
     }
   }
 
@@ -364,41 +579,40 @@ export class UserCSSContentController implements ContentController {
    * Handle style removal
    */
   async onStyleRemove(styleId: string): Promise<void> {
-    this.debug('Style removal received:', styleId);
+    this.debug("Style removal received:", styleId);
 
     try {
       if (this.appliedStyles.has(styleId)) {
         await this.removeStyle(styleId);
       }
     } catch (error) {
-      logger.error?.(
-        ErrorSource.CONTENT,
-        'Failed to handle style removal',
-        {
-          error: error instanceof Error ? error.message : String(error),
-          styleId
-        }
-      );
+      logger.error?.(ErrorSource.CONTENT, "Failed to handle style removal", {
+        error: error instanceof Error ? error.message : String(error),
+        styleId,
+      });
     }
   }
 
   /**
    * Handle variable updates for a specific style
    */
-  async onVariablesUpdate(styleId: string, variables: Record<string, string>): Promise<void> {
-    this.debug('Variable update received:', styleId, variables);
+  async onVariablesUpdate(
+    styleId: string,
+    variables: Record<string, string>,
+  ): Promise<void> {
+    this.debug("Variable update received:", styleId, variables);
 
     try {
       const appliedStyle = this.appliedStyles.get(styleId);
       if (!appliedStyle) {
-        this.debug('Style not applied, ignoring variable update:', styleId);
+        this.debug("Style not applied, ignoring variable update:", styleId);
         return;
       }
 
       // Update the style's variables
       const updatedStyle = {
         ...appliedStyle,
-        variables: { ...appliedStyle.variables }
+        variables: { ...appliedStyle.variables },
       };
 
       // Update variable values
@@ -406,7 +620,7 @@ export class UserCSSContentController implements ContentController {
         if (updatedStyle.variables[varName]) {
           updatedStyle.variables[varName] = {
             ...updatedStyle.variables[varName],
-            value: varValue
+            value: varValue,
           };
         }
       }
@@ -414,15 +628,276 @@ export class UserCSSContentController implements ContentController {
       // Re-apply the style with updated variables
       await this.applyStyle(updatedStyle);
 
-      this.debug('Variables updated and style re-applied:', styleId);
+      this.debug("Variables updated and style re-applied:", styleId);
     } catch (error) {
-      logger.error?.(
-        ErrorSource.CONTENT,
-        'Failed to handle variable update',
-        {
-          error: error instanceof Error ? error.message : String(error),
-          styleId
+      logger.error?.(ErrorSource.CONTENT, "Failed to handle variable update", {
+        error: error instanceof Error ? error.message : String(error),
+        styleId,
+      });
+    }
+  }
+
+  /**
+   * Check Content Security Policy headers that might affect CSS injection
+   */
+  private checkCSPHeaders(): void {
+    try {
+      console.log("[ContentController] Checking CSP headers...");
+
+      // Check meta tag CSP
+      const cspMeta = document.querySelector(
+        'meta[http-equiv="Content-Security-Policy"]',
+      );
+      if (cspMeta) {
+        console.log(
+          "[ContentController] Found CSP meta tag:",
+          cspMeta.getAttribute("content"),
+        );
+      }
+
+      // Try to detect CSP violations by attempting a simple style injection
+      const testStyle = document.createElement("style");
+      testStyle.textContent = "/* CSP test */";
+      document.head.appendChild(testStyle);
+
+      // Remove test style after a short delay
+      setTimeout(() => {
+        if (testStyle.parentNode) {
+          testStyle.parentNode.removeChild(testStyle);
+          console.log(
+            "[ContentController] CSP test passed - style injection allowed",
+          );
+        } else {
+          console.warn(
+            "[ContentController] CSP test failed - style may be blocked",
+          );
         }
+      }, 100);
+
+      // Check for CSP violation events
+      document.addEventListener("securitypolicyviolation", (event) => {
+        console.error("[ContentController] CSP violation detected:", {
+          violatedDirective: event.violatedDirective,
+          blockedURI: event.blockedURI,
+          sourceFile: event.sourceFile,
+          lineNumber: event.lineNumber,
+        });
+      });
+    } catch (error) {
+      console.error("[ContentController] Error checking CSP headers:", error);
+    }
+  }
+
+  /**
+   * Preprocess CSS to fix browser compatibility issues
+   */
+  private preprocessCSS(css: string): string {
+    let processedCss = css;
+
+    console.log("[ContentController] Original CSS length:", css.length);
+    console.log(
+      "[ContentController] Original CSS preview:",
+      css.substring(0, 500),
+    );
+
+    // Remove @-moz-document rules and extract their content
+    // This is crucial for content script CSS injection as @-moz-document is not supported
+    let allExtractedContent = "";
+    let hasExtractedContent = false;
+    let extractionCount = 0;
+
+    // Find all @-moz-document blocks and extract their content
+    // Use a more robust regex that handles nested braces properly
+    const mozDocumentRegex = /@-moz-document\s+[^{]*\{/g;
+    const cssWithoutMozDocument = css;
+    let match;
+
+    while ((match = mozDocumentRegex.exec(cssWithoutMozDocument)) !== null) {
+      const startIndex = match.index;
+      const openBraceIndex = startIndex + match[0].length - 1;
+
+      // Find the matching closing brace
+      let braceCount = 1;
+      const contentStartIndex = openBraceIndex + 1;
+      let currentIndex = contentStartIndex;
+
+      while (currentIndex < cssWithoutMozDocument.length && braceCount > 0) {
+        const char = cssWithoutMozDocument[currentIndex];
+        if (char === "{") {
+          braceCount++;
+        } else if (char === "}") {
+          braceCount--;
+        }
+        currentIndex++;
+      }
+
+      if (braceCount === 0) {
+        const content = cssWithoutMozDocument.substring(
+          contentStartIndex,
+          currentIndex - 1,
+        );
+        extractionCount++;
+
+        console.log(
+          `[ContentController] Extracting @-moz-document block ${extractionCount}`,
+          {
+            blockLength: content.length,
+            preview: content.substring(0, 200),
+            startIndex: contentStartIndex,
+            endIndex: currentIndex - 1,
+          },
+        );
+
+        // Clean up the extracted content
+        const cleanContent = content.trim();
+
+        // Add the extracted content
+        allExtractedContent += cleanContent + "\n\n";
+        hasExtractedContent = true;
+
+        // Move past this block
+        mozDocumentRegex.lastIndex = currentIndex;
+      }
+    }
+
+    // If we extracted content, replace the CSS with all extracted content
+    if (hasExtractedContent) {
+      processedCss = allExtractedContent.trim();
+      console.log(
+        "[ContentController] Total extracted content length:",
+        processedCss.length,
+        "from",
+        extractionCount,
+        "blocks",
+      );
+      console.log(
+        "[ContentController] Extracted content preview:",
+        processedCss.substring(0, 500),
+      );
+    }
+
+    // Fix IE-specific pseudo-selectors that Firefox doesn't understand
+    processedCss = processedCss.replace(
+      /-ms-input-placeholder/g,
+      "::placeholder",
+    );
+
+    // Fix old CSS filter syntax (alpha() -> opacity)
+    processedCss = processedCss.replace(
+      /filter:\s*alpha\(opacity=([^)]+)\)/g,
+      (_, opacity) => {
+        const opacityValue = parseInt(opacity) / 100;
+        return `opacity: ${opacityValue}`;
+      },
+    );
+
+    // Remove -moz- prefixes that are no longer needed in modern Firefox
+    processedCss = processedCss.replace(
+      /-moz-(background-clip|box-shadow|border-radius|outline-style)/g,
+      "$1",
+    );
+
+    // Final cleanup - remove any remaining artifacts
+    processedCss = processedCss.replace(/^\s*\*\/\s*\n/, "");
+    processedCss = processedCss.replace(/\n\s*\n/g, "\n"); // Remove excessive line breaks
+    processedCss = processedCss.replace(/[^}]*{\s*}\s*/g, ""); // Remove empty rules
+
+    console.log("[ContentController] CSS preprocessing completed");
+    if (processedCss !== css) {
+      console.log("[ContentController] CSS was modified during preprocessing");
+      console.log(
+        "[ContentController] Original length:",
+        css.length,
+        "Processed length:",
+        processedCss.length,
+      );
+    }
+
+    return processedCss.trim();
+  }
+
+  /**
+   * Verify that a style was actually applied to the DOM
+   */
+  private verifyStyleApplication(styleId: string): void {
+    try {
+      // Check if style element exists in DOM
+      const styleElement = document.querySelector(
+        `style[data-eastyles-id="${styleId}"]`,
+      );
+      console.log(
+        `[ContentController] Style ${styleId} found in DOM as style element:`,
+        !!styleElement,
+      );
+
+      if (styleElement) {
+        const sheet = (styleElement as HTMLStyleElement).sheet;
+        console.log(
+          `[ContentController] Style ${styleId} has CSS sheet:`,
+          !!sheet,
+        );
+
+        if (sheet) {
+          console.log(
+            `[ContentController] Style ${styleId} has ${sheet.cssRules.length} CSS rules`,
+          );
+          // Log first few rules to see if they're valid
+          for (let i = 0; i < Math.min(sheet.cssRules.length, 3); i++) {
+            console.log(
+              `[ContentController] Rule ${i}:`,
+              sheet.cssRules[i].cssText,
+            );
+          }
+        }
+      }
+
+      // Check if constructable stylesheet was used
+      if (document.adoptedStyleSheets) {
+        console.log(
+          `[ContentController] AdoptedStyleSheets count: ${document.adoptedStyleSheets.length}`,
+        );
+      }
+
+      // Check if any elements on the page have styles that might be from our CSS
+      setTimeout(() => {
+        console.log(
+          `[ContentController] Page style verification for ${styleId}:`,
+        );
+        console.log(
+          `- Body background:`,
+          window.getComputedStyle(document.body).backgroundColor,
+        );
+        console.log(
+          `- Body color:`,
+          window.getComputedStyle(document.body).color,
+        );
+
+        // Look for common Discord elements that might be styled
+        const discordElements = document.querySelectorAll(
+          '[class*="header"], [class*="channel"], [class*="message"]',
+        );
+        if (discordElements.length > 0) {
+          console.log(
+            `[ContentController] Found ${discordElements.length} potential Discord elements`,
+          );
+          // Check first few elements
+          for (let i = 0; i < Math.min(discordElements.length, 3); i++) {
+            const el = discordElements[i] as HTMLElement;
+            console.log(
+              `[ContentController] Element ${i} classes:`,
+              el.className,
+            );
+            console.log(
+              `[ContentController] Element ${i} display:`,
+              window.getComputedStyle(el).display,
+            );
+          }
+        }
+      }, 200);
+    } catch (error) {
+      console.error(
+        `[ContentController] Error verifying style application for ${styleId}:`,
+        error,
       );
     }
   }
@@ -430,37 +905,10 @@ export class UserCSSContentController implements ContentController {
   /**
    * Get currently applied styles
    */
-   getAppliedStyles(): Map<string, UserCSSStyle> {
+  getAppliedStyles(): Map<string, UserCSSStyle> {
     return new Map(this.appliedStyles);
   }
-
-   /**
-    * Log performance metrics
-    */
-   private logPerformance(operation: string, startTime: number): void {
-     if (!this.performanceEnabled) {
-       return;
-     }
-
-     const endTime = performance.now();
-     const duration = endTime - startTime;
-
-     // Log warning if operation exceeds 200ms budget
-     if (duration > 200) {
-       logger.error?.(
-         ErrorSource.CONTENT,
-         `Performance budget exceeded for ${operation}`,
-         {
-           operation,
-           duration: `${duration.toFixed(2)}ms`,
-           budget: '200ms'
-         }
-       );
-     } else {
-       this.debug(`Performance: ${operation} completed in ${duration.toFixed(2)}ms`);
-     }
-   }
- }
+}
 
 // Default instance
 export const contentController = new UserCSSContentController();

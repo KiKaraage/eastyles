@@ -112,7 +112,7 @@ export function parseUserCSS(raw: string): ParseResult {
       }
     }
 
-    // Handle legacy -moz-document syntax
+    // Handle legacy -moz-document syntax in metadata
     if (directives["-moz-document"]) {
       warnings.push(
         "Legacy -moz-document syntax detected. Consider using modern @domain directive",
@@ -121,9 +121,6 @@ export function parseUserCSS(raw: string): ParseResult {
       // Extract domains from -moz-document rules
       const mozDocumentRules = directives["-moz-document"];
       if (mozDocumentRules) {
-        warnings.push(
-          "Legacy -moz-document syntax detected. Consider using modern @domain directive",
-        );
         // Match url(), url-prefix(), and domain() patterns
         const urlMatches = mozDocumentRules.match(
           /url\(["']?(https?:\/\/[^"')]+)["']?\)/g,
@@ -131,6 +128,10 @@ export function parseUserCSS(raw: string): ParseResult {
 
         const urlPrefixMatches = mozDocumentRules.match(
           /url-prefix\(["']?(https?:\/\/[^"')]+)["']?\)/g,
+        );
+
+        const domainMatches = mozDocumentRules.match(
+          /domain\(["']?([^"')]+)["']?\)/g,
         );
 
         if (urlMatches) {
@@ -162,6 +163,35 @@ export function parseUserCSS(raw: string): ParseResult {
             }
           });
         }
+
+        if (domainMatches) {
+          domainMatches.forEach((match) => {
+            const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
+            if (domainMatch) {
+              domains.push(domainMatch[1]);
+            }
+          });
+        }
+      }
+    }
+
+    // Parse CSS content for @-moz-document rules
+    const mozDocumentCssMatch = css.match(/@-moz-document\s+([^}]+)\s*\{/);
+    if (mozDocumentCssMatch) {
+      const mozDocumentRule = mozDocumentCssMatch[1];
+      warnings.push(
+        "Found @-moz-document rule in CSS content. Consider using modern @domain directive in metadata",
+      );
+
+      // Extract domains from CSS @-moz-document rules
+      const domainMatches = mozDocumentRule.match(/domain\(["']?([^"')]+)["']?\)/g);
+      if (domainMatches) {
+        domainMatches.forEach((match) => {
+          const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
+          if (domainMatch) {
+            domains.push(domainMatch[1]);
+          }
+        });
       }
     }
 

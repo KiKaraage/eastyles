@@ -6,7 +6,7 @@
  * exact domains, subdomains, URL prefixes, and regular expressions.
  */
 
-import { DomainRule } from './types';
+import { DomainRule } from "./types";
 
 /**
  * Interface for the domain detector
@@ -39,9 +39,9 @@ export interface DomainDetector {
  * Implementation of the domain detector
  */
 export class UserCSSDomainDetector implements DomainDetector {
-  private debugEnabled = false;
+  private debugEnabled = true; // Enable debugging
 
-  constructor(debug = false) {
+  constructor(debug = true) {
     this.debugEnabled = debug;
   }
 
@@ -56,18 +56,23 @@ export class UserCSSDomainDetector implements DomainDetector {
    */
   matches(url: string, rules: DomainRule[]): boolean {
     if (!rules || rules.length === 0) {
-      this.debug('No rules provided, matching all URLs');
+      this.debug("No rules provided, matching all URLs");
       return true; // No rules means apply to all URLs
     }
 
     const normalizedUrl = this.normalizeURL(url);
     const domain = this.extractDomain(url);
 
-    this.debug(`Checking URL: ${url} (normalized: ${normalizedUrl}, domain: ${domain})`);
+    this.debug(
+      `Checking URL: ${url} (normalized: ${normalizedUrl}, domain: ${domain})`,
+    );
 
     // First check exclude rules - if any exclude rule matches, return false
     for (const rule of rules) {
-      if (!rule.include && this.matchesRulePattern(normalizedUrl, domain, rule)) {
+      if (
+        !rule.include &&
+        this.matchesRulePattern(normalizedUrl, domain, rule)
+      ) {
         this.debug(`URL excluded by rule:`, rule);
         return false;
       }
@@ -75,40 +80,47 @@ export class UserCSSDomainDetector implements DomainDetector {
 
     // Then check include rules - if any include rule matches, return true
     for (const rule of rules) {
-      if (rule.include && this.matchesRulePattern(normalizedUrl, domain, rule)) {
+      if (
+        rule.include &&
+        this.matchesRulePattern(normalizedUrl, domain, rule)
+      ) {
         this.debug(`URL included by rule:`, rule);
         return true;
       }
     }
 
     // If we have include rules but none matched, return false
-    const hasIncludeRules = rules.some(rule => rule.include);
+    const hasIncludeRules = rules.some((rule) => rule.include);
     if (hasIncludeRules) {
-      this.debug('No include rules matched');
+      this.debug("No include rules matched");
       return false;
     }
 
     // If we only have exclude rules and none matched, return true
-    this.debug('No rules matched, defaulting to match');
+    this.debug("No rules matched, defaulting to match");
     return true;
   }
 
   /**
    * Check if a URL matches a specific domain rule (ignoring include/exclude)
    */
-  private matchesRulePattern(url: string, domain: string, rule: DomainRule): boolean {
+  private matchesRulePattern(
+    url: string,
+    domain: string,
+    rule: DomainRule,
+  ): boolean {
     try {
       switch (rule.kind) {
-        case 'domain':
+        case "domain":
           return this.matchesDomainPattern(domain, rule.pattern);
 
-        case 'url-prefix':
+        case "url-prefix":
           return this.matchesUrlPrefixPattern(url, rule.pattern);
 
-        case 'url':
+        case "url":
           return this.matchesUrlPattern(url, rule.pattern);
 
-        case 'regexp':
+        case "regexp":
           return this.matchesRegexpPattern(url, rule.pattern);
 
         default:
@@ -130,14 +142,44 @@ export class UserCSSDomainDetector implements DomainDetector {
     const normalizedPattern = pattern.toLowerCase();
 
     // Handle wildcard patterns
-    if (normalizedPattern.startsWith('*.')) {
+    if (normalizedPattern.startsWith("*.")) {
       // Match subdomains (e.g., *.example.com matches sub.example.com)
       const baseDomain = normalizedPattern.slice(2);
-      return normalizedDomain === baseDomain || normalizedDomain.endsWith(`.${baseDomain}`);
+      return (
+        normalizedDomain === baseDomain ||
+        normalizedDomain.endsWith(`.${baseDomain}`)
+      );
     }
 
-    // Exact domain match
-    return normalizedDomain === normalizedPattern;
+    // Special handling for www subdomain - treat www.example.com the same as example.com
+    if (normalizedDomain.startsWith("www.") && 
+        normalizedDomain.substring(4) === normalizedPattern) {
+      return true;
+    }
+    
+    if (normalizedPattern.startsWith("www.") && 
+        normalizedPattern.substring(4) === normalizedDomain) {
+      return true;
+    }
+
+    // For most other cases, treat subdomains as matching their parent domain
+    // This allows reddit.com to match old.reddit.com, mobile.reddit.com, etc.
+    // But still keeps distinct domains like example.com and another-example.com separate
+    if (normalizedDomain === normalizedPattern) {
+      return true;
+    }
+    
+    // Check if domain is a subdomain of pattern
+    if (normalizedDomain.endsWith(`.${normalizedPattern}`)) {
+      return true;
+    }
+    
+    // Check if pattern is a subdomain of domain
+    if (normalizedPattern.endsWith(`.${normalizedDomain}`)) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -171,8 +213,6 @@ export class UserCSSDomainDetector implements DomainDetector {
     }
   }
 
-
-
   /**
    * Extract domain from URL
    */
@@ -200,16 +240,16 @@ export class UserCSSDomainDetector implements DomainDetector {
 
         // Remove default ports
         if (
-          (urlObj.protocol === 'https:' && urlObj.port === '443') ||
-          (urlObj.protocol === 'http:' && urlObj.port === '80')
+          (urlObj.protocol === "https:" && urlObj.port === "443") ||
+          (urlObj.protocol === "http:" && urlObj.port === "80")
         ) {
-          urlObj.port = '';
+          urlObj.port = "";
         }
 
         // Normalize hostname to lowercase
         urlObj.hostname = urlObj.hostname.toLowerCase();
 
-        return urlObj.toString().replace(/\/$/, ''); // Remove trailing slash
+        return urlObj.toString().replace(/\/$/, ""); // Remove trailing slash
       }
 
       // For URLs without protocol, try to add https:// and parse
@@ -217,7 +257,7 @@ export class UserCSSDomainDetector implements DomainDetector {
         const urlWithProtocol = `https://${url}`;
         const urlObj = new URL(urlWithProtocol);
         urlObj.hostname = urlObj.hostname.toLowerCase();
-        return urlObj.toString().replace(/\/$/, '');
+        return urlObj.toString().replace(/\/$/, "");
       } catch {
         return url; // Return original URL if can't parse even with protocol
       }
