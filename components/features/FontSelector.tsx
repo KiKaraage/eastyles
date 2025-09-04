@@ -109,14 +109,11 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       // Type guard for parseUserCSS result
       if ("success" in result && result.success) {
         // Install the style
-        const installResult = await sendMessage(
-          ApplyMessageType.INSTALL_STYLE,
-          {
-            meta: result.meta!,
-            compiledCss: result.css || "",
-            variables: [],
-          },
-        );
+        const installResult = await sendMessage(SaveMessageType.INSTALL_STYLE, {
+          meta: result.meta!,
+          compiledCss: result.css || "",
+          variables: [],
+        });
 
         // Type guard for installStyle result
         if ("success" in installResult && installResult.success) {
