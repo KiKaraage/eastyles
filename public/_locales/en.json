@@ -7,6 +7,22 @@
     "message": "Easy web styling for everyone",
     "description": "The application description. You can alter this to fit the languages better, but emphasis on the `Easy web styling` part."
   },
+  "stylesFor": {
+    "message": "Styles for",
+    "description": "Header text for styles section in the extension popup"
+  },
+  "manageStyles": {
+    "message": "Manage Styles",
+    "description": "Label for Style Manager button and section header"
+  },
+  "settings": {
+    "message": "Settings",
+    "description": "Label for Settings button and section header"
+  },
+  "addNewStyle": {
+    "message": "Add New Style",
+    "description": "Button text for adding a new style"
+  },
   "saveButton": {
     "message": "Save Style",
     "description": "Button text for saving a style"
@@ -14,6 +30,10 @@
   "cancelButton": {
     "message": "Cancel",
     "description": "Button text for canceling an action"
+  },
+  "closeButton": {
+    "message": "Close",
+    "description": "Button text for closing a dialog or page"
   },
   "applyButton": {
     "message": "Apply to Site",
@@ -254,17 +274,5 @@
   "ERR_FONT_LOAD": {
     "message": "Failed to load font: $1",
     "description": "Error message for font loading failures with font name"
-  },
-  "stylesFor": {
-    "message": "Styles for...",
-    "description": "Header text for styles section"
-  },
-  "manageButton": {
-    "message": "Manage",
-    "description": "Manage button text"
-  },
-  "addNewStyle": {
-    "message": "Add New Style",
-    "description": "Add new style button text"
   }
 }

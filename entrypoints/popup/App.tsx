@@ -1,20 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { withErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { browser } from "wxt/browser";
 import { List, Plus, Settings } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useI18n } from "../../hooks/useI18n";
 import { FontSelector } from "../../components/features/FontSelector";
+import { useMessage, PopupMessageType } from "../../hooks/useMessage";
+import { UserCSSStyle } from "../../services/storage/schema";
 
 interface PopupState {
   isLoading: boolean;
   showFontSelector: boolean;
+  currentTab: { url?: string; title?: string } | null;
+  availableStyles: UserCSSStyle[];
+  activeStyles: UserCSSStyle[];
 }
 
 const App = () => {
   const [state, setState] = useState<PopupState>({
     isLoading: false,
     showFontSelector: false,
+    currentTab: null,
+    availableStyles: [],
+    activeStyles: [],
   });
 
   // Theme hook to sync with user's preference from settings
@@ -22,6 +30,138 @@ const App = () => {
 
   // Internationalization hook
   const { t } = useI18n();
+
+  // Message hook for communicating with background
+  const { sendMessage } = useMessage();
+
+  // Load styles and current tab info on popup open
+  useEffect(() => {
+    console.log("[Popup] useEffect running, loading popup data...");
+    const loadPopupData = async () => {
+      try {
+        console.log("[Popup] Setting loading state...");
+        setState((prev) => ({ ...prev, isLoading: true }));
+
+        // Get current active tab
+        const tabs = await browser.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        const currentTab = tabs[0];
+        console.log("[Popup] Current tab:", currentTab);
+
+        let tabUrl = "current-site";
+        let tabTitle = "Current Site";
+
+        if (currentTab) {
+          // Try to get URL from tab object first
+          if (currentTab.url && currentTab.url.startsWith("http")) {
+            tabUrl = currentTab.url;
+            tabTitle = currentTab.title || tabUrl;
+          }
+          // Note: Removed the GET_CURRENT_TAB message type usage as it doesn't exist
+
+          setState((prev) => ({
+            ...prev,
+            currentTab: {
+              url: tabUrl,
+              title: tabTitle,
+            },
+          }));
+
+          // Query for styles that match the current URL
+          console.log("[Popup] Attempting to get styles for URL:", tabUrl);
+          console.log("[Popup] tabUrl type:", typeof tabUrl);
+          console.log(
+            "[Popup] tabUrl === 'current-site':",
+            tabUrl === "current-site",
+          );
+          console.log(
+            "[Popup] Boolean check result:",
+            tabUrl && tabUrl !== "current-site",
+          );
+          try {
+            let availableStyles: UserCSSStyle[] = [];
+
+            if (tabUrl && tabUrl !== "current-site") {
+              // Query styles for specific URL through background script
+              console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
+              const response = await sendMessage(
+                PopupMessageType.QUERY_STYLES_FOR_URL,
+                { url: tabUrl },
+              );
+              console.log("[Popup] QUERY_STYLES_FOR_URL response:", response);
+              console.log("[Popup] Response type:", typeof response);
+              console.log("[Popup] Response.success:", response?.success);
+              console.log(
+                "[Popup] Response.styles length:",
+                response?.styles?.length,
+              );
+              if (
+                response &&
+                typeof response === "object" &&
+                response.success &&
+                response.styles
+              ) {
+                availableStyles = response.styles as UserCSSStyle[];
+              } else {
+                console.warn(
+                  "[Popup] QUERY_STYLES_FOR_URL failed, falling back to GET_STYLES",
+                );
+                // Fallback to all styles if domain query fails
+                const fallbackResponse = await sendMessage(
+                  PopupMessageType.GET_STYLES,
+                  {},
+                );
+                if (
+                  fallbackResponse &&
+                  typeof fallbackResponse === "object" &&
+                  fallbackResponse.styles
+                ) {
+                  availableStyles = fallbackResponse.styles as UserCSSStyle[];
+                }
+              }
+            } else {
+              // Fallback: get all styles if URL not available
+              console.log(
+                "[Popup] Using GET_STYLES fallback (no URL or current-site)",
+              );
+              const response = await sendMessage(
+                PopupMessageType.GET_STYLES,
+                {},
+              );
+              console.log("[Popup] GET_STYLES response:", response);
+              console.log("[Popup] GET_STYLES response type:", typeof response);
+              if (response && typeof response === "object" && response.styles) {
+                availableStyles = response.styles as UserCSSStyle[];
+              }
+            }
+
+            console.log(
+              "[Popup] Setting available styles:",
+              availableStyles.length,
+              "active:",
+              availableStyles.filter((style) => style.enabled).length,
+            );
+            setState((prev) => ({
+              ...prev,
+              availableStyles,
+              activeStyles: availableStyles.filter((style) => style.enabled),
+            }));
+          } catch (error) {
+            console.error("[Popup] Failed to get styles:", error);
+          }
+        }
+      } catch (error) {
+        console.error("[Popup] Failed to load popup data:", error);
+      } finally {
+        console.log("[Popup] Finished loading, setting loading to false");
+        setState((prev) => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    loadPopupData();
+  }, [sendMessage]);
 
   // Helper function to close popup
   // Using window.close() directly as it's supported in extension popups across browsers
@@ -71,6 +211,31 @@ const App = () => {
     // TODO: Handle successful font application
   };
 
+  const handleToggleStyle = async (styleId: string, enabled: boolean) => {
+    try {
+      await sendMessage(PopupMessageType.TOGGLE_STYLE, {
+        id: styleId,
+        enabled,
+      });
+
+      // Update local state
+      setState((prev) => ({
+        ...prev,
+        availableStyles: prev.availableStyles.map((style) =>
+          style.id === styleId ? { ...style, enabled } : style,
+        ),
+        activeStyles: enabled
+          ? [
+              ...prev.activeStyles,
+              prev.availableStyles.find((s) => s.id === styleId)!,
+            ].filter(Boolean)
+          : prev.activeStyles.filter((style) => style.id !== styleId),
+      }));
+    } catch (error) {
+      console.error("Failed to toggle style:", error);
+    }
+  };
+
   return (
     <div className="bg-base-100 min-h-screen flex flex-col">
       {/* Header */}
@@ -88,7 +253,19 @@ const App = () => {
               aria-hidden="true"
             />
             <h3 className="text-lg font-bold text-base-content">
-              {t('appName')}
+              {t("stylesFor")}{" "}
+              {state.currentTab?.url
+                ? (() => {
+                    try {
+                      const url = new URL(state.currentTab.url);
+                      // Only remove 'www.' prefix, keep other subdomains
+                      const hostname = url.hostname.replace(/^www\./, "");
+                      return hostname;
+                    } catch {
+                      return "current site";
+                    }
+                  })()
+                : "current site"}
             </h3>
           </div>
         </div>
@@ -99,42 +276,61 @@ const App = () => {
         {state.isLoading ? (
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
             <div className="loading loading-spinner loading-lg"></div>
-            <p className="text-base-content/70">{t('loading')}</p>
+            <p className="text-base-content/70">{t("loading")}</p>
           </div>
         ) : (
           <div className="space-y-4 px-2">
-            {/* Quick Stats - Using DaisyUI stats component */}
-            <div className="stats shadow">
-              <div className="stat place-items-center">
-                <div className="stat-title text-xs">Active Styles</div>
-                <div className="stat-value text-primary text-lg">0</div>
-                <div className="stat-desc text-xs">Total managed styles</div>
+            {/* Show available styles for this site */}
+            {state.availableStyles.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-base-content">
+                  Available for this site:
+                </h4>
+                {state.availableStyles.map((style) => (
+                  <div
+                    key={style.id}
+                    className="flex items-center justify-between p-3 bg-base-200 rounded-lg"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h5 className="text-sm font-medium text-base-content truncate">
+                        {style.name}
+                      </h5>
+                      <p className="text-xs text-base-content/70 truncate">
+                        {style.description}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        handleToggleStyle(style.id, !style.enabled)
+                      }
+                      className={`btn btn-sm ${style.enabled ? "btn-success" : "btn-ghost"}`}
+                    >
+                      {style.enabled ? "Active" : "Enable"}
+                    </button>
+                  </div>
+                ))}
               </div>
+            )}
 
-              <div className="stat place-items-center">
-                <div className="stat-title text-xs">Total Styles</div>
-                <div className="stat-value text-secondary text-lg">0</div>
-                <div className="stat-desc text-xs">All created styles</div>
-              </div>
+            <div className="flex justify-between">
+              {/* Add New Style Button */}
+              <button
+                onClick={handleAddNewStyle}
+                className="btn btn-secondary flex-1 justify-start normal-case"
+              >
+                <Plus className="w-5 h-5 mr-3 flex-shrink-0" />
+                <span className="truncate">{t("addNewStyle")}</span>
+              </button>
+
+              {/* Apply Font Button */}
+              <button
+                onClick={handleOpenFontSelector}
+                className="btn btn-primary flex-1 justify-start normal-case ml-2"
+              >
+                <span className="text-lg mr-3 flex-shrink-0">Aa</span>
+                <span className="truncate">{t("font.applyButton")}</span>
+              </button>
             </div>
-
-            {/* Add New Style Button - moved below stats */}
-            <button
-              onClick={handleAddNewStyle}
-              className="btn btn-secondary w-full justify-start normal-case"
-            >
-              <Plus className="w-5 h-5 mr-3 flex-shrink-0" />
-              <span className="truncate">{t('saveButton')}</span>
-            </button>
-
-            {/* Apply Font Button */}
-            <button
-              onClick={handleOpenFontSelector}
-              className="btn btn-primary w-full justify-start normal-case"
-            >
-              <span className="text-lg mr-3 flex-shrink-0">Aa</span>
-              <span className="truncate">{t('font.applyButton')}</span>
-            </button>
 
             {/* Font Selector Modal */}
             {state.showFontSelector && (
@@ -151,7 +347,7 @@ const App = () => {
         )}
       </div>
 
-      {/* Footer with Manage and Settings */}
+      {/* Footer with Manage and Settings buttons */}
       <div
         className={`bg-base-200 border-t border-base-300 p-2 ${isDark ? "dark" : ""}`}
       >
@@ -161,7 +357,7 @@ const App = () => {
             className="btn btn-ghost btn-sm normal-case flex-1 justify-start mr-2"
           >
             <List className="w-4 h-4 mr-2" />
-            <span>{t('configureButton')}</span>
+            <span>{t("manageButton")}</span>
           </button>
 
           <button
@@ -170,6 +366,7 @@ const App = () => {
             title="Settings"
           >
             <Settings className="w-4 h-4" />
+            <span>{t("settingsButton")}</span>
           </button>
         </div>
       </div>

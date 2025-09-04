@@ -4,8 +4,24 @@
     "description": "The application name"
   },
   "appDescription": {
-    "message": "Atur gaya webmu secara mudah",
+    "message": "Atur gaya webmu dengan mudah",
     "description": "The application description. You can alter this to fit the languages better, but emphasis on the `Easy web styling` part."
+  },
+  "stylesFor": {
+    "message": "Gaya untuk",
+    "description": "Header text for styles section in the extension popup"
+  },
+  "manageStyles": {
+    "message": "Kelola Gaya",
+    "description": "Label for Style Manager button and section header"
+  },
+  "settings": {
+    "message": "Pengaturan",
+    "description": "Label for Settings button and section header"
+  },
+  "addNewStyle": {
+    "message": "Tambah Gaya Baru",
+    "description": "Button text for adding a new style"
   },
   "saveButton": {
     "message": "Simpan Gaya",
@@ -14,6 +30,10 @@
   "cancelButton": {
     "message": "Batal",
     "description": "Button text for canceling an action"
+  },
+  "closeButton": {
+    "message": "Tutup",
+    "description": "Button text for closing a dialog or page"
   },
   "applyButton": {
     "message": "Terapkan ke Situs",

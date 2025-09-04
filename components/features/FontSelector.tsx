@@ -12,7 +12,7 @@ import {
   CustomFont,
   FontApplication,
 } from "../../services/usercss/font-registry";
-import { useMessage, ApplyMessageType } from "../../hooks/useMessage";
+import { useMessage, SaveMessageType } from "../../hooks/useMessage";
 import { useI18n } from "../../hooks/useI18n";
 
 interface FontSelectorProps {
@@ -101,7 +101,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       const userCSS = fontRegistry.generateFontUserCSS(application);
 
       // Send to background for parsing and installation
-      const result = await sendMessage(ApplyMessageType.PARSE_USERCSS, {
+      const result = await sendMessage(SaveMessageType.PARSE_USERCSS, {
         text: userCSS,
         sourceUrl: `eastyles://font/${fontToApply.name}`,
       });
@@ -153,7 +153,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
         <button
           onClick={onClose}
           className="btn btn-sm btn-ghost"
-          aria-label={t("common.close")}
+          aria-label={t("closeButton")}
         >
           ✕
         </button>
@@ -304,7 +304,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
           className="btn btn-ghost"
           disabled={isApplying}
         >
-          {t("common.cancel")}
+          {t("cancelButton")}
         </button>
         <button
           onClick={handleApplyFont}
