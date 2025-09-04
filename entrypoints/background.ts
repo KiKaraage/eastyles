@@ -280,7 +280,22 @@ export default defineBackground({
       // Initialize all services
       initializeServices();
 
-      // Message bus handles its own message listener setup
+      // Ensure message bus is properly initialized and listening
+      console.log("[Background] Initializing message bus...");
+      const handlerValidation = messageBus.validateHandlers();
+      if (!handlerValidation.isValid) {
+        logger.warn(ErrorSource.BACKGROUND, "Message handlers validation failed", {
+          missingHandlers: handlerValidation.missingHandlers,
+        });
+      }
+
+      // Log successful initialization
+      logger.info(ErrorSource.BACKGROUND, "Background script fully initialized", {
+        handlers: messageBus.getHandlerService().getRegisteredHandlers(),
+        messageBusOnline: messageBus.getOnlineStatus(),
+      });
+
+      console.log("[Background] Message bus initialized with handlers:", messageBus.getHandlerService().getRegisteredHandlers());
 
       // Set up extension lifecycle event listeners
       browser.runtime.onInstalled.addListener(handleInstallation);
@@ -300,6 +315,13 @@ export default defineBackground({
       if ("onSuspend" in browser.runtime) {
         browser.runtime.onSuspend.addListener(handleSuspension);
       }
+
+      // Keep service worker alive for message handling
+      // This is crucial for Manifest V3 to prevent premature termination
+      const keepAlive = () => {
+        setTimeout(keepAlive, 20000); // Keep alive every 20 seconds
+      };
+      keepAlive();
 
       logger.info(
         ErrorSource.BACKGROUND,
