@@ -36,6 +36,16 @@ export function isValidReceivedMessage(
     return validateManagerMessage(message, messageType);
   }
 
+  // Validate ApplyMessages
+  if (isApplyMessage(messageType)) {
+    return validateApplyMessage(message, messageType);
+  }
+
+  // Validate ContentMessages
+  if (isContentMessage(messageType)) {
+    return validateContentMessage(message, messageType);
+  }
+
   return false;
 }
 
@@ -64,6 +74,25 @@ function isManagerMessage(type: string): boolean {
     "REQUEST_IMPORT",
     "RESET_SETTINGS",
     "GET_ALL_STYLES",
+  ].includes(type);
+}
+
+/**
+ * Type guard to check if a message type belongs to ApplyMessages.
+ */
+function isApplyMessage(type: string): boolean {
+  return [
+    "PARSE_USERCSS",
+    "INSTALL_STYLE",
+  ].includes(type);
+}
+
+/**
+ * Type guard to check if a message type belongs to ContentMessages.
+ */
+function isContentMessage(type: string): boolean {
+  return [
+    "QUERY_STYLES_FOR_URL",
   ].includes(type);
 }
 
@@ -157,6 +186,62 @@ function validateManagerMessage(message: unknown, type: string): boolean {
       if (message && typeof message === "object") {
         const keys = Object.keys(message);
         return keys.length === 1 && keys[0] === "type";
+      }
+      return false;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Validates an ApplyMessage based on its type and required payload structure.
+ */
+function validateApplyMessage(message: unknown, type: string): boolean {
+  switch (type) {
+    case "PARSE_USERCSS":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "text" in payload &&
+          typeof (payload as { text?: unknown }).text === "string" &&
+          (payload as { text: string }).text.length > 0
+        );
+      }
+      return false;
+    case "INSTALL_STYLE":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "meta" in payload &&
+          "compiledCss" in payload &&
+          "variables" in payload
+        );
+      }
+      return false;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Validates a ContentMessage based on its type and required payload structure.
+ */
+function validateContentMessage(message: unknown, type: string): boolean {
+  switch (type) {
+    case "QUERY_STYLES_FOR_URL":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "url" in payload &&
+          typeof (payload as { url?: unknown }).url === "string" &&
+          (payload as { url: string }).url.length > 0
+        );
       }
       return false;
     default:

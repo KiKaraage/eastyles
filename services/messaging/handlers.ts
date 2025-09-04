@@ -7,6 +7,7 @@ import { browser } from "@wxt-dev/browser";
 import { ReceivedMessages, ErrorDetails } from "./types";
 import { storageClient } from "../storage/client";
 import { UserCSSStyle } from "../storage/schema";
+import { DomainRule } from "../usercss/types";
 
 /**
  * Helper function to keep service worker alive using browser.tabs API
@@ -459,11 +460,28 @@ const handleOpenSettings: MessageHandler = async (_message) => {
  * Handler for GET_STYLES messages.
  */
 const handleGetStyles: MessageHandler = async (message) => {
-  console.log("Get styles requested:", message);
-  // TODO: Implement actual styles retrieval when storage service is available
-  return {
-    styles: [],
-  };
+  console.log("[handleGetStyles] Processing message:", message);
+  try {
+    // Get all UserCSS styles
+    const userCSSStyles = await storageClient.getUserCSSStyles();
+    console.log(
+      "[handleGetStyles] Retrieved UserCSS styles:",
+      userCSSStyles.length,
+    );
+
+    return {
+      success: true,
+      styles: userCSSStyles,
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("[handleGetStyles] Error:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
 };
 
 /**
@@ -474,11 +492,63 @@ const handleToggleStyle: MessageHandler = async (message) => {
     ReceivedMessages,
     { type: "TOGGLE_STYLE" }
   >;
-  console.log("Toggle style requested:", toggleMessage);
-  // TODO: Implement actual style toggling when storage service is available
-  return {
-    success: true,
-  };
+  console.log("[handleToggleStyle] Processing message:", toggleMessage);
+
+  try {
+    const { id, enabled } = toggleMessage.payload;
+
+    // Update the style's enabled status in storage
+    await storageClient.enableUserCSSStyle(id, enabled);
+    console.log(
+      `[handleToggleStyle] Style ${id} ${enabled ? "enabled" : "disabled"}`,
+    );
+
+    // Notify all content scripts to update/remove the style
+    // Get the updated style
+    const updatedStyle = await storageClient.getUserCSSStyle(id);
+    if (updatedStyle) {
+      // Broadcast style update to all tabs
+      browser.tabs.query({}).then((tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.id) {
+            browser.tabs
+              .sendMessage(tab.id, {
+                type: enabled ? "styleUpdate" : "styleRemove",
+                styleId: id,
+                style: enabled ? updatedStyle : undefined,
+              })
+              .catch((error) => {
+                // Silently ignore errors for tabs that don't have content scripts
+                // This is normal for extension pages, about: pages, etc.
+                const errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                if (
+                  !errorMessage.includes("Could not establish connection") &&
+                  !errorMessage.includes("Receiving end does not exist")
+                ) {
+                  console.warn(
+                    `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
+                    error,
+                  );
+                }
+              });
+          }
+        });
+      });
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("[handleToggleStyle] Error:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
 };
 
 /**
@@ -528,39 +598,43 @@ const handleParseUserCSS: MessageHandler = async (message) => {
     const css = cssMatch ? cssMatch[1].trim() : text;
 
     // Extract domains from @-moz-document or similar
-    const domainMatches = text.match(/@-moz-document\s+[^}]*url\(["']([^"']+)["']\)/g) || [];
-    const domains = domainMatches.map(match => {
-      const urlMatch = match.match(/url\(["']([^"']+)["']\)/);
-      if (urlMatch) {
-        try {
-          return new URL(urlMatch[1]).hostname;
-        } catch {
-          return urlMatch[1];
+    const domainMatches =
+      text.match(/@-moz-document\s+[^}]*url\(["']([^"']+)["']\)/g) || [];
+    const domains = domainMatches
+      .map((match) => {
+        const urlMatch = match.match(/url\(["']([^"']+)["']\)/);
+        if (urlMatch) {
+          try {
+            return new URL(urlMatch[1]).hostname;
+          } catch {
+            return urlMatch[1];
+          }
         }
-      }
-      return '';
-    }).filter(Boolean);
+        return "";
+      })
+      .filter(Boolean);
 
     return {
       success: true,
       meta: {
-        name: nameMatch ? nameMatch[1].trim() : 'Unknown Style',
-        namespace: namespaceMatch ? namespaceMatch[1].trim() : '',
-        version: versionMatch ? versionMatch[1].trim() : '1.0.0',
-        description: descriptionMatch ? descriptionMatch[1].trim() : '',
-        author: authorMatch ? authorMatch[1].trim() : '',
-        sourceUrl: sourceUrl || '',
-        domains: domains
+        name: nameMatch ? nameMatch[1].trim() : "Unknown Style",
+        namespace: namespaceMatch ? namespaceMatch[1].trim() : "",
+        version: versionMatch ? versionMatch[1].trim() : "1.0.0",
+        description: descriptionMatch ? descriptionMatch[1].trim() : "",
+        author: authorMatch ? authorMatch[1].trim() : "",
+        sourceUrl: sourceUrl || "",
+        domains: domains,
       },
       css: css,
       warnings: [],
-      errors: []
+      errors: [],
     };
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return {
       success: false,
-      error: errorMessage
+      error: errorMessage,
     };
   }
 };
@@ -599,32 +673,129 @@ const handleInstallStyle: MessageHandler = async (message) => {
     // Import storage client dynamically to avoid circular dependencies
     const { storageClient } = await import("@services/storage/client");
 
+    // Parse domains from CSS content if not found in metadata
+    const allDomains = [...meta.domains];
+
+    // Parse CSS content for @-moz-document rules
+    const mozDocumentCssMatch = compiledCss.match(
+      /@-moz-document\s+([^}]+)\s*\{/,
+    );
+    if (mozDocumentCssMatch) {
+      const mozDocumentRule = mozDocumentCssMatch[1];
+      console.log(
+        "[handleInstallStyle] Found @-moz-document rule in CSS:",
+        mozDocumentRule,
+      );
+
+      // Extract domains from CSS @-moz-document rules
+      const domainMatches = mozDocumentRule.match(
+        /domain\(["']?([^"')]+)["']?\)/g,
+      );
+      if (domainMatches) {
+        domainMatches.forEach((match) => {
+          const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
+          if (domainMatch && !allDomains.includes(domainMatch[1])) {
+            allDomains.push(domainMatch[1]);
+            console.log(
+              "[handleInstallStyle] Extracted domain from CSS:",
+              domainMatch[1],
+            );
+          }
+        });
+      }
+    }
+
+    // Convert string domains to DomainRule format
+    const domainRules: DomainRule[] = allDomains.map((domain) => ({
+      kind: "domain" as const,
+      pattern: domain,
+      include: true,
+    }));
+
+    console.log("[handleInstallStyle] Final domains:", allDomains);
+    console.log("[handleInstallStyle] Domain rules:", domainRules);
+
+    // Convert variables array to Record format
+    const variablesRecord: Record<
+      string,
+      import("../usercss/types").VariableDescriptor
+    > = {};
+    if (variables) {
+      variables.forEach((variable) => {
+        // Map the string type to the expected enum values
+        let mappedType: import("../usercss/types").VariableDescriptor["type"] =
+          "unknown";
+        switch (variable.type) {
+          case "color":
+            mappedType = "color";
+            break;
+          case "number":
+            mappedType = "number";
+            break;
+          case "text":
+            mappedType = "text";
+            break;
+          case "select":
+            mappedType = "select";
+            break;
+        }
+
+        variablesRecord[variable.name] = {
+          name: variable.name,
+          type: mappedType,
+          default: variable.default,
+          value: variable.default, // Start with default value
+          min: variable.min,
+          max: variable.max,
+          options: variable.options,
+        };
+      });
+    }
+
     // Create the style object for storage
     const styleData = {
       name: meta.name,
-      code: compiledCss,
-      description: meta.description,
-      domains: meta.domains,
-      variables: variables || [],
+      namespace: meta.namespace || "",
+      version: meta.version || "1.0.0",
+      description: meta.description || "",
+      author: meta.author || "",
+      sourceUrl: meta.sourceUrl || "",
+      domains: domainRules,
+      compiledCss: compiledCss,
+      variables: variablesRecord,
+      originalDefaults: {},
+      assets: [],
+      installedAt: Date.now(),
       enabled: true,
-      version: meta.version ? parseInt(meta.version) || 1 : 1,
+      source: "", // Original source code (could be added later if needed)
+      updatedAt: Date.now(),
     };
 
     // Add the style to storage
-    const savedStyle = await storageClient.addStyle(styleData);
+    const savedStyle = await storageClient.addUserCSSStyle(styleData);
 
-    console.log("Style installed successfully:", savedStyle.id);
+    console.log("Style installed successfully:", savedStyle.id, savedStyle);
+    console.log("Style domains:", savedStyle.domains);
+
+    // Verify the style was saved by retrieving all styles
+    const allStyles = await storageClient.getUserCSSStyles();
+    console.log("Total styles after installation:", allStyles.length);
+    console.log(
+      "All styles domains:",
+      allStyles.map((s) => ({ id: s.id, domains: s.domains })),
+    );
 
     return {
       success: true,
-      styleId: savedStyle.id
+      styleId: savedStyle.id,
     };
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     console.error("Failed to install style:", errorMessage);
     return {
       success: false,
-      error: errorMessage
+      error: errorMessage,
     };
   }
 };
@@ -634,17 +805,24 @@ const handleInstallStyle: MessageHandler = async (message) => {
  */
 const handleUpdateVariables: MessageHandler = async (message) => {
   try {
-    const { styleId, variables } = (message as { payload: { styleId: string; variables: Record<string, string> } }).payload;
+    const { styleId, variables } = (
+      message as {
+        payload: { styleId: string; variables: Record<string, string> };
+      }
+    ).payload;
 
     // Update variables using the variable persistence service
-    const { variablePersistenceService } = await import('../usercss/variable-service');
+    const { variablePersistenceService } = await import(
+      "../usercss/variable-service"
+    );
     await variablePersistenceService.updateVariables(styleId, variables);
 
     return {
       success: true,
     };
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     console.error("Failed to update variables:", errorMessage);
     return {
       success: false,
@@ -657,26 +835,51 @@ const handleUpdateVariables: MessageHandler = async (message) => {
  * Handle queries for styles applicable to a specific URL
  */
 const handleQueryStylesForUrl: MessageHandler = async (message) => {
+  console.log("[handleQueryStylesForUrl] Processing message:", message);
   try {
     const { url } = (message as { payload: { url: string } }).payload;
+    console.log("[handleQueryStylesForUrl] Querying styles for URL:", url);
 
     // Get all UserCSS styles
     const userCSSStyles = await storageClient.getUserCSSStyles();
+    console.log(
+      "[handleQueryStylesForUrl] Retrieved UserCSS styles:",
+      userCSSStyles.length,
+    );
 
     // Filter styles that match the URL using domain detection
-    const { domainDetector } = await import('../usercss/domain-detector');
+    const { domainDetector } = await import("../usercss/domain-detector");
     const matchingStyles = userCSSStyles.filter((style: UserCSSStyle) => {
-      if (!style.enabled) return false;
-      return domainDetector.matches(url, style.domains);
+      // First check if style has domain rules
+      if (!style.domains || style.domains.length === 0) {
+        console.log(
+          `[handleQueryStylesForUrl] Style ${style.id}: no domain rules, skipping`,
+        );
+        return false;
+      }
+
+      const matchesDomain = domainDetector.matches(url, style.domains);
+      console.log(
+        `[handleQueryStylesForUrl] Style ${style.id}: matchesDomain=${matchesDomain}, enabled=${style.enabled}, domains=${JSON.stringify(style.domains)}`,
+      );
+
+      // Only return styles that match the domain (regardless of enabled state for popup display)
+      return matchesDomain;
     });
+
+    console.log(
+      "[handleQueryStylesForUrl] Found matching styles:",
+      matchingStyles.length,
+    );
 
     return {
       success: true,
       styles: matchingStyles,
     };
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Failed to query styles for URL:", errorMessage);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("[handleQueryStylesForUrl] Error:", errorMessage);
     return {
       success: false,
       error: errorMessage,
@@ -701,9 +904,9 @@ const handlerRegistry: HandlerRegistry = {
   RESET_SETTINGS: withErrorHandling(handleResetSettings),
   GET_ALL_STYLES: withErrorHandling(handleGetAllStyles),
   PARSE_USERCSS: withErrorHandling(handleParseUserCSS),
-   INSTALL_STYLE: withErrorHandling(handleInstallStyle),
-   UPDATE_VARIABLES: withErrorHandling(handleUpdateVariables),
-   QUERY_STYLES_FOR_URL: withErrorHandling(handleQueryStylesForUrl),
+  INSTALL_STYLE: withErrorHandling(handleInstallStyle),
+  UPDATE_VARIABLES: withErrorHandling(handleUpdateVariables),
+  QUERY_STYLES_FOR_URL: withErrorHandling(handleQueryStylesForUrl),
 };
 
 /**
@@ -778,19 +981,32 @@ export class MessageHandlerService {
     message: ReceivedMessages,
     tabId?: number,
   ): Promise<unknown> {
+    console.log("[MessageHandlerService] Handling message:", message.type);
     // Ensure service is initialized
     if (!this.isInitialized) {
+      console.log("[MessageHandlerService] Initializing service");
       this.initialize();
     }
 
     const handler = this.handlers[message.type];
+    console.log(
+      "[MessageHandlerService] Found handler for",
+      message.type,
+      ":",
+      !!handler,
+    );
 
     if (!handler) {
+      console.error(
+        "[MessageHandlerService] No handler registered for message type:",
+        message.type,
+      );
       throw new Error(
         `No handler registered for message type: ${message.type}`,
       );
     }
 
+    console.log("[MessageHandlerService] Calling handler for", message.type);
     return await handler(message, tabId);
   }
 

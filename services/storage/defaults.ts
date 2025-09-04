@@ -196,6 +196,7 @@ export class StorageFallbacks {
     return {
       settings: DEFAULT_SETTINGS,
       styles: [],
+      userCSSStyles: [],
       timestamp: Date.now(),
       version: EXTENSION_METADATA.version,
       exportVersion: EXTENSION_METADATA.exportVersion,

@@ -3,8 +3,13 @@
  * Provides reactive communication between popup, background, and manager pages
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { browser } from "wxt/browser";
+import { browser } from "@wxt-dev/browser";
+import { useState, useCallback, useEffect } from "react";
+import { errorService } from "../services/errors/service";
+import type {
+  PopupMessageResponses,
+  ApplyMessageResponses,
+} from "../services/messaging/types";
 
 /**
  * Message types for popup communication
@@ -16,41 +21,52 @@ export enum PopupMessageType {
   GET_STYLES = "GET_STYLES",
   TOGGLE_STYLE = "TOGGLE_STYLE",
   THEME_CHANGED = "THEME_CHANGED",
+  QUERY_STYLES_FOR_URL = "QUERY_STYLES_FOR_URL",
 }
 
+/**
+ * Message types for apply operations
+ */
 export enum ApplyMessageType {
   PARSE_USERCSS = "PARSE_USERCSS",
   INSTALL_STYLE = "INSTALL_STYLE",
 }
 
 /**
- * Message payload types
+ * Error codes for message operations
  */
-export interface PopupMessagePayloads {
-  [PopupMessageType.OPEN_MANAGER]: { url?: string };
-  [PopupMessageType.ADD_STYLE]: { template?: string };
-  [PopupMessageType.OPEN_SETTINGS]: { section?: string };
-  [PopupMessageType.GET_STYLES]: { ids?: string[] };
-  [PopupMessageType.TOGGLE_STYLE]: { id: string; enabled: boolean };
-  [PopupMessageType.THEME_CHANGED]: { theme: "light" | "dark" | "system" };
+export enum ErrorCodes {
+  ERR_MESSAGE_INVALID = "ERR_MESSAGE_INVALID",
 }
 
 /**
- * Message response types
+ * Payload interfaces for popup messages
  */
-export interface PopupMessageResponses {
-  [PopupMessageType.OPEN_MANAGER]: { success: boolean; error?: string };
+export interface PopupMessagePayloads {
+  [PopupMessageType.OPEN_MANAGER]: Record<string, never>;
   [PopupMessageType.ADD_STYLE]: {
-    success: boolean;
-    styleId?: string;
-    error?: string;
+    name: string;
+    description: string;
+    code: string;
+    enabled: boolean;
   };
-  [PopupMessageType.OPEN_SETTINGS]: { success: boolean; error?: string };
-  [PopupMessageType.GET_STYLES]: { styles: unknown[]; error?: string };
-  [PopupMessageType.TOGGLE_STYLE]: { success: boolean; error?: string };
-  [PopupMessageType.THEME_CHANGED]: { success: boolean; error?: string };
+  [PopupMessageType.OPEN_SETTINGS]: Record<string, never>;
+  [PopupMessageType.GET_STYLES]: Record<string, never>;
+  [PopupMessageType.TOGGLE_STYLE]: {
+    id: string;
+    enabled: boolean;
+  };
+  [PopupMessageType.THEME_CHANGED]: {
+    theme: "light" | "dark";
+  };
+  [PopupMessageType.QUERY_STYLES_FOR_URL]: {
+    url: string;
+  };
 }
 
+/**
+ * Payload interfaces for apply messages
+ */
 export interface ApplyMessagePayloads {
   [ApplyMessageType.PARSE_USERCSS]: {
     text: string;
@@ -78,41 +94,17 @@ export interface ApplyMessagePayloads {
   };
 }
 
-export interface ApplyMessageResponses {
-  [ApplyMessageType.PARSE_USERCSS]: {
-    success: boolean;
-    error?: string;
-    meta?: {
-      name: string;
-      namespace: string;
-      version: string;
-      description: string;
-      author: string;
-      sourceUrl: string;
-      domains: string[];
-    };
-    css?: string;
-    warnings?: string[];
-    errors?: string[];
-  };
-  [ApplyMessageType.INSTALL_STYLE]: {
-    success: boolean;
-    error?: string;
-    styleId?: string;
-  };
-}
-
 /**
- * Message interface
+ * Generic message interface
  */
-export interface PopupMessage<T extends PopupMessageType> {
-  type: T;
-  payload: PopupMessagePayloads[T];
+export interface PopupMessage {
+  type: string;
+  payload: unknown;
   responseId?: string;
 }
 
 /**
- * Hook return interface
+ * Return type for useMessage hook
  */
 export interface UseMessageReturn {
   /** Send a message to background script */
@@ -147,7 +139,7 @@ export interface UseMessageReturn {
 }
 
 /**
- * Union type for all message types
+ * Combined message types
  */
 export type MessageType = PopupMessageType | ApplyMessageType;
 
@@ -162,191 +154,121 @@ export type MessagePayloads = PopupMessagePayloads & ApplyMessagePayloads;
 export type MessageResponses = PopupMessageResponses & ApplyMessageResponses;
 
 /**
- * Hook for message passing functionality
+ * Main message hook
  */
 export function useMessage(): UseMessageReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [pendingMessages, setPendingMessages] = useState(0);
-  const [messageHandlers, setMessageHandlers] = useState<
-    Map<MessageType, ((payload: unknown) => void)[]>
-  >(new Map());
-  const [responseHandlers, setResponseHandlers] = useState<
-    Map<string, ((response: unknown) => void)[]>
-  >(new Map());
 
-  // Initialize connection
-  // Ref to store the latest message handlers
-  const messageHandlersRef = useRef(messageHandlers);
-  const responseHandlersRef = useRef(responseHandlers);
-
-  // Update refs whenever handlers change
+  // Track connection status
   useEffect(() => {
-    messageHandlersRef.current = messageHandlers;
-  }, [messageHandlers]);
+    const updateConnectionStatus = () => {
+      try {
+        // More comprehensive connection check
+        const hasRuntime = !!browser?.runtime;
+        const hasRuntimeId = !!browser?.runtime?.id;
+        const canSendMessages =
+          typeof browser?.runtime?.sendMessage === "function";
 
-  useEffect(() => {
-    responseHandlersRef.current = responseHandlers;
-  }, [responseHandlers]);
+        const connected = hasRuntime && hasRuntimeId && canSendMessages;
 
-  // Check if browser APIs are available to determine connection status
-  useEffect(() => {
-    const checkConnection = () => {
-      console.log("[useMessage] Debug browser object:", browser);
-      const hasBrowserApi = typeof browser !== "undefined" && browser.runtime;
-      const hasRuntime = browser?.runtime?.id || browser?.runtime?.onMessage;
-      const isConnected = !!hasBrowserApi && !!hasRuntime;
-      console.log(
-        "[useMessage] Connection status:",
-        isConnected,
-        "browser:",
-        typeof browser !== "undefined",
-        "runtime:",
-        browser?.runtime ? "available" : "missing",
-        "runtime.id:",
-        browser?.runtime?.id ? "present" : "missing",
-        "runtime.onMessage:",
-        typeof browser?.runtime?.onMessage,
-      );
-      setIsConnected(isConnected);
-      return isConnected;
+        setIsConnected((prev) => {
+          // Only update if the connection status actually changed
+          if (prev !== connected) {
+            console.log("[useMessage] Connection status changed:", connected, {
+              hasRuntime,
+              hasRuntimeId,
+              canSendMessages,
+            });
+            return connected;
+          }
+          return prev;
+        });
+      } catch (error) {
+        console.warn("[useMessage] Error checking connection status:", error);
+        setIsConnected(false);
+      }
     };
 
-    // Initial check
-    checkConnection();
+    updateConnectionStatus();
 
-    // Listen for browser runtime events that might affect connection
-    if (typeof browser !== "undefined" && browser.runtime) {
-      const listener = () => {
-        console.log("[useMessage] Runtime event detected");
-        checkConnection();
-      };
+    // Use a more stable connection check
+    const connectionCheck = setInterval(updateConnectionStatus, 5000);
 
-      browser.runtime.onConnect.addListener(listener);
-
-      // Cleanup
-      return () => {
-        browser.runtime.onConnect.removeListener(listener);
-      };
-    }
-  }, []);
-
-  // Dynamic connection check for every message send
-  const getIsConnected = useCallback(() => {
-    const hasBrowserApi = typeof browser !== "undefined" && browser.runtime;
-    const hasRuntime = browser?.runtime?.id || browser?.runtime?.onMessage;
-    return !!hasBrowserApi && !!hasRuntime;
+    return () => {
+      clearInterval(connectionCheck);
+    };
   }, []);
 
   // Send message to background script
   const sendMessage = useCallback(
-    async <T extends MessageType>(
+    <T extends MessageType>(
       type: T,
       payload: MessagePayloads[T],
     ): Promise<MessageResponses[T]> => {
-      const dynamicIsConnected = getIsConnected();
-      console.log(
-        `[useMessage] Attempting to send message:`,
-        type,
-        payload,
-        "isConnected:",
-        dynamicIsConnected,
-      );
-      setPendingMessages((prev) => prev + 1);
+      return new Promise((resolve, reject) => {
+        // Always try to send the message, don't rely on cached connection status
+        console.log("[useMessage] Attempting to send message:", type);
 
-      try {
+        setPendingMessages((count) => count + 1);
+
         const responseId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-        const message: { type: T; payload: MessagePayloads[T]; responseId?: string } = { type, payload, responseId };
+        const message: PopupMessage = { type, payload, responseId };
 
-        // Create promise for response
-        return new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            cleanupHandlers();
-            reject(new Error(`Message timeout after 3 attempts: ${type}`));
-          }, 15000); // 15 second timeout (increased for service worker)
+        console.log("[useMessage] Sending message:", message);
 
-          const cleanupHandlers = () => {
-            clearTimeout(timeout);
-            setResponseHandlers((prev) => {
-              const newHandlers = new Map(prev);
-              newHandlers.delete(responseId);
-              return newHandlers;
-            });
-          };
+        // Set up timeout
+        const timeoutId = setTimeout(() => {
+          console.warn("[useMessage] Message timeout for:", type);
+          setPendingMessages((count) => count - 1);
+          reject(new Error("Message timeout"));
+        }, 5000);
 
-          // Store response handler
-          setResponseHandlers((prev) => {
-            const newHandlers = new Map(prev);
-            const handlers = newHandlers.get(responseId) || [];
-            handlers.push((response: unknown) => {
-              cleanupHandlers();
-              console.log(
-                `[useMessage] Received response for ${type}:`,
-                response,
-              );
-              resolve(response as MessageResponses[T]);
-            });
-            newHandlers.set(responseId, handlers);
-            return newHandlers;
+        // Send message and handle response through the Promise
+        browser?.runtime
+          ?.sendMessage(message)
+          .then((response: unknown) => {
+            console.log("[useMessage] Received response:", response);
+            console.log("[useMessage] Response type:", typeof response);
+            console.log(
+              "[useMessage] Response is object:",
+              typeof response === "object",
+            );
+            console.log(
+              "[useMessage] Response keys:",
+              response && typeof response === "object"
+                ? Object.keys(response)
+                : "N/A",
+            );
+            clearTimeout(timeoutId);
+            setPendingMessages((count) => count - 1);
+            resolve(response as MessageResponses[T]);
+          })
+          .catch((error: unknown) => {
+            console.error("[useMessage] Failed to send message:", error);
+            clearTimeout(timeoutId);
+            setPendingMessages((count) => count - 1);
+            reject(error);
           });
-
-          // Send message
-          if (typeof browser !== "undefined" && browser.runtime?.sendMessage) {
-            console.log(
-              `[useMessage] Sending via browser.runtime.sendMessage:`,
-              message,
-            );
-            browser.runtime.sendMessage(message).catch((error) => {
-              console.error(
-                `[useMessage] Failed to send message ${type}:`,
-                error,
-              );
-              cleanupHandlers();
-              reject(error);
-            });
-          } else {
-            // Mock mode for development/testing
-            console.log(
-              `[Mock] Sending message:`,
-              message.type,
-              message.payload,
-            );
-            setTimeout(() => {
-              cleanupHandlers();
-              resolve({ success: true } as MessageResponses[T]);
-            }, 100);
-          }
-        });
-      } finally {
-        setPendingMessages((prev) => Math.max(0, prev - 1));
-      }
+      });
     },
-    [getIsConnected],
+    [], // Remove isConnected dependency
   );
 
   // Send notification without waiting for response
   const sendNotification = useCallback(
     <T extends MessageType>(type: T, payload: MessagePayloads[T]) => {
-      const dynamicIsConnected = getIsConnected();
-      console.log(
-        `[useMessage] Sending notification:`,
-        type,
-        payload,
-        "isConnected:",
-        dynamicIsConnected,
-      );
-
-      const message: { type: T; payload: MessagePayloads[T] } = { type, payload };
-
-      if (dynamicIsConnected && browser.runtime?.sendMessage) {
-        browser.runtime.sendMessage(message).catch((error) => {
-          console.warn("Failed to send notification:", error);
-        });
-      } else {
-        // Mock mode
-        console.log(`[Mock] Sending notification:`, type, payload);
+      if (!isConnected) {
+        console.warn("Not connected to background script");
+        return;
       }
+
+      const message: PopupMessage = { type, payload };
+      browser?.runtime?.sendMessage(message).catch((error: unknown) => {
+        console.error("Failed to send notification:", error);
+      });
     },
-    [getIsConnected],
+    [isConnected],
   );
 
   // Listen for messages from background script
@@ -355,28 +277,16 @@ export function useMessage(): UseMessageReturn {
       type: T,
       callback: (payload: MessagePayloads[T]) => void,
     ) => {
-      setMessageHandlers((prev) => {
-        const newHandlers = new Map(prev);
-        const handlers = newHandlers.get(type as MessageType) || [];
-        handlers.push(callback as (payload: unknown) => void);
-        newHandlers.set(type as MessageType, handlers);
-        return newHandlers;
-      });
+      const handler = (message: PopupMessage) => {
+        if (message.type === type) {
+          callback(message.payload as MessagePayloads[T]);
+        }
+      };
 
-      // Return cleanup function
+      browser?.runtime?.onMessage?.addListener(handler);
+
       return () => {
-        setMessageHandlers((prev) => {
-          const newHandlers = new Map(prev);
-          const handlers = newHandlers.get(type as MessageType) || [];
-          const index = handlers.indexOf(
-            callback as (payload: unknown) => void,
-          );
-          if (index > -1) {
-            handlers.splice(index, 1);
-          }
-          newHandlers.set(type as MessageType, handlers);
-          return newHandlers;
-        });
+        browser?.runtime?.onMessage?.removeListener(handler);
       };
     },
     [],
@@ -388,28 +298,16 @@ export function useMessage(): UseMessageReturn {
       responseId: string,
       callback: (response: MessageResponses[T]) => void,
     ) => {
-      setResponseHandlers((prev) => {
-        const newHandlers = new Map(prev);
-        const handlers = newHandlers.get(responseId) || [];
-        handlers.push(callback as (response: unknown) => void);
-        newHandlers.set(responseId, handlers);
-        return newHandlers;
-      });
+      const handler = (message: PopupMessage) => {
+        if (message.responseId === responseId) {
+          callback(message.payload as MessageResponses[T]);
+        }
+      };
 
-      // Return cleanup function
+      browser?.runtime?.onMessage?.addListener(handler);
+
       return () => {
-        setResponseHandlers((prev) => {
-          const newHandlers = new Map(prev);
-          const handlers = newHandlers.get(responseId) || [];
-          const index = handlers.indexOf(
-            callback as (response: unknown) => void,
-          );
-          if (index > -1) {
-            handlers.splice(index, 1);
-          }
-          newHandlers.set(responseId, handlers);
-          return newHandlers;
-        });
+        browser?.runtime?.onMessage?.removeListener(handler);
       };
     },
     [],
@@ -426,138 +324,166 @@ export function useMessage(): UseMessageReturn {
 }
 
 /**
- * Hook for message analytics and monitoring
+ * Hook for message analytics
  */
 export function useMessageAnalytics() {
   const [messageStats, setMessageStats] = useState({
     sent: 0,
     received: 0,
     failed: 0,
-    averageResponseTime: 0,
   });
 
-  const [recentMessages, setRecentMessages] = useState<
-    Array<{
-      type: string;
-      timestamp: number;
-      success: boolean;
-      responseTime?: number;
-    }>
-  >([]);
-
-  const trackMessage = useCallback(
-    (type: string, success: boolean, responseTime?: number) => {
-      setMessageStats((prev) => ({
-        ...prev,
-        sent: prev.sent + 1,
-        received: prev.received + (success ? 1 : 0),
-        failed: prev.failed + (success ? 0 : 1),
-        averageResponseTime:
-          prev.averageResponseTime > 0
-            ? (prev.averageResponseTime + (responseTime || 0)) / 2
-            : responseTime || 0,
-      }));
-
-      setRecentMessages((prev) => [
-        {
-          type,
-          timestamp: Date.now(),
-          success,
-          responseTime,
-        },
-        ...prev.slice(0, 19), // Keep last 20 messages
-      ]);
-    },
-    [],
-  );
-
-  const getStats = () => messageStats;
-  const getRecentMessages = () => recentMessages;
+  const trackMessage = useCallback((type: "sent" | "received" | "failed") => {
+    setMessageStats((stats) => ({
+      ...stats,
+      [type]: stats[type] + 1,
+    }));
+  }, []);
 
   return {
-    trackMessage,
-    getStats,
-    getRecentMessages,
     messageStats,
-    recentMessages,
+    trackMessage,
   };
 }
 
 /**
- * Convenience hook for common popup actions
+ * Hook for popup-specific actions
  */
 export function usePopupActions() {
   const { sendMessage } = useMessage();
+  const { trackMessage } = useMessageAnalytics();
+  const [dynamicIsConnected, setDynamicIsConnected] = useState(false);
+
+  // Update connection status
+  useEffect(() => {
+    const updateConnectionStatus = () => {
+      setDynamicIsConnected(!!browser.runtime?.id);
+    };
+
+    updateConnectionStatus();
+    browser?.runtime?.onConnect?.addListener(updateConnectionStatus);
+
+    return () => {
+      browser?.runtime?.onConnect?.removeListener(updateConnectionStatus);
+    };
+  }, []);
 
   const openManager = useCallback(async () => {
-    console.log("[usePopupActions] openManager called");
-    const response = await sendMessage(PopupMessageType.OPEN_MANAGER, {});
-    console.log("[usePopupActions] openManager response:", response);
-    return response;
-  }, [sendMessage]);
+    try {
+      await sendMessage(PopupMessageType.OPEN_MANAGER, {});
+      trackMessage("sent");
+    } catch (error: unknown) {
+      errorService.createMessageError(
+        typeof error === "string" ? error : "Unknown error",
+      );
+      trackMessage("failed");
+    }
+  }, [sendMessage, trackMessage]);
 
-  const addNewStyle = useCallback(
-    async (template?: string) => {
-      console.log("[usePopupActions] addNewStyle called, template:", template);
-      return sendMessage(PopupMessageType.ADD_STYLE, { template });
+  const addStyle = useCallback(
+    async (
+      name: string,
+      description: string,
+      code: string,
+      enabled: boolean,
+    ) => {
+      try {
+        const result = await sendMessage(PopupMessageType.ADD_STYLE, {
+          name,
+          description,
+          code,
+          enabled,
+        });
+        trackMessage("sent");
+        return result;
+      } catch (error: unknown) {
+        errorService.createMessageError(
+          typeof error === "string" ? error : "Unknown error",
+        );
+        trackMessage("failed");
+        throw error;
+      }
     },
-    [sendMessage],
+    [sendMessage, trackMessage],
   );
 
-  const openSettings = useCallback(
-    async (section?: string) => {
-      console.log("[usePopupActions] openSettings called, section:", section);
-      const response = await sendMessage(PopupMessageType.OPEN_SETTINGS, {
-        section,
-      });
-      console.log("[usePopupActions] openSettings response:", response);
-      return response;
-    },
-    [sendMessage],
-  );
-
-  const getStyles = useCallback(
-    async (ids?: string[]) => {
-      console.log("[usePopupActions] getStyles called, ids:", ids);
-      return sendMessage(PopupMessageType.GET_STYLES, { ids });
-    },
-    [sendMessage],
-  );
+  const getStyles = useCallback(async () => {
+    try {
+      const result = await sendMessage(PopupMessageType.GET_STYLES, {});
+      trackMessage("sent");
+      return result;
+    } catch (error: unknown) {
+      errorService.createMessageError(
+        typeof error === "string" ? error : "Unknown error",
+      );
+      trackMessage("failed");
+      throw error;
+    }
+  }, [sendMessage, trackMessage]);
 
   const toggleStyle = useCallback(
     async (id: string, enabled: boolean) => {
-      console.log(
-        "[usePopupActions] toggleStyle called, id:",
-        id,
-        "enabled:",
-        enabled,
-      );
-      return sendMessage(PopupMessageType.TOGGLE_STYLE, { id, enabled });
+      try {
+        const result = await sendMessage(PopupMessageType.TOGGLE_STYLE, {
+          id,
+          enabled,
+        });
+        trackMessage("sent");
+        return result;
+      } catch (error: unknown) {
+        errorService.createMessageError(
+          typeof error === "string" ? error : "Unknown error",
+        );
+        trackMessage("failed");
+        throw error;
+      }
     },
-    [sendMessage],
+    [sendMessage, trackMessage],
   );
 
   return {
     openManager,
-    addNewStyle,
-    openSettings,
+    addStyle,
     getStyles,
     toggleStyle,
+    isConnected: dynamicIsConnected,
   };
 }
 
 /**
- * Hook for Apply Page message passing functionality
+ * Hook for apply-specific actions
  */
 export function useApplyActions() {
   const { sendMessage } = useMessage();
+  const { trackMessage } = useMessageAnalytics();
 
   const parseUserCSS = useCallback(
     async (text: string, sourceUrl?: string) => {
-      console.log("[useApplyActions] parseUserCSS called, text length:", text.length);
-      return sendMessage(ApplyMessageType.PARSE_USERCSS, { text, sourceUrl });
+      console.log(
+        "[useApplyActions] parseUserCSS called, text length:",
+        text.length,
+      );
+      try {
+        console.log("[useApplyActions] About to send PARSE_USERCSS message");
+        const result = await sendMessage(ApplyMessageType.PARSE_USERCSS, {
+          text,
+          sourceUrl,
+        });
+        console.log("[useApplyActions] parseUserCSS result:", result);
+        console.log("[useApplyActions] result type:", typeof result);
+        console.log("[useApplyActions] result success:", result?.success);
+        trackMessage("sent");
+        return result;
+      } catch (error: unknown) {
+        console.error("[useApplyActions] parseUserCSS error:", error);
+        errorService.createMessageError(
+          typeof error === "string" ? error : "Unknown error",
+        );
+        trackMessage("failed");
+        throw error;
+      }
     },
-    [sendMessage],
+    [sendMessage, trackMessage],
   );
 
   const installStyle = useCallback(
@@ -579,16 +505,26 @@ export function useApplyActions() {
         min?: number;
         max?: number;
         options?: string[];
-      }>
+      }>,
     ) => {
       console.log("[useApplyActions] installStyle called, style:", meta.name);
-      return sendMessage(ApplyMessageType.INSTALL_STYLE, {
-        meta,
-        compiledCss,
-        variables,
-      });
+      try {
+        const result = await sendMessage(ApplyMessageType.INSTALL_STYLE, {
+          meta,
+          compiledCss,
+          variables,
+        });
+        trackMessage("sent");
+        return result;
+      } catch (error: unknown) {
+        errorService.createMessageError(
+          typeof error === "string" ? error : "Unknown error",
+        );
+        trackMessage("failed");
+        throw error;
+      }
     },
-    [sendMessage],
+    [sendMessage, trackMessage],
   );
 
   return {

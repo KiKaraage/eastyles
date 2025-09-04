@@ -154,8 +154,7 @@ export function useErrorHandling(
       autoRetry,
       maxRetries,
       errorState.retryCount,
-      // retryCallback, // Removed from dependency array
-      // retry, // Removed from dependency array
+      retryCallback,
     ],
   );
 

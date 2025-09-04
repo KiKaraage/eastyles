@@ -49,9 +49,6 @@ const MAX_OFFLINE_MESSAGES = 100;
 export class MessageBus {
   private pendingMessages = new Map<string, PendingMessage>();
   private messageIdCounter = 0;
-  private messageQueue: Array<{ message: ReceivedMessages; tabId?: number }> =
-    [];
-  private isProcessingQueue = false;
   private isOnline = true;
   private offlineCheckInterval?: number;
 
@@ -60,8 +57,6 @@ export class MessageBus {
     this.setupMessageListener();
     // Initialize online status monitoring
     this.initializeOnlineStatusMonitoring();
-    // Process any existing offline messages
-    this.processOfflineMessages();
   }
 
   /**
@@ -71,24 +66,54 @@ export class MessageBus {
     const listener = (
       message: unknown,
       sender: { tab?: { id?: number } },
-      _sendResponse: (response?: unknown) => void,
+      sendResponse: (response?: unknown) => void,
     ) => {
-      this.handleIncomingMessage(message, sender.tab?.id);
-      return true; // Keep message channel open for async response
+      console.log(
+        "[MessageBus] Raw message received:",
+        message,
+        "from sender:",
+        sender,
+      );
+
+      // Handle async processing
+      this.handleIncomingMessage(message, sender.tab?.id)
+        .then((result) => {
+          console.log("[MessageBus] Sending response:", result);
+          sendResponse(result);
+        })
+        .catch((error) => {
+          console.error("[MessageBus] Error in message listener:", error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        });
+
+      // Return true to indicate we will send response asynchronously
+      return true;
     };
 
     if (typeof browser !== "undefined" && browser.runtime) {
+      console.log("[MessageBus] Setting up message listener");
       browser.runtime.onMessage.addListener(listener);
+    } else {
+      console.error("[MessageBus] Browser runtime not available");
     }
   }
 
   /**
    * Handle incoming messages from other extension components.
    */
-  public handleIncomingMessage(message: unknown, tabId?: number): boolean {
+  public async handleIncomingMessage(
+    message: unknown,
+    tabId?: number,
+  ): Promise<unknown> {
+    console.log("[MessageBus] Received message:", message, "from tab:", tabId);
+
     // First check if this is a response to a pending message
     const messageObj = message as Record<string, unknown>;
     if (messageObj.replyTo && typeof messageObj.replyTo === "string") {
+      console.log("[MessageBus] Handling response for:", messageObj.replyTo);
       const pending = this.pendingMessages.get(messageObj.replyTo);
       if (pending) {
         // Clear the timeout
@@ -97,8 +122,13 @@ export class MessageBus {
 
         // Resolve or reject the promise based on the response
         if (messageObj.error) {
+          console.log("[MessageBus] Rejecting with error:", messageObj.error);
           pending.reject(messageObj.error);
         } else {
+          console.log(
+            "[MessageBus] Resolving with response:",
+            messageObj.response,
+          );
           pending.resolve(messageObj.response);
         }
       }
@@ -107,61 +137,59 @@ export class MessageBus {
 
     // Check if this is a valid received message
     if (!isValidReceivedMessage(message)) {
+      console.log("[MessageBus] Invalid message received:", message);
       // Send error response
       this.sendError(message, createInvalidMessageError(message, "unknown"));
       return true;
     }
 
-    // This is a new message that needs to be processed
-    // Add to queue for processing
-    this.messageQueue.push({ message: message as ReceivedMessages, tabId });
+    console.log(
+      "[MessageBus] Processing valid message:",
+      (message as ReceivedMessages).type,
+    );
+    try {
+      // Process the message synchronously and return the response
+      const response = await this.processMessage(
+        message as ReceivedMessages,
+        tabId,
+      );
+      console.log("[MessageBus] Returning synchronous response:", response);
 
-    // Process the queue if not already doing so
-    if (!this.isProcessingQueue) {
-      this.processMessageQueue();
-    }
-
-    return true;
-  }
-
-  /**
-   * Process messages in the queue sequentially.
-   */
-  private async processMessageQueue(): Promise<void> {
-    if (this.isProcessingQueue) return;
-
-    this.isProcessingQueue = true;
-
-    while (this.messageQueue.length > 0) {
-      const { message, tabId } = this.messageQueue.shift()!;
-
-      try {
-        // Process the message and get a response
-        const response = await this.processMessage(message, tabId);
-
-        // Send the response back
-        if (browser.tabs && tabId) {
-          await browser.tabs.sendMessage(tabId, {
-            replyTo: message.type,
-            response,
-          });
-        }
-      } catch (error: unknown) {
-        // Send error response
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        const errorStack = error instanceof Error ? error.stack || "" : "";
-        this.sendError(message, {
-          message: errorMessage,
-          stack: errorStack,
-          source: "background",
-          timestamp: Date.now(),
-          severity: "notify",
-        });
+      // Include the messageId or responseId in the response if it was present in the original message
+      const originalMessage = message as {
+        messageId?: string;
+        responseId?: string;
+      };
+      if (originalMessage.messageId) {
+        return {
+          ...(typeof response === "object" && response !== null
+            ? response
+            : {}),
+          messageId: originalMessage.messageId,
+        };
       }
-    }
+      if (originalMessage.responseId) {
+        return {
+          ...(typeof response === "object" && response !== null
+            ? response
+            : {}),
+          responseId: originalMessage.responseId,
+        };
+      }
 
-    this.isProcessingQueue = false;
+      return response;
+    } catch (error: unknown) {
+      console.error("[MessageBus] Error processing message:", error);
+      // Return error response
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      const errorStack = error instanceof Error ? error.stack || "" : "";
+      return {
+        success: false,
+        error: errorMessage,
+        stack: errorStack,
+      };
+    }
   }
 
   /**
@@ -171,8 +199,21 @@ export class MessageBus {
     message: ReceivedMessages,
     tabId?: number,
   ): Promise<unknown> {
-    // Use the message handler service to process the message
-    return await messageHandlerService.handleMessage(message, tabId);
+    console.log(
+      "[MessageBus] Processing message:",
+      message.type,
+      "with data:",
+      message,
+    );
+    try {
+      // Use the message handler service to process the message
+      const result = await messageHandlerService.handleMessage(message, tabId);
+      console.log("[MessageBus] Message handler returned:", result);
+      return result;
+    } catch (error) {
+      console.error("[MessageBus] Message handler threw error:", error);
+      throw error;
+    }
   }
 
   /**

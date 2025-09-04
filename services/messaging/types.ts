@@ -11,41 +11,46 @@ export interface PopupMessageResponses {
     styleId?: string;
     styles?: unknown[];
   };
+  QUERY_STYLES_FOR_URL: {
+    success: boolean;
+    error?: string;
+    styles?: import("../storage/schema").UserCSSStyle[];
+  };
 }
 
 // Response types for apply page messages
 export interface ApplyMessageResponses {
-   PARSE_USERCSS: {
-     success: boolean;
-     error?: string;
-     meta?: {
-       name: string;
-       namespace: string;
-       version: string;
-       description: string;
-       author: string;
-       sourceUrl: string;
-       domains: string[];
-     };
-     css?: string;
-     warnings?: string[];
-     errors?: string[];
-   };
-   INSTALL_STYLE: {
-     success: boolean;
-     error?: string;
-     styleId?: string;
-   };
- }
+  PARSE_USERCSS: {
+    success: boolean;
+    error?: string;
+    meta?: {
+      name: string;
+      namespace: string;
+      version: string;
+      description: string;
+      author: string;
+      sourceUrl: string;
+      domains: string[];
+    };
+    css?: string;
+    warnings?: string[];
+    errors?: string[];
+  };
+  INSTALL_STYLE: {
+    success: boolean;
+    error?: string;
+    styleId?: string;
+  };
+}
 
 // Response types for content script messages
 export interface ContentMessageResponses {
-   QUERY_STYLES_FOR_URL: {
-     success: boolean;
-     error?: string;
-     styles?: import('../storage/schema').UserCSSStyle[];
-   };
- }
+  QUERY_STYLES_FOR_URL: {
+    success: boolean;
+    error?: string;
+    styles?: import("../storage/schema").UserCSSStyle[];
+  };
+}
 
 /**
  * Messages sent from the background script to other components.
@@ -57,22 +62,22 @@ export type BackgroundMessages =
         error: ErrorDetails;
       };
     }
-   | {
-       type: "STORAGE_UPDATED";
-       payload: {
-         key: string;
-         newValue: unknown;
-         oldValue: unknown;
-       };
-     }
-   | {
-       type: "VARIABLES_UPDATED";
-       payload: {
-         styleId: string;
-         variables: Record<string, string>;
-         timestamp: number;
-       };
-     };
+  | {
+      type: "STORAGE_UPDATED";
+      payload: {
+        key: string;
+        newValue: unknown;
+        oldValue: unknown;
+      };
+    }
+  | {
+      type: "VARIABLES_UPDATED";
+      payload: {
+        styleId: string;
+        variables: Record<string, string>;
+        timestamp: number;
+      };
+    };
 
 /**
  * Messages sent from the popup to the background script.
@@ -118,19 +123,25 @@ export type PopupMessages =
   | {
       type: "GET_CURRENT_TAB";
     }
-   | {
-       type: "TOGGLE_THEME";
-     }
-   | {
-       type: "RESET_SETTINGS";
-     }
-   | {
-       type: "UPDATE_VARIABLES";
-       payload: {
-         styleId: string;
-         variables: Record<string, string>;
-       };
-     };
+  | {
+      type: "TOGGLE_THEME";
+    }
+  | {
+      type: "RESET_SETTINGS";
+    }
+  | {
+      type: "UPDATE_VARIABLES";
+      payload: {
+        styleId: string;
+        variables: Record<string, string>;
+      };
+    }
+  | {
+      type: "QUERY_STYLES_FOR_URL";
+      payload: {
+        url: string;
+      };
+    };
 
 /**
  * Messages sent from the manager page to the background script.
@@ -159,52 +170,55 @@ export type ManagerMessages =
  * Messages sent from the apply page to the background script.
  */
 export type ApplyMessages =
-   | {
-       type: "PARSE_USERCSS";
-       payload: {
-         text: string;
-         sourceUrl?: string;
-       };
-     }
-   | {
-       type: "INSTALL_STYLE";
-       payload: {
-         meta: {
-           name: string;
-           namespace: string;
-           version: string;
-           description: string;
-           author: string;
-           sourceUrl: string;
-           domains: string[];
-         };
-         compiledCss: string;
-         variables: Array<{
-           name: string;
-           type: string;
-           default: string;
-           min?: number;
-           max?: number;
-           options?: string[];
-         }>;
-       };
-     };
+  | {
+      type: "PARSE_USERCSS";
+      payload: {
+        text: string;
+        sourceUrl?: string;
+      };
+    }
+  | {
+      type: "INSTALL_STYLE";
+      payload: {
+        meta: {
+          name: string;
+          namespace: string;
+          version: string;
+          description: string;
+          author: string;
+          sourceUrl: string;
+          domains: string[];
+        };
+        compiledCss: string;
+        variables: Array<{
+          name: string;
+          type: string;
+          default: string;
+          min?: number;
+          max?: number;
+          options?: string[];
+        }>;
+      };
+    };
 
 /**
  * Messages sent from the content script to the background script.
  */
-export type ContentMessages =
-   | {
-       type: "QUERY_STYLES_FOR_URL";
-       payload: {
-         url: string;
-       };
-     };
+export type ContentMessages = {
+  type: "QUERY_STYLES_FOR_URL";
+  payload: {
+    url: string;
+  };
+};
 
 /**
  * Union type of all possible message types that can be received by the background script.
  */
-export type ReceivedMessages = PopupMessages | ManagerMessages | ApplyMessages | ContentMessages;
+export type ReceivedMessages =
+  | PopupMessages
+  | ManagerMessages
+  | ApplyMessages
+  | ContentMessages;
 
 /**
  * Union type of all possible message types that can be sent from the background script.
