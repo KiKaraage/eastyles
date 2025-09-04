@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
+import { browser } from "@wxt-dev/browser";
 import { storageClient } from "../../../services/storage/client";
 import { UserCSSStyle } from "../../../services/storage/schema";
 import { useMessage, PopupMessageType } from "../../../hooks/useMessage";
@@ -111,7 +112,7 @@ const ManagerPage: React.FC = () => {
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
 
@@ -119,9 +120,23 @@ const ManagerPage: React.FC = () => {
     const userCssFile = files.find((file) => file.name.endsWith(".user.css"));
 
     if (userCssFile) {
-      // Create object URL and redirect to apply page
-      const fileUrl = URL.createObjectURL(userCssFile);
-      window.location.href = `/apply.html?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(userCssFile.name)}`;
+      try {
+        // Read the file content directly
+        const cssContent = await userCssFile.text();
+        console.log("Read local UserCSS file, length:", cssContent.length);
+
+        // Pass content as base64 to avoid encoding issues
+        const saveUrl = browser.runtime.getURL("/save.html");
+        const encodedCss = btoa(encodeURIComponent(cssContent));
+        const filename = encodeURIComponent(userCssFile.name);
+        const finalUrl = `${saveUrl}?css=${encodedCss}&filename=${filename}&source=local&encoding=base64`;
+
+        console.log("Redirecting to Save page with local file content");
+        window.location.href = finalUrl;
+      } catch (error) {
+        console.error("Failed to read local UserCSS file:", error);
+        setError("Failed to read the UserCSS file");
+      }
     }
   }, []);
 

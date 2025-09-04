@@ -18,8 +18,8 @@ export interface PopupMessageResponses {
   };
 }
 
-// Response types for apply page messages
-export interface ApplyMessageResponses {
+// Response types for save page messages
+export interface SaveMessageResponses {
   PARSE_USERCSS: {
     success: boolean;
     error?: string;
@@ -167,9 +167,9 @@ export type ManagerMessages =
     };
 
 /**
- * Messages sent from the apply page to the background script.
+ * Messages sent from the save page to the background script.
  */
-export type ApplyMessages =
+export type SaveMessages =
   | {
       type: "PARSE_USERCSS";
       payload: {
@@ -217,7 +217,7 @@ export type ContentMessages = {
 export type ReceivedMessages =
   | PopupMessages
   | ManagerMessages
-  | ApplyMessages
+  | SaveMessages
   | ContentMessages;
 
 /**

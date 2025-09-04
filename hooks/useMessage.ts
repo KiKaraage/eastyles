@@ -8,7 +8,7 @@ import { useState, useCallback, useEffect } from "react";
 import { errorService } from "../services/errors/service";
 import type {
   PopupMessageResponses,
-  ApplyMessageResponses,
+  SaveMessageResponses,
 } from "../services/messaging/types";
 
 /**
@@ -25,9 +25,9 @@ export enum PopupMessageType {
 }
 
 /**
- * Message types for apply operations
+ * Message types for save operations
  */
-export enum ApplyMessageType {
+export enum SaveMessageType {
   PARSE_USERCSS = "PARSE_USERCSS",
   INSTALL_STYLE = "INSTALL_STYLE",
 }
@@ -65,14 +65,14 @@ export interface PopupMessagePayloads {
 }
 
 /**
- * Payload interfaces for apply messages
+ * Payload interfaces for save messages
  */
-export interface ApplyMessagePayloads {
-  [ApplyMessageType.PARSE_USERCSS]: {
+export interface SaveMessagePayloads {
+  [SaveMessageType.PARSE_USERCSS]: {
     text: string;
     sourceUrl?: string;
   };
-  [ApplyMessageType.INSTALL_STYLE]: {
+  [SaveMessageType.INSTALL_STYLE]: {
     meta: {
       name: string;
       namespace: string;
@@ -141,17 +141,17 @@ export interface UseMessageReturn {
 /**
  * Combined message types
  */
-export type MessageType = PopupMessageType | ApplyMessageType;
+export type MessageType = PopupMessageType | SaveMessageType;
 
 /**
  * Union type for all message payloads
  */
-export type MessagePayloads = PopupMessagePayloads & ApplyMessagePayloads;
+export type MessagePayloads = PopupMessagePayloads & SaveMessagePayloads;
 
 /**
  * Union type for all message responses
  */
-export type MessageResponses = PopupMessageResponses & ApplyMessageResponses;
+export type MessageResponses = PopupMessageResponses & SaveMessageResponses;
 
 /**
  * Main message hook
@@ -451,31 +451,31 @@ export function usePopupActions() {
 }
 
 /**
- * Hook for apply-specific actions
+ * Hook for save-specific actions
  */
-export function useApplyActions() {
+export function useSaveActions() {
   const { sendMessage } = useMessage();
   const { trackMessage } = useMessageAnalytics();
 
   const parseUserCSS = useCallback(
     async (text: string, sourceUrl?: string) => {
       console.log(
-        "[useApplyActions] parseUserCSS called, text length:",
+        "[useSaveActions] parseUserCSS called, text length:",
         text.length,
       );
       try {
-        console.log("[useApplyActions] About to send PARSE_USERCSS message");
-        const result = await sendMessage(ApplyMessageType.PARSE_USERCSS, {
+        console.log("[useSaveActions] About to send PARSE_USERCSS message");
+        const result = await sendMessage(SaveMessageType.PARSE_USERCSS, {
           text,
           sourceUrl,
         });
-        console.log("[useApplyActions] parseUserCSS result:", result);
-        console.log("[useApplyActions] result type:", typeof result);
-        console.log("[useApplyActions] result success:", result?.success);
+        console.log("[useSaveActions] parseUserCSS result:", result);
+        console.log("[useSaveActions] result type:", typeof result);
+        console.log("[useSaveActions] result success:", result?.success);
         trackMessage("sent");
         return result;
       } catch (error: unknown) {
-        console.error("[useApplyActions] parseUserCSS error:", error);
+        console.error("[useSaveActions] parseUserCSS error:", error);
         errorService.createMessageError(
           typeof error === "string" ? error : "Unknown error",
         );
@@ -507,9 +507,9 @@ export function useApplyActions() {
         options?: string[];
       }>,
     ) => {
-      console.log("[useApplyActions] installStyle called, style:", meta.name);
+      console.log("[useSaveActions] installStyle called, style:", meta.name);
       try {
-        const result = await sendMessage(ApplyMessageType.INSTALL_STYLE, {
+        const result = await sendMessage(SaveMessageType.INSTALL_STYLE, {
           meta,
           compiledCss,
           variables,
