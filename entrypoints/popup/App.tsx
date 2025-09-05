@@ -55,11 +55,25 @@ const App = () => {
 
         if (currentTab) {
           // Try to get URL from tab object first
-          if (currentTab.url && currentTab.url.startsWith("http")) {
-            tabUrl = currentTab.url;
-            tabTitle = currentTab.title || tabUrl;
+          if (currentTab.url) {
+            // Handle different URL types
+            if (currentTab.url.startsWith("http")) {
+              tabUrl = currentTab.url;
+              tabTitle = currentTab.title || tabUrl;
+            } else if (currentTab.url.startsWith("chrome://") || currentTab.url.startsWith("about:")) {
+              // Special pages like chrome://extensions, about:blank, etc.
+              tabUrl = currentTab.url;
+              tabTitle = currentTab.title || "Browser Page";
+            } else if (currentTab.url.startsWith("chrome-extension://")) {
+              // Extension pages
+              tabUrl = currentTab.url;
+              tabTitle = currentTab.title || "Extension Page";
+            } else {
+              // Other restricted URLs
+              tabUrl = "restricted-url";
+              tabTitle = currentTab.title || "Restricted Page";
+            }
           }
-          // Note: Removed the GET_CURRENT_TAB message type usage as it doesn't exist
 
           setState((prev) => ({
             ...prev,
@@ -83,7 +97,7 @@ const App = () => {
           try {
             let availableStyles: UserCSSStyle[] = [];
 
-            if (tabUrl && tabUrl !== "current-site") {
+            if (tabUrl && tabUrl !== "current-site" && tabUrl !== "restricted-url") {
               // Query styles for specific URL through background script
               console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
               const response = await sendMessage(
@@ -257,11 +271,28 @@ const App = () => {
               {state.currentTab?.url
                 ? (() => {
                     try {
+                      if (state.currentTab.url === "current-site") {
+                        return "current site";
+                      }
+                      if (state.currentTab.url === "restricted-url") {
+                        return "restricted page";
+                      }
+
                       const url = new URL(state.currentTab.url);
                       // Only remove 'www.' prefix, keep other subdomains
                       const hostname = url.hostname.replace(/^www\./, "");
                       return hostname;
                     } catch {
+                      // For non-HTTP URLs, try to extract a meaningful name
+                      if (state.currentTab.url.startsWith("chrome://")) {
+                        return "Chrome page";
+                      }
+                      if (state.currentTab.url.startsWith("about:")) {
+                        return "Browser page";
+                      }
+                      if (state.currentTab.url.startsWith("chrome-extension://")) {
+                        return "Extension page";
+                      }
                       return "current site";
                     }
                   })()

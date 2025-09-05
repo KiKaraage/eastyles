@@ -577,8 +577,6 @@ const handleParseUserCSS: MessageHandler = async (message) => {
   console.log("Parse UserCSS requested:", parseMessage.payload);
 
   try {
-    // TODO: Implement actual UserCSS parsing when processor service is available
-    // For now, return mock data
     const { text, sourceUrl } = parseMessage.payload;
 
     // Basic validation
@@ -586,48 +584,21 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       throw new Error("Invalid UserCSS text: must be a non-empty string");
     }
 
-    // Mock parsing logic - extract basic metadata
-    const nameMatch = text.match(/@name\s+(.+)/);
-    const namespaceMatch = text.match(/@namespace\s+(.+)/);
-    const versionMatch = text.match(/@version\s+(.+)/);
-    const descriptionMatch = text.match(/@description\s+(.+)/);
-    const authorMatch = text.match(/@author\s+(.+)/);
+    // Import the proper UserCSS processor
+    const { parseUserCSS } = await import("../usercss/processor");
 
-    // Extract CSS content (everything after the metadata block)
-    const cssMatch = text.match(/==\/UserStyle==\s*\n?(.*)/s);
-    const css = cssMatch ? cssMatch[1].trim() : text;
-
-    // Extract domains from @-moz-document or similar
-    const domainMatches =
-      text.match(/@-moz-document\s+[^}]*url\(["']([^"']+)["']\)/g) || [];
-    const domains = domainMatches
-      .map((match) => {
-        const urlMatch = match.match(/url\(["']([^"']+)["']\)/);
-        if (urlMatch) {
-          try {
-            return new URL(urlMatch[1]).hostname;
-          } catch {
-            return urlMatch[1];
-          }
-        }
-        return "";
-      })
-      .filter(Boolean);
+    // Use the proper UserCSS parser
+    const parseResult = parseUserCSS(text);
 
     return {
       success: true,
       meta: {
-        name: nameMatch ? nameMatch[1].trim() : "Unknown Style",
-        namespace: namespaceMatch ? namespaceMatch[1].trim() : "",
-        version: versionMatch ? versionMatch[1].trim() : "1.0.0",
-        description: descriptionMatch ? descriptionMatch[1].trim() : "",
-        author: authorMatch ? authorMatch[1].trim() : "",
-        sourceUrl: sourceUrl || "",
-        domains: domains,
+        ...parseResult.meta,
+        sourceUrl: sourceUrl || parseResult.meta.sourceUrl,
       },
-      css: css,
-      warnings: [],
-      errors: [],
+      css: parseResult.css,
+      warnings: parseResult.warnings,
+      errors: parseResult.errors,
     };
   } catch (error: unknown) {
     const errorMessage =

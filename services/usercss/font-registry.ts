@@ -1,7 +1,7 @@
 /**
  * Font Registry Service
  *
- * Manages built-in fonts from assets/fonts folder and provides
+ * Manages built-in fonts from public/fonts folder and provides
  * font availability checking for custom user fonts.
  */
 
@@ -179,7 +179,7 @@ export class FontRegistryService {
    */
   getFontFilePath(fontName: string): string | null {
     const font = this.builtInFonts.find((f) => f.name === fontName);
-    return font ? `/assets/fonts/${font.file}` : null;
+    return font ? `/fonts/${font.file}` : null;
   }
 
   /**

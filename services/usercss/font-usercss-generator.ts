@@ -81,7 +81,7 @@ export class FontUserCSSGenerator {
       variables: {},
       assets: fontType === 'builtin' ? [{
         type: 'font',
-        url: `/assets/fonts/${fontName}.woff2`,
+        url: `/fonts/${fontName}.woff2`,
         format: 'woff2'
       }] : []
     };
@@ -103,7 +103,7 @@ export class FontUserCSSGenerator {
   private generateFontFaceRule(fontName: string): string | null {
     // This would typically come from the font registry
     // For now, we'll generate a basic @font-face rule
-    const fontPath = `/assets/fonts/${fontName}.woff2`;
+    const fontPath = `/fonts/${fontName}.woff2`;
 
     return `@font-face {
   font-family: '${fontName}';
@@ -210,7 +210,7 @@ export class FontUserCSSGenerator {
     const fontName = fontNameMatch[1].trim();
 
     // Determine font type from CSS content
-    const fontType: 'builtin' | 'custom' = userCSS.includes('/assets/fonts/') ? 'builtin' : 'custom';
+    const fontType: 'builtin' | 'custom' = userCSS.includes('/fonts/') ? 'builtin' : 'custom';
 
     // Extract target elements - look for CSS rules that are NOT @font-face
     // Remove the UserCSS metadata block first

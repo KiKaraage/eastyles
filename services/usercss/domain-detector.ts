@@ -56,8 +56,8 @@ export class UserCSSDomainDetector implements DomainDetector {
    */
   matches(url: string, rules: DomainRule[]): boolean {
     if (!rules || rules.length === 0) {
-      this.debug("No rules provided, matching all URLs");
-      return true; // No rules means apply to all URLs
+      this.debug("No rules provided, not matching any URLs (styles should have explicit domain rules)");
+      return false; // No rules means don't apply to any URLs - styles should have explicit domain rules
     }
 
     const normalizedUrl = this.normalizeURL(url);
