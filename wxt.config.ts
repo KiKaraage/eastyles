@@ -13,7 +13,7 @@ export default defineConfig({
     localesDir: "public/_locales",
   },
   manifest: {
-    permissions: ["storage", "contextMenus"],
+    permissions: ["storage", "contextMenus", "tabs"],
     default_locale: "en",
     browser_specific_settings: {
       gecko: {
@@ -33,12 +33,37 @@ export default defineConfig({
         "128": "icon/128.png",
       },
     },
+    web_accessible_resources: [
+      {
+        resources: ["fonts/*"],
+        matches: ["<all_urls>"],
+      },
+    ],
   },
   vite: () => ({
     plugins: [tailwindcss()],
     resolve: {
       alias: {
         "@services": path.resolve(__dirname, "./services"),
+      },
+    },
+    build: {
+      rollupOptions: {
+        onwarn(warning, warn) {
+          // Suppress Stylus-related externalization warnings
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE' ||
+              (warning.message && warning.message.includes('has been externalized for browser compatibility'))) {
+            return;
+          }
+          warn(warning);
+        },
+      },
+    },
+    css: {
+      preprocessorOptions: {
+        stylus: {
+          // Stylus options can be configured here if needed
+        },
       },
     },
   }),
