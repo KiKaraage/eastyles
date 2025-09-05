@@ -101,6 +101,81 @@ const ManagerPage: React.FC = () => {
     [],
   );
 
+  // Handle file import via button click
+  const handleImportClick = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".user.css";
+    input.multiple = false;
+
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file && file.name.endsWith(".user.css")) {
+        try {
+          // Read the file content directly
+          const cssContent = await file.text();
+          console.log("Read imported UserCSS file, length:", cssContent.length);
+
+          // Pass content as base64 to avoid encoding issues
+          const saveUrl = browser.runtime.getURL("/save.html");
+          const encodedCss = btoa(encodeURIComponent(cssContent));
+          const filename = encodeURIComponent(file.name);
+          const finalUrl = `${saveUrl}?css=${encodedCss}&filename=${filename}&source=local&encoding=base64`;
+
+          console.log("Redirecting to Save page with imported file content");
+          window.location.href = finalUrl;
+        } catch (error) {
+          console.error("Failed to read imported UserCSS file:", error);
+          setError("Failed to read the UserCSS file");
+        }
+      } else if (file) {
+        setError("Please select a .user.css file");
+      }
+    };
+
+    input.click();
+  }, []);
+
+  // Handle export functionality
+  const handleExportClick = useCallback(async () => {
+    try {
+      setError(null);
+      // Get all UserCSS styles for export
+      const userCSSStyles = await storageClient.getUserCSSStyles();
+
+      if (userCSSStyles.length === 0) {
+        setError("No styles to export");
+        return;
+      }
+
+      // Create export data structure
+      const exportData = {
+        styles: userCSSStyles,
+        timestamp: Date.now(),
+        version: "1.0.0",
+      };
+
+      // Convert to JSON and create download
+      const json = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `eastyles_styles_${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Show success message
+      setError(null);
+      // You could add a success toast here similar to the Save page
+    } catch (error) {
+      console.error("Failed to export styles:", error);
+      setError("Failed to export styles");
+    }
+  }, []);
+
   // Handle drag and drop
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -180,11 +255,11 @@ const ManagerPage: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-outline">
+          <button className="btn btn-outline" onClick={handleExportClick}>
             <Download className="w-4 h-4 mr-2" />
             Export
           </button>
-          <button className="btn btn-primary">
+          <button className="btn btn-primary" onClick={handleImportClick}>
             <Upload className="w-4 h-4 mr-2" />
             Import
           </button>
