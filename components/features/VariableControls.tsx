@@ -31,21 +31,22 @@ const VariableControl: React.FC<VariableControlProps> = ({ variable, onChange })
   };
 
   switch (variable.type) {
-    case 'color':
-      return (
-        <div className="form-control">
-          <label className="label">
-            <span className="label-text">{variable.name.replace(/^--/, '')}</span>
-          </label>
-          <input
-            type="color"
-            value={variable.value}
-            onChange={handleChange}
-            className="input input-bordered input-sm"
-            title={`Color picker for ${variable.name}`}
-          />
-        </div>
-      );
+      case 'color':
+        return (
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text">{variable.name.replace(/^--/, '')}</span>
+            </label>
+            <input
+              type="text"
+              value={variable.value}
+              onChange={handleChange}
+              className="input input-bordered input-sm"
+              placeholder="#000000"
+              title={`Color value for ${variable.name}`}
+            />
+          </div>
+        );
 
     case 'number':
       return (

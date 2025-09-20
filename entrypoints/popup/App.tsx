@@ -4,7 +4,8 @@ import { browser } from "wxt/browser";
 import { List, Plus, Settings } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useI18n } from "../../hooks/useI18n";
-import { FontSelector } from "../../components/features/FontSelector";
+import ApplyFont from "./ApplyFont";
+import { VariableControls } from "../../components/features/VariableControls";
 import { useMessage, PopupMessageType } from "../../hooks/useMessage";
 import { UserCSSStyle } from "../../services/storage/schema";
 
@@ -14,6 +15,7 @@ interface PopupState {
   currentTab: { url?: string; title?: string } | null;
   availableStyles: UserCSSStyle[];
   activeStyles: UserCSSStyle[];
+  expandedStyleId: string | null;
 }
 
 const App = () => {
@@ -23,6 +25,7 @@ const App = () => {
     currentTab: null,
     availableStyles: [],
     activeStyles: [],
+    expandedStyleId: null,
   });
 
   // Theme hook to sync with user's preference from settings
@@ -60,7 +63,10 @@ const App = () => {
             if (currentTab.url.startsWith("http")) {
               tabUrl = currentTab.url;
               tabTitle = currentTab.title || tabUrl;
-            } else if (currentTab.url.startsWith("chrome://") || currentTab.url.startsWith("about:")) {
+            } else if (
+              currentTab.url.startsWith("chrome://") ||
+              currentTab.url.startsWith("about:")
+            ) {
               // Special pages like chrome://extensions, about:blank, etc.
               tabUrl = currentTab.url;
               tabTitle = currentTab.title || "Browser Page";
@@ -97,7 +103,11 @@ const App = () => {
           try {
             let availableStyles: UserCSSStyle[] = [];
 
-            if (tabUrl && tabUrl !== "current-site" && tabUrl !== "restricted-url") {
+            if (
+              tabUrl &&
+              tabUrl !== "current-site" &&
+              tabUrl !== "restricted-url"
+            ) {
               // Query styles for specific URL through background script
               console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
               const response = await sendMessage(
@@ -250,6 +260,52 @@ const App = () => {
     }
   };
 
+  const handleToggleVariableExpansion = (styleId: string) => {
+    setState((prev) => ({
+      ...prev,
+      expandedStyleId: prev.expandedStyleId === styleId ? null : styleId,
+    }));
+  };
+
+  const handleVariableChange = async (
+    styleId: string,
+    variableName: string,
+    value: string,
+  ) => {
+    try {
+      // Update local state immediately for responsive UI
+      setState((prev) => {
+        const updatedAvailableStyles = prev.availableStyles.map((style) =>
+          style.id === styleId
+            ? {
+                ...style,
+                variables: {
+                  ...style.variables,
+                  [variableName]: {
+                    ...style.variables[variableName],
+                    value,
+                  },
+                },
+              }
+            : style,
+        );
+        return {
+          ...prev,
+          availableStyles: updatedAvailableStyles,
+          activeStyles: updatedAvailableStyles.filter((style) => style.enabled),
+        };
+      });
+
+      // Send message to update variables in storage and content script
+      await sendMessage(PopupMessageType.UPDATE_VARIABLES, {
+        styleId: styleId,
+        variables: { [variableName]: value },
+      });
+    } catch (error) {
+      console.error("Failed to update variable:", error);
+    }
+  };
+
   return (
     <div className="bg-base-100 min-h-screen flex flex-col">
       {/* Header */}
@@ -290,7 +346,9 @@ const App = () => {
                       if (state.currentTab.url.startsWith("about:")) {
                         return "Browser page";
                       }
-                      if (state.currentTab.url.startsWith("chrome-extension://")) {
+                      if (
+                        state.currentTab.url.startsWith("chrome-extension://")
+                      ) {
                         return "Extension page";
                       }
                       return "current site";
@@ -318,26 +376,58 @@ const App = () => {
                   Available for this site:
                 </h4>
                 {state.availableStyles.map((style) => (
-                  <div
-                    key={style.id}
-                    className="flex items-center justify-between p-3 bg-base-200 rounded-lg"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h5 className="text-sm font-medium text-base-content truncate">
-                        {style.name}
-                      </h5>
-                      <p className="text-xs text-base-content/70 truncate">
-                        {style.description}
-                      </p>
+                  <div key={style.id} className="space-y-2">
+                    <div className="flex items-center justify-between p-3 bg-base-200 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <h5 className="text-sm font-medium text-base-content truncate">
+                          {style.name}
+                        </h5>
+                        <p className="text-xs text-base-content/70 truncate">
+                          {style.description}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {/* Settings button for styles with variables - only for enabled styles */}
+                        {Object.keys(style.variables).length > 0 &&
+                          style.enabled && (
+                            <button
+                              onClick={() =>
+                                handleToggleVariableExpansion(style.id)
+                              }
+                              className={`btn btn-ghost btn-sm ${state.expandedStyleId === style.id ? "btn-active" : ""}`}
+                              title="Configure variables"
+                            >
+                              <Settings className="w-4 h-4" />
+                            </button>
+                          )}
+                        <button
+                          onClick={() =>
+                            handleToggleStyle(style.id, !style.enabled)
+                          }
+                          className={`btn btn-sm ${style.enabled ? "btn-success" : "btn-ghost"}`}
+                        >
+                          {style.enabled ? "Active" : "Enable"}
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() =>
-                        handleToggleStyle(style.id, !style.enabled)
-                      }
-                      className={`btn btn-sm ${style.enabled ? "btn-success" : "btn-ghost"}`}
-                    >
-                      {style.enabled ? "Active" : "Enable"}
-                    </button>
+
+                    {/* Variable Controls */}
+                    {state.expandedStyleId === style.id &&
+                      Object.keys(style.variables).length > 0 &&
+                      style.enabled && (
+                        <div className="ml-4 p-3 bg-base-100 border border-base-300 rounded-lg">
+                          <VariableControls
+                            variables={Object.values(style.variables)}
+                            onChange={(variableName, value) =>
+                              handleVariableChange(
+                                style.id,
+                                variableName,
+                                value,
+                              )
+                            }
+                          />
+                        </div>
+                      )}
                   </div>
                 ))}
               </div>
@@ -359,15 +449,15 @@ const App = () => {
                 className="btn btn-primary flex-1 justify-start normal-case ml-2"
               >
                 <span className="text-lg mr-3 flex-shrink-0">Aa</span>
-                <span className="truncate">{t("font.applyButton")}</span>
+                <span className="truncate">{t("font_applyButton")}</span>
               </button>
             </div>
 
-            {/* Font Selector Modal */}
+            {/* Apply Font Modal */}
             {state.showFontSelector && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-base-100 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                  <FontSelector
+                <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full">
+                  <ApplyFont
                     onFontApplied={handleFontApplied}
                     onClose={handleCloseFontSelector}
                   />
@@ -388,7 +478,7 @@ const App = () => {
             className="btn btn-ghost btn-sm normal-case flex-1 justify-start mr-2"
           >
             <List className="w-4 h-4 mr-2" />
-            <span>{t("manageButton")}</span>
+            <span>{t("manageStyles")}</span>
           </button>
 
           <button
@@ -397,7 +487,7 @@ const App = () => {
             title="Settings"
           >
             <Settings className="w-4 h-4" />
-            <span>{t("settingsButton")}</span>
+            <span>{t("settings")}</span>
           </button>
         </div>
       </div>
