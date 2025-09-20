@@ -71,102 +71,6 @@
     "message": "Gaya berhasil dihapus",
     "description": "Success message when a style is removed"
   },
-  "font.selector.title": {
-    "message": "Terapkan Font",
-    "description": "Title for the font selector dialog"
-  },
-  "font.tabs.builtin": {
-    "message": "Font Bawaan",
-    "description": "Tab label for built-in fonts"
-  },
-  "font.tabs.custom": {
-    "message": "Font Kustom",
-    "description": "Tab label for custom fonts"
-  },
-  "font.builtin.description": {
-    "message": "Pilih dari koleksi font yang telah dipilih dengan hati-hati",
-    "description": "Description for built-in fonts section"
-  },
-  "font.custom.description": {
-    "message": "Masukkan nama font yang terinstall di sistem Anda",
-    "description": "Description for custom fonts section"
-  },
-  "font.custom.inputLabel": {
-    "message": "Nama Font",
-    "description": "Label for custom font input field"
-  },
-  "font.custom.placeholder": {
-    "message": "contoh: Arial, Times New Roman, Comic Sans MS",
-    "description": "Placeholder text for custom font input"
-  },
-  "font.custom.checkButton": {
-    "message": "Periksa",
-    "description": "Button text to check font availability"
-  },
-  "font.custom.previewLabel": {
-    "message": "Pratinjau",
-    "description": "Label for font preview section"
-  },
-  "font.custom.available": {
-    "message": "Font tersedia dan siap digunakan",
-    "description": "Message when custom font is available"
-  },
-  "font.custom.notAvailable": {
-    "message": "Font tidak ditemukan di sistem Anda",
-    "description": "Message when custom font is not available"
-  },
-  "font.categories.sans-serif": {
-    "message": "Sans Serif",
-    "description": "Font category name"
-  },
-  "font.categories.serif": {
-    "message": "Serif",
-    "description": "Font category name"
-  },
-  "font.categories.monospace": {
-    "message": "Monospace",
-    "description": "Font category name"
-  },
-  "font.categories.display": {
-    "message": "Display",
-    "description": "Font category name"
-  },
-  "font.categories.handwriting": {
-    "message": "Tulisan Tangan",
-    "description": "Font category name"
-  },
-  "font.error.emptyName": {
-    "message": "Silakan masukkan nama font",
-    "description": "Error when font name is empty"
-  },
-  "font.error.notAvailable": {
-    "message": "Font '$name$' tidak tersedia di sistem Anda",
-    "description": "Error when custom font is not available"
-  },
-  "font.error.checkFailed": {
-    "message": "Gagal memeriksa ketersediaan font",
-    "description": "Error when font check fails"
-  },
-  "font.error.parseFailed": {
-    "message": "Gagal memproses gaya font",
-    "description": "Error when font UserCSS parsing fails"
-  },
-  "font.error.installFailed": {
-    "message": "Gagal menginstall gaya font",
-    "description": "Error when font style installation fails"
-  },
-  "font.error.applyFailed": {
-    "message": "Gagal menerapkan font",
-    "description": "Generic error when font application fails"
-  },
-  "font.applying": {
-    "message": "Menerapkan...",
-    "description": "Loading text when applying font"
-  },
-  "font.applyButton": {
-    "message": "Terapkan Font",
-    "description": "Button text to apply selected font"
-  },
   "styleDeleted": {
     "message": "Gaya berhasil dihapus",
     "description": "Success message when a style is deleted"
@@ -222,6 +126,122 @@
   "installDate": {
     "message": "Tanggal Pemasangan",
     "description": "Label for style save date"
+  },
+  "font_selector_title": {
+    "message": "Terapkan Font",
+    "description": "Title for the font selector dialog"
+  },
+  "font_tabs_builtin": {
+    "message": "Font Bawaan",
+    "description": "Tab label for built-in fonts"
+  },
+  "font_tabs_custom": {
+    "message": "Font Kustom",
+    "description": "Tab label for custom fonts"
+  },
+  "font_builtin_description": {
+    "message": "Pilih dari koleksi font yang telah dipilih dengan hati-hati",
+    "description": "Description for built-in fonts section"
+  },
+  "font_custom_description": {
+    "message": "Masukkan nama font yang terinstall di sistem Anda",
+    "description": "Description for custom fonts section"
+  },
+  "font_custom_inputLabel": {
+    "message": "Nama Font",
+    "description": "Label for custom font input field"
+  },
+  "font_custom_placeholder": {
+    "message": "contoh: Arial, Times New Roman, Comic Sans MS",
+    "description": "Placeholder text for custom font input"
+  },
+  "font_custom_checkButton": {
+    "message": "Periksa",
+    "description": "Button text to check font availability"
+  },
+  "font_custom_previewLabel": {
+    "message": "Pratinjau",
+    "description": "Label for font preview section"
+  },
+  "font_custom_available": {
+    "message": "Font tersedia dan siap digunakan",
+    "description": "Message when custom font is available"
+  },
+  "font_custom_notAvailable": {
+    "message": "Font tidak ditemukan di sistem Anda",
+    "description": "Message when custom font is not available"
+  },
+  "font_categories_sans_serif": {
+    "message": "Sans Serif",
+    "description": "Font category name"
+  },
+  "font_categories_serif": {
+    "message": "Serif",
+    "description": "Font category name"
+  },
+  "font_categories_monospace": {
+    "message": "Monospace",
+    "description": "Font category name"
+  },
+  "font_categories_display": {
+    "message": "Display",
+    "description": "Font category name"
+  },
+  "font_categories_handwriting": {
+    "message": "Tulisan Tangan",
+    "description": "Font category name"
+  },
+  "font_error_emptyName": {
+    "message": "Silakan masukkan nama font",
+    "description": "Error when font name is empty"
+  },
+  "font_error_selectFont": {
+    "message": "Silakan pilih font",
+    "description": "Error when no font is selected"
+  },
+  "font_error_notAvailable": {
+    "message": "Font '$1' tidak tersedia di sistem Anda",
+    "description": "Error when custom font is not available"
+  },
+  "font_error_checkFailed": {
+    "message": "Gagal memeriksa ketersediaan font",
+    "description": "Error when font check fails"
+  },
+  "font_error_parseFailed": {
+    "message": "Gagal memproses gaya font",
+    "description": "Error when font UserCSS parsing fails"
+  },
+  "font_error_installFailed": {
+    "message": "Gagal menginstall gaya font",
+    "description": "Error when font style installation fails"
+  },
+  "font_error_applyFailed": {
+    "message": "Gagal menerapkan font",
+    "description": "Generic error when font application fails"
+  },
+  "font_applying": {
+    "message": "Menerapkan...",
+    "description": "Loading text when applying font"
+  },
+  "font_applied": {
+    "message": "Font '$1' berhasil diterapkan",
+    "description": "Success message when font is applied"
+  },
+  "font_applyTitle": {
+    "message": "Terapkan Font",
+    "description": "Title for the apply font dialog"
+  },
+  "font_selectLabel": {
+    "message": "Pilih Font",
+    "description": "Label for the font selection dropdown"
+  },
+  "font_selectPlaceholder": {
+    "message": "Pilih font...",
+    "description": "Placeholder for the font selection dropdown"
+  },
+  "font_applyButton": {
+    "message": "Terapkan Font",
+    "description": "Button text to apply selected font"
   },
   "ERR_STORAGE_QUOTA": {
     "message": "Kapasitas penyimpanan terlampaui. Silakan hapus beberapa gaya untuk membebaskan ruang.",
