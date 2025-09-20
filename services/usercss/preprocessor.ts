@@ -8,7 +8,7 @@
 /**
  * Supported preprocessor types
  */
-export type PreprocessorType = "none" | "less" | "stylus";
+export type PreprocessorType = "none" | "less" | "stylus" | "uso";
 
 /**
  * Detection result for preprocessor type
@@ -39,9 +39,23 @@ export function detectPreprocessor(text: string): PreprocessorDetection {
         return { type: "less", source: "metadata", confidence: 1.0 };
       case "stylus":
         return { type: "stylus", source: "metadata", confidence: 1.0 };
+      case "uso":
+        return { type: "uso", source: "metadata", confidence: 1.0 };
       default:
         return { type: "none", source: "metadata", confidence: 0.5 };
     }
+  }
+
+  // Check for USO-specific patterns (high priority)
+  let usoScore = 0;
+  if (text.includes("@advanced")) usoScore += 2;
+  if (text.includes("<<<EOT")) usoScore += 2;
+  if (text.includes("EOT;")) usoScore += 2;
+  if (text.includes("dropdown")) usoScore += 1;
+  if (text.includes("UserStyle")) usoScore += 1;
+
+  if (usoScore >= 3) {
+    return { type: "uso", source: "heuristic", confidence: Math.min(usoScore / 6, 0.9) };
   }
 
   // Heuristic detection based on syntax patterns
@@ -63,6 +77,12 @@ export function detectPreprocessor(text: string): PreprocessorDetection {
   if (text.includes("colors.")) stylusScore += 1; // Dot notation like colors.red
   if (text.includes("unless ")) stylusScore += 1; // Stylus unless
   if (text.includes("if ")) stylusScore += 1; // Stylus if
+
+  // Handle cases where multiple preprocessors might match
+  // USO has highest priority due to specific patterns
+  if (usoScore > 0 && usoScore >= Math.max(lessScore, stylusScore)) {
+    return { type: "uso", source: "heuristic", confidence: Math.min(usoScore / 6, 0.9) };
+  }
 
   // Handle cases where both might match (prioritize less when scores are equal or close)
   if (
@@ -97,6 +117,8 @@ export function getPreprocessorName(type: PreprocessorType): string {
       return "Less";
     case "stylus":
       return "Stylus";
+    case "uso":
+      return "USO";
     case "none":
       return "None";
     default:
@@ -201,6 +223,10 @@ export class PreprocessorEngine {
   private async loadLess(): Promise<unknown> {
     if (!this.lessModule) {
       try {
+        // Guard against running in non-browser context
+        if (typeof window === 'undefined') {
+          throw new Error("Less preprocessor cannot run in background context");
+        }
         this.lessModule = await import("less");
       } catch (error) {
         throw new Error(
@@ -217,6 +243,10 @@ export class PreprocessorEngine {
   private async loadStylus(): Promise<unknown> {
     if (!this.stylusModule) {
       try {
+        // Guard against running in non-browser context
+        if (typeof window === 'undefined') {
+          throw new Error("Stylus preprocessor cannot run in background context");
+        }
         this.stylusModule = await import("stylus");
       } catch (error) {
         throw new Error(
@@ -243,6 +273,17 @@ export class PreprocessorEngine {
         };
       };
       const result = await less.default.render(text);
+
+      // Handle background context error
+      if (result && typeof result === 'object' && 'message' in result &&
+          typeof result.message === 'string' &&
+          result.message.includes('cannot run in background context')) {
+        return {
+          css: text,
+          warnings: ['Less preprocessor not available in background context'],
+          errors: [],
+        };
+      }
 
       const warnings: string[] = [];
       const errors: string[] = [];
@@ -350,10 +391,19 @@ export class PreprocessorEngine {
         );
       });
     } catch (error: unknown) {
+      const errorMessage = (error as Error).message;
+      // Handle background context error
+      if (errorMessage && errorMessage.includes('cannot run in background context')) {
+        return {
+          css: text,
+          warnings: ['Stylus preprocessor not available in background context'],
+          errors: [],
+        };
+      }
       return {
         css: "",
         warnings: [],
-        errors: [`Failed to process with stylus: ${(error as Error).message}`],
+        errors: [`Failed to process with stylus: ${errorMessage}`],
       };
     }
   }
@@ -390,6 +440,14 @@ export class PreprocessorEngine {
           break;
         case "stylus":
           result = await this.processStylus(text);
+          break;
+        case "uso":
+          // USO mode: no preprocessing needed, variables are handled differently
+          result = {
+            css: text,
+            warnings: [],
+            errors: [],
+          };
           break;
         case "none":
         default:

@@ -5,26 +5,295 @@
  * and preparing CSS content for preprocessing and injection.
  */
 
-import { StyleMeta, ParseResult, PreprocessorResult } from "./types";
+import { StyleMeta, ParseResult, PreprocessorResult, VariableDescriptor } from "./types";
 import { detectPreprocessor, PreprocessorEngine } from "./preprocessor";
+import { resolveVariables } from "./variables";
 
 /**
  * Regular expression to match UserCSS metadata block
  * Handles both empty and populated blocks, flexible with missing closing comment
  */
 const METADATA_BLOCK_REGEX =
-  /\/\*\s*==UserStyle==\s*\n([\s\S]*?)\s*==\/UserStyle==\s*(?:\*\/|\n|$)/;
+  /\/\*\s*==UserStyle==\s*\r?\n([\s\S]*?)\s*==\/UserStyle==\s*(?:\*\/|\r?\n|$)/;
 
 /**
  * Regular expression to extract individual metadata directives
  */
 const DIRECTIVE_REGEX =
-  /@([^\s\r\n]+)[^\S\r\n]*([\s\S]*?)(?=\n@|\n==\/UserStyle==|$)/g;
+  /@([^\s\r\n]+)[^\S\r\n]*([\s\S]*?)(?=\r?\n@|\r?\n==\/UserStyle==|$)/g;
 
 /**
  * Regular expression to match URL fields for validation
  */
 const URL_REGEX = /^(https?:\/\/|ftp:\/\/|file:\/\/|data:)/;
+
+/**
+ * Helper function to process variable matches and create VariableDescriptor
+ */
+function processVariableMatch(type: string, name: string, label: string, defaultValue: string): VariableDescriptor | null {
+  let varType: VariableDescriptor['type'] = 'unknown';
+  if (type === 'checkbox') {
+    varType = 'select';
+  } else if (type === 'color') {
+    varType = 'color';
+  } else if (type === 'number') {
+    varType = 'number';
+  } else if (type === 'text') {
+    varType = 'text';
+  } else if (type === 'select') {
+    varType = 'select';
+  } else if (type === 'dropdown') {
+    // USO-specific dropdown type
+    varType = 'select';
+  }
+
+  const variable: VariableDescriptor = {
+    name,
+    type: varType,
+    label,
+    default: defaultValue || '',
+    value: defaultValue || '',
+  };
+
+  // Handle number type with min/max/step
+  if (type === 'number' && defaultValue) {
+    const parts = defaultValue.trim().split(/\s+/);
+    if (parts.length >= 4) {
+      // Format: default min max step
+      variable.default = parts[0];
+      variable.value = parts[0];
+      variable.min = parseFloat(parts[1]);
+      variable.max = parseFloat(parts[2]);
+      // step is parts[3] but we don't use it in the UI
+    }
+  }
+
+  if (type === 'checkbox') {
+    variable.options = ['0', '1'];
+    // For checkbox, default should be "0" or "1"
+    if (defaultValue && (defaultValue === '0' || defaultValue === '1')) {
+      variable.value = defaultValue;
+    } else {
+      variable.value = '0'; // Default to off
+    }
+  } else if ((type === 'select' || type === 'dropdown') && defaultValue) {
+    // Check if this is a USO EOT block format
+    if (defaultValue.includes('<<<EOT')) {
+      const eotResult = parseEOTBlocks(defaultValue);
+      if (eotResult) {
+        variable.options = eotResult.options;
+        variable.optionCss = eotResult.optionCss;
+        variable.default = eotResult.defaultValue;
+        variable.value = eotResult.defaultValue;
+      }
+    } else {
+      // Parse select options from format like ["option1","option2","option3"]
+      try {
+        const optionsMatch = defaultValue.match(/^\[([^\]]*)\]$/);
+        if (optionsMatch) {
+          const optionsString = optionsMatch[1];
+          variable.options = optionsString.split(',').map(opt => opt.trim().replace(/^["']|["']$/g, ''));
+          // Set the first option as the default value if it's an array
+          if (variable.options.length > 0) {
+            variable.value = variable.options[0];
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to parse select options:', defaultValue);
+      }
+    }
+  }
+
+  return variable;
+}
+
+/**
+ * Parses USO EOT blocks to extract dropdown options and CSS snippets
+ */
+function parseEOTBlocks(value: string): { options: string[]; optionCss: Record<string, string>; defaultValue: string } | null {
+  // Regular expression to match EOT blocks
+  // Format: [*]optionLabel "Display Label" <<<EOT css content EOT;
+  const eotRegex = /(\*?\w+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+
+  const options: string[] = [];
+  const optionCss: Record<string, string> = {};
+  let defaultValue = '';
+  let hasDefault = false;
+
+  let match;
+  while ((match = eotRegex.exec(value)) !== null) {
+    const [, optionKey, displayLabel, cssContent] = match;
+
+    // Check if this is the default option (marked with *)
+    const isDefault = optionKey.startsWith('*');
+    const cleanOptionKey = optionKey.replace(/^\*/, '');
+
+    options.push(displayLabel);
+    // Preserve indentation but remove leading/trailing whitespace
+    optionCss[displayLabel] = cssContent.replace(/^\s*\n/, '').replace(/\n\s*$/, '');
+
+    if (isDefault && !hasDefault) {
+      defaultValue = cssContent.trim();
+      hasDefault = true;
+    }
+  }
+
+  // If no default was found, use the first option's CSS content as default
+  if (!hasDefault && options.length > 0) {
+    defaultValue = optionCss[options[0]];
+  }
+
+  return options.length > 0 ? { options, optionCss, defaultValue } : null;
+}
+
+/**
+ * Parses a @var directive value into a VariableDescriptor
+ */
+function parseVarDirective(value: string): VariableDescriptor | null {
+  // Remove trailing quote if present (bug from DIRECTIVE_REGEX)
+  let trimmedValue = value.trim();
+  if (trimmedValue.endsWith('"') && !trimmedValue.endsWith('\\"')) {
+    trimmedValue = trimmedValue.slice(0, -1);
+  }
+
+  // Handle @advanced dropdown format first
+  if (trimmedValue.startsWith('dropdown')) {
+    // Manual parsing approach for dropdown format
+    let pos = 0;
+
+    // Skip "dropdown" and whitespace
+    while (pos < trimmedValue.length && /\w/.test(trimmedValue[pos])) pos++; // skip "dropdown"
+    while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) pos++; // skip whitespace
+
+    // Parse name (allow hyphens and underscores)
+    const nameStart = pos;
+    while (pos < trimmedValue.length && /[\w\-_]/.test(trimmedValue[pos])) pos++;
+    const name = trimmedValue.substring(nameStart, pos);
+
+    // Skip whitespace
+    while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) pos++;
+
+    // Parse label (quoted)
+    if (pos < trimmedValue.length && trimmedValue[pos] === '"') {
+      pos++; // Skip opening quote
+      const labelStart = pos;
+      while (pos < trimmedValue.length && trimmedValue[pos] !== '"') pos++;
+      const label = trimmedValue.substring(labelStart, pos);
+      if (pos < trimmedValue.length) pos++; // Skip closing quote
+
+      // Skip whitespace
+      while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) pos++;
+
+      // Find the opening brace
+      if (pos < trimmedValue.length && trimmedValue[pos] === '{') {
+        pos++; // Skip opening brace
+        const optionsStart = pos;
+
+        // Find the matching closing brace
+        let braceCount = 1;
+        while (pos < trimmedValue.length && braceCount > 0) {
+          if (trimmedValue[pos] === '{') braceCount++;
+          else if (trimmedValue[pos] === '}') braceCount--;
+          pos++;
+        }
+
+        if (braceCount === 0) {
+          const optionsBlock = trimmedValue.substring(optionsStart, pos - 1).trim();
+          const eotResult = parseEOTBlocks(optionsBlock);
+          if (eotResult) {
+            return {
+              name,
+              type: 'select',
+              label,
+              default: eotResult.defaultValue,
+              value: eotResult.defaultValue,
+              options: eotResult.options,
+              optionCss: eotResult.optionCss,
+            };
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // Manual parsing approach for complex cases with quoted strings
+  let pos = 0;
+
+  // Skip whitespace
+  while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
+    pos++;
+  }
+
+  // Parse type
+  const typeStart = pos;
+  while (pos < trimmedValue.length && /\w/.test(trimmedValue[pos])) {
+    pos++;
+  }
+  const type = trimmedValue.substring(typeStart, pos);
+
+  // Skip whitespace
+  while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
+    pos++;
+  }
+
+  // Parse name (allow hyphens and underscores)
+  const nameStart = pos;
+  while (pos < trimmedValue.length && /[\w\-_]/.test(trimmedValue[pos])) {
+    pos++;
+  }
+  const name = trimmedValue.substring(nameStart, pos);
+
+  // Skip whitespace
+  while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
+    pos++;
+  }
+
+  // Parse label (quoted)
+  if (pos < trimmedValue.length && trimmedValue[pos] === '"') {
+    pos++; // Skip opening quote
+    const labelStart = pos;
+    while (pos < trimmedValue.length && trimmedValue[pos] !== '"') {
+      pos++;
+    }
+    const label = trimmedValue.substring(labelStart, pos);
+    if (pos < trimmedValue.length) {
+      pos++; // Skip closing quote
+    }
+
+    // Skip whitespace
+    while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
+      pos++;
+    }
+
+    // Parse default value
+    let defaultValue = '';
+    if (pos < trimmedValue.length) {
+      if (trimmedValue[pos] === '"') {
+        // Quoted default value
+        pos++; // Skip opening quote
+        const defaultStart = pos;
+        while (pos < trimmedValue.length && trimmedValue[pos] !== '"') {
+          pos++;
+        }
+        defaultValue = trimmedValue.substring(defaultStart, pos);
+        if (pos < trimmedValue.length) {
+          pos++; // Skip closing quote
+        }
+      } else {
+        // Unquoted default value
+        const defaultStart = pos;
+        pos = trimmedValue.length; // Take rest
+        defaultValue = trimmedValue.substring(defaultStart, pos);
+      }
+    }
+
+    return processVariableMatch(type, name, label, defaultValue);
+  }
+
+  return null;
+}
 
 /**
  * Parses a raw UserCSS string to extract metadata and CSS content
@@ -37,6 +306,7 @@ export function parseUserCSS(raw: string): ParseResult {
   const errors: string[] = [];
   let css = raw;
   let meta: StyleMeta;
+  let metadataBlock: string = "";
   const domains: string[] = [];
 
   try {
@@ -49,17 +319,44 @@ export function parseUserCSS(raw: string): ParseResult {
       );
     }
 
-    const metadataContent = metadataBlockMatch[1];
+    const metadataContent = metadataBlockMatch[1].trim();
     const lineStart =
-      (raw.substring(0, metadataBlockMatch.index!).match(/\n/g) || []).length +
+      (raw.substring(0, metadataBlockMatch.index!).match(/\r?\n/g) || []).length +
       1;
 
-    // Check for malformed blocks with nested comments
-    if (metadataContent.includes("/*") || metadataContent.includes("*/")) {
+    // Check for malformed blocks - be more permissive but still safe
+    // Only reject the most obvious cases of malformed metadata
+
+    // Case 1: Metadata content ends with /* (indicates incomplete parsing due to fake closing marker)
+    if (metadataContent.endsWith('/*')) {
       throw new Error(
         "No UserCSS metadata block found. Expected block between ==UserStyle== and ==/UserStyle==",
       );
     }
+
+    // Case 2: Check for nested comments that contain UserCSS structural markers
+    const nestedCommentPattern = /\/\*[\s\S]*?\*\//g;
+    const nestedComments = metadataContent.match(nestedCommentPattern);
+
+    if (nestedComments && nestedComments.length > 0) {
+      // Check if any nested comments contain UserCSS markers that could confuse parsing
+      const hasConflictingMarkers = nestedComments.some(comment =>
+        comment.includes('==UserStyle==') ||
+        comment.includes('==/UserStyle==')
+      );
+
+      if (hasConflictingMarkers) {
+        throw new Error(
+          "No UserCSS metadata block found. Metadata contains conflicting comment structures.",
+        );
+      }
+
+      // Allow other nested comments but warn about them
+      warnings.push("Metadata block contains nested comments - ensure they don't interfere with parsing");
+    }
+
+    // Extract metadata block for display purposes
+    metadataBlock = metadataBlockMatch[0];
 
     // Remove metadata block from CSS content
     css = raw.replace(METADATA_BLOCK_REGEX, "").trim();
@@ -67,6 +364,7 @@ export function parseUserCSS(raw: string): ParseResult {
     // Parse individual directives
     const directives: Record<string, string> = {};
     const seenDirectives = new Set<string>();
+    const variables: Record<string, VariableDescriptor> = {};
 
     // Use a while loop to process all directives
     let match: RegExpExecArray | null;
@@ -76,21 +374,31 @@ export function parseUserCSS(raw: string): ParseResult {
       const [fullMatch, directive, value] = match;
       const directiveLine =
         currentLine +
-        (metadataContent.substring(0, match.index!).match(/\n/g) || []).length;
+        (metadataContent.substring(0, match.index!).match(/\r?\n/g) || []).length;
 
-      // Check for duplicate directives
-      if (seenDirectives.has(directive)) {
+      // Check for duplicate directives (allow multiple @var and @advanced)
+      if (directive !== "var" && directive !== "advanced" && seenDirectives.has(directive)) {
         errors.push(
           `Duplicate @${directive} directive found at line ${directiveLine}`,
         );
         continue;
       }
 
-      seenDirectives.add(directive);
+      if (directive !== "var" && directive !== "advanced") {
+        seenDirectives.add(directive);
+      }
       directives[directive] = value.trim();
 
+      // Process @var and @advanced directives to create variables
+      if (directive === "var" || directive === "advanced") {
+        const variable = parseVarDirective(value);
+        if (variable) {
+          variables[variable.name] = variable;
+        }
+      }
+
       // Update line position for next iteration
-      const newlines = fullMatch.match(/\n/g);
+      const newlines = fullMatch.match(/\r?\n/g);
       if (newlines) {
         currentLine += newlines.length;
       }
@@ -100,15 +408,21 @@ export function parseUserCSS(raw: string): ParseResult {
     DIRECTIVE_REGEX.lastIndex = 0;
 
     // Handle special -moz-document directive that doesn't start with @
-    // Look for -moz-document directive not preceded by @
     const mozDocumentMatch = metadataContent.match(
-      /(?:^|\n)(-moz-document)[^\S\r\n]*([\s\S]*?)(?=\n@|\n==\/UserStyle==|$)/,
+      /(?:^|\r?\n)(-moz-document)[^\S\r\n]*([\s\S]*?)(?=\r?\n@|\r?\n==\/UserStyle==|$)/,
     );
     if (mozDocumentMatch) {
       const [, directive, value] = mozDocumentMatch;
       if (!seenDirectives.has(directive)) {
-        seenDirectives.add(directive);
-        directives[directive] = value.trim();
+       if (directive === "var" || directive === "advanced") {
+         const variable = parseVarDirective(value);
+         if (variable) {
+           variables[variable.name] = variable;
+         }
+       } else {
+         seenDirectives.add(directive);
+         directives[directive] = value.trim();
+       }
       }
     }
 
@@ -179,9 +493,6 @@ export function parseUserCSS(raw: string): ParseResult {
     const mozDocumentCssMatch = css.match(/@-moz-document\s+([^}]+)\s*\{/);
     if (mozDocumentCssMatch) {
       const mozDocumentRule = mozDocumentCssMatch[1];
-      warnings.push(
-        "Found @-moz-document rule in CSS content. Consider using modern @domain directive in metadata",
-      );
 
       // Extract domains from CSS @-moz-document rules
       const domainMatches = mozDocumentRule.match(/domain\(["']?([^"')]+)["']?\)/g);
@@ -190,6 +501,22 @@ export function parseUserCSS(raw: string): ParseResult {
           const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
           if (domainMatch) {
             domains.push(domainMatch[1]);
+          }
+        });
+      }
+
+      // Extract url-prefix patterns from CSS @-moz-document rules
+      const urlPrefixMatches = mozDocumentRule.match(/url-prefix\(["']?([^"')]+)["']?\)/g);
+      if (urlPrefixMatches) {
+        urlPrefixMatches.forEach((match) => {
+          const urlMatch = match.match(/url-prefix\(["']?([^"')]+)["']?\)/);
+          if (urlMatch) {
+            try {
+              const url = new URL(urlMatch[1]);
+              domains.push(url.hostname);
+            } catch {
+              // Ignore invalid URLs
+            }
           }
         });
       }
@@ -237,6 +564,31 @@ export function parseUserCSS(raw: string): ParseResult {
       });
     }
 
+    // Handle @match directive (similar to @include)
+    if (directives.match) {
+      const matchList = directives.match
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean);
+
+      matchList.forEach((match) => {
+        // Extract hostname from URL pattern
+        try {
+          // Replace wildcards with dummy values for URL parsing
+          let dummyUrl = match.replace(/\*/g, "dummy");
+          if (dummyUrl.startsWith("dummy://")) {
+            dummyUrl = "https://" + dummyUrl.substring(8);
+          } else if (!dummyUrl.startsWith("https://") && !dummyUrl.startsWith("http://")) {
+            dummyUrl = "https://" + dummyUrl;
+          }
+          const url = new URL(dummyUrl);
+          domains.push(url.hostname);
+        } catch {
+          warnings.push(`Invalid @match pattern: ${match}`);
+        }
+      });
+    }
+
     // Create metadata object
     meta = {
       id: generateId(directives.name || "", directives.namespace || ""),
@@ -252,7 +604,7 @@ export function parseUserCSS(raw: string): ParseResult {
         "",
       domains,
       compiledCss: "", // Will be filled in by preprocessing step
-      variables: undefined, // Will be filled in by variable extraction
+       variables: variables || {},
       assets: undefined, // Will be filled in by asset extraction
     };
 
@@ -292,6 +644,7 @@ export function parseUserCSS(raw: string): ParseResult {
   return {
     meta,
     css,
+    metadataBlock,
     warnings,
     errors,
   };
@@ -325,12 +678,30 @@ export async function processUserCSS(
   const preprocessorDetection = detectPreprocessor(raw);
   const preprocessorType = preprocessorDetection.type;
 
-  // Step 3: Preprocess CSS
-  const engine = new PreprocessorEngine();
-  const preprocessResult: PreprocessorResult = await engine.process(
-    parseResult.css,
-    preprocessorType,
-  );
+    // Step 3: Inject variables into CSS if preprocessor is used
+    let cssToProcess = parseResult.css;
+    if (preprocessorType !== "none" && parseResult.meta.variables) {
+      if (preprocessorType === "uso") {
+        // For USO mode, resolve variables using CSS snippets
+        const variableValues = Object.fromEntries(
+          Object.entries(parseResult.meta.variables).map(([name, variable]) => [name, variable.value])
+        );
+        cssToProcess = resolveVariables(cssToProcess, variableValues, parseResult.meta.variables);
+      } else {
+        // For other preprocessors, inject variable definitions
+        const variableDefinitions = Object.entries(parseResult.meta.variables)
+          .map(([name, variable]) => `${name} = ${variable.value}`)
+          .join('\n');
+        cssToProcess = variableDefinitions + '\n' + cssToProcess;
+      }
+    }
+
+   // Step 4: Preprocess CSS
+   const engine = new PreprocessorEngine();
+   const preprocessResult: PreprocessorResult = await engine.process(
+     cssToProcess,
+     preprocessorType,
+   );
 
   // Step 4: Return combined result
   return {
@@ -366,8 +737,9 @@ export function getErrorPosition(
   index: number,
 ): { line: number; column: number } {
   const before = text.substring(0, index);
-  const line = before.split("\n").length;
-  const column = before.length - before.lastIndexOf("\n");
+  const lines = before.split(/\r?\n/);
+  const line = lines.length;
+  const column = lines[lines.length - 1].length + 1;
 
   return { line, column };
 }
@@ -380,8 +752,9 @@ export function getPositionFromIndex(
   index: number,
 ): { line: number; column: number } {
   const before = text.substring(0, index);
-  const line = before.split("\n").length;
-  const column = before.length - before.lastIndexOf("\n");
+  const lines = before.split(/\r?\n/);
+  const line = lines.length;
+  const column = lines[lines.length - 1].length + 1;
 
   return { line, column };
 }

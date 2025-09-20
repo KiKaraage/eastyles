@@ -14,6 +14,7 @@ import { logger } from "../errors/logger";
 import { ErrorSource } from "../errors/service";
 import { cssInjector } from "./css-injector";
 import { resolveVariables } from "./variables";
+import { extractExternalUrls, ExternalAsset } from "./asset-processor";
 import { browser } from "wxt/browser";
 
 export interface ContentController {
@@ -398,16 +399,12 @@ export class UserCSSContentController implements ContentController {
   private async applyStyle(style: UserCSSStyle): Promise<void> {
     const styleStartTime = performance.now();
     try {
-      console.log("[ContentController] Starting to apply style:", style.id);
-      console.log("[ContentController] Style details:", {
-        id: style.id,
-        name: style.name,
-        domains: style.domains,
-        cssLength: style.compiledCss.length,
-        hasVariables: !!(
-          style.variables && Object.keys(style.variables).length > 0
-        ),
-      });
+      this.debug(
+        "Applying style:",
+        style.id,
+        "CSS length:",
+        style.compiledCss.length,
+      );
 
       this.debug(
         "Applying style:",
@@ -422,8 +419,14 @@ export class UserCSSContentController implements ContentController {
         // Create values object from variable descriptors
         const values: Record<string, string> = {};
         for (const [name, variable] of Object.entries(style.variables)) {
-          // Use current value if set, otherwise use default
-          values[name] = variable.value || variable.default || "";
+          let value = variable.value || variable.default || "";
+
+          // For select variables, if the value is a display label, map it to CSS content
+          if (variable.type === 'select' && variable.optionCss && variable.optionCss[value]) {
+            value = variable.optionCss[value];
+          }
+
+          values[name] = value;
         }
 
         console.log(
@@ -451,20 +454,71 @@ export class UserCSSContentController implements ContentController {
         );
       }
 
-      // Preprocess CSS to fix browser compatibility issues
-      finalCss = this.preprocessCSS(finalCss);
+       // Process external assets (images, fonts) to work around CSP restrictions
+       console.log("[ContentController] Processing external assets for style:", style.id);
+       try {
+         const assetProcessingStart = performance.now();
+         const assetResult = await this.processExternalAssets(finalCss);
+         finalCss = assetResult.css;
 
-      // Inject the CSS using the CSS injector
-      console.log(
-        "[ContentController] Injecting CSS for style:",
-        style.id,
-        "final CSS length:",
-        finalCss.length,
-      );
-      console.log(
-        "[ContentController] Final CSS content preview:",
-        finalCss.substring(0, 300) + (finalCss.length > 300 ? "..." : ""),
-      );
+         const assetProcessingDuration = performance.now() - assetProcessingStart;
+         const successfulAssets = assetResult.assets.filter(a => a.dataUrl).length;
+         const totalAssets = assetResult.assets.length;
+
+         console.log(
+           `[ContentController] Asset processing completed in ${assetProcessingDuration.toFixed(2)}ms:`,
+           `${successfulAssets}/${totalAssets} assets processed`
+         );
+
+         if (successfulAssets < totalAssets) {
+           console.warn(
+             `[ContentController] Some assets failed to load: ${totalAssets - successfulAssets} failed`
+           );
+           // Log failed assets
+           assetResult.assets.filter(a => !a.dataUrl && a.error).forEach(asset => {
+             console.warn(`[ContentController] Failed asset: ${asset.url} - ${asset.error}`);
+           });
+         }
+
+         if (assetProcessingDuration > 500) {
+           logger.warn?.(
+             ErrorSource.CONTENT,
+             `Asset processing exceeded threshold: ${assetProcessingDuration.toFixed(2)}ms`,
+             {
+               styleId: style.id,
+               totalAssets,
+               processedAssets: successfulAssets,
+               duration: `${assetProcessingDuration.toFixed(2)}ms`,
+             },
+           );
+         }
+       } catch (error) {
+         console.warn("[ContentController] Asset processing failed:", error);
+         logger.error?.(
+           ErrorSource.CONTENT,
+           "Failed to process external assets",
+           {
+             error: error instanceof Error ? error.message : String(error),
+             styleId: style.id,
+           },
+         );
+         // Continue with original CSS if asset processing fails
+       }
+
+       // Preprocess CSS to fix browser compatibility issues
+       finalCss = this.preprocessCSS(finalCss);
+
+       // Inject the CSS using the CSS injector
+       console.log(
+         "[ContentController] Injecting CSS for style:",
+         style.id,
+         "final CSS length:",
+         finalCss.length,
+       );
+       console.log(
+         "[ContentController] Final CSS content preview:",
+         finalCss.substring(0, 300) + (finalCss.length > 300 ? "..." : ""),
+       );
 
       // Check if CSS contains valid selectors
       const selectorMatches = finalCss.match(/\{[^}]*\}/g);
@@ -600,8 +654,6 @@ export class UserCSSContentController implements ContentController {
     styleId: string,
     variables: Record<string, string>,
   ): Promise<void> {
-    this.debug("Variable update received:", styleId, variables);
-
     try {
       const appliedStyle = this.appliedStyles.get(styleId);
       if (!appliedStyle) {
@@ -625,8 +677,28 @@ export class UserCSSContentController implements ContentController {
         }
       }
 
-      // Re-apply the style with updated variables
-      await this.applyStyle(updatedStyle);
+      // Resolve variables in the CSS
+      let finalCss = updatedStyle.compiledCss;
+      if (updatedStyle.variables && Object.keys(updatedStyle.variables).length > 0) {
+        const values: Record<string, string> = {};
+        for (const [name, variable] of Object.entries(updatedStyle.variables)) {
+          values[name] = variable.value;
+        }
+        finalCss = resolveVariables(updatedStyle.compiledCss, values);
+      }
+
+      // Process external assets
+      const assetResult = await this.processExternalAssets(finalCss);
+      finalCss = assetResult.css;
+
+      // Preprocess CSS
+      finalCss = this.preprocessCSS(finalCss);
+
+      // Update the injected CSS instead of re-injecting
+      await cssInjector.update(styleId, finalCss);
+
+      // Update the applied style record
+      this.appliedStyles.set(styleId, updatedStyle);
 
       this.debug("Variables updated and style re-applied:", styleId);
     } catch (error) {
@@ -816,10 +888,12 @@ export class UserCSSContentController implements ContentController {
     return processedCss.trim();
   }
 
+
+
   /**
    * Verify that a style was actually applied to the DOM
    */
-  private verifyStyleApplication(styleId: string): void {
+   private verifyStyleApplication(styleId: string): void {
     try {
       // Check if style element exists in DOM
       const styleElement = document.querySelector(
@@ -903,6 +977,63 @@ export class UserCSSContentController implements ContentController {
   }
 
   /**
+   * Process external assets in CSS content
+   */
+  private async processExternalAssets(css: string): Promise<{ css: string; assets: ExternalAsset[] }> {
+    // Extract external URLs from CSS
+    const assets = extractExternalUrls(css);
+
+    if (assets.length === 0) {
+      return { css, assets: [] };
+    }
+
+    console.log(`[ContentController] Found ${assets.length} external assets to process`);
+
+    // Check if background script is available
+    if (!browser.runtime?.id) {
+      console.warn("[ContentController] Background script not available for asset processing");
+      return { css, assets };
+    }
+
+    try {
+      // Send assets to background script for processing
+      const response = await browser.runtime.sendMessage({
+        type: "FETCH_ASSETS",
+        payload: { assets },
+      }) as {
+        success: boolean;
+        assets?: ExternalAsset[];
+        error?: string;
+      };
+
+      if (response.success && response.assets) {
+        console.log(`[ContentController] Background processed ${response.assets.filter((a: ExternalAsset) => a.dataUrl).length}/${response.assets.length} assets`);
+
+        // Replace URLs in CSS with data URLs
+        let processedCss = css;
+        for (const asset of response.assets) {
+          if (asset.dataUrl) {
+            // Escape special regex characters in URL
+            const escapedUrl = asset.originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+            // Replace the URL in CSS
+            const urlRegex = new RegExp(`url\\(["']?${escapedUrl}["']?\\)`, 'g');
+            processedCss = processedCss.replace(urlRegex, `url("${asset.dataUrl}")`);
+          }
+        }
+
+        return { css: processedCss, assets: response.assets };
+      } else {
+        console.warn("[ContentController] Background asset processing failed:", response.error);
+        return { css, assets };
+      }
+    } catch (error) {
+      console.warn("[ContentController] Failed to communicate with background for asset processing:", error);
+      return { css, assets };
+    }
+  }
+
+  /**
    * Get currently applied styles
    */
   getAppliedStyles(): Map<string, UserCSSStyle> {
@@ -910,5 +1041,5 @@ export class UserCSSContentController implements ContentController {
   }
 }
 
-// Default instance
-export const contentController = new UserCSSContentController();
+// Default instance with debug enabled
+export const contentController = new UserCSSContentController(true);

@@ -35,6 +35,8 @@ export interface VariableDescriptor {
   name: string;
   /** Type of the variable for UI rendering */
   type: 'color' | 'number' | 'text' | 'select' | 'unknown';
+  /** Human-readable label for the variable */
+  label?: string;
   /** Default value as defined in the original UserCSS */
   default: string;
   /** Minimum value (for numeric variables) */
@@ -43,6 +45,8 @@ export interface VariableDescriptor {
   max?: number;
   /** Available options (for select variables) */
   options?: string[];
+  /** CSS snippets for each option (for USO EOT blocks) */
+  optionCss?: Record<string, string>;
   /** Current value that may be modified by user */
   value: string;
 }
@@ -61,6 +65,8 @@ export interface ParseResult {
   meta: StyleMeta;
   /** Original CSS content without metadata block */
   css: string;
+  /** Raw metadata block for display purposes */
+  metadataBlock?: string;
   /** List of warnings encountered during parsing */
   warnings: string[];
   /** List of errors encountered during parsing */

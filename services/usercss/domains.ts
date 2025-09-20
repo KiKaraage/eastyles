@@ -60,14 +60,15 @@ export function extractDomains(css: string): DomainRule[] {
               // Skip invalid regex patterns
               continue;
             }
-          } else {
-            // For other types, just add the rule
-            rules.push({
-              kind: mapType(type) as DomainRule["kind"],
-              pattern: patternValue,
-              include: true,
-            });
-          }
+           } else {
+             // For domain rules, normalize the pattern; for others, use as-is
+             const finalPattern = type === "domain" ? normalizePattern(patternValue) : patternValue;
+             rules.push({
+               kind: mapType(type) as DomainRule["kind"],
+               pattern: finalPattern,
+               include: true,
+             });
+           }
         }
       }
     }
@@ -99,15 +100,21 @@ function mapType(cssType: string): string {
  */
 export function normalizePattern(pattern: string): string {
   try {
+    // Remove leading/trailing whitespace
+    let normalized = pattern.trim();
+
     // If it's a full URL, extract just the hostname
-    if (pattern.includes("://")) {
-      const url = new URL(pattern);
+    if (normalized.includes("://")) {
+      const url = new URL(normalized);
       return url.hostname;
     }
-    // Remove leading/trailing whitespace
-    return pattern.trim();
+
+    // Remove trailing slashes
+    normalized = normalized.replace(/\/+$/, "");
+
+    return normalized;
   } catch {
-    // If URL parsing fails, return as-is
-    return pattern.trim();
+    // If URL parsing fails, return as-is (but still trim and remove trailing slashes)
+    return pattern.trim().replace(/\/+$/, "");
   }
 }

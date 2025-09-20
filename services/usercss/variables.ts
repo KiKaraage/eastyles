@@ -159,16 +159,41 @@ function parseVariableType(typeString: string): VariableDescriptor["type"] {
  *
  * @param css - The CSS content with variable placeholders
  * @param values - The variable values to substitute
+ * @param variables - Variable descriptors for advanced resolution
  * @returns CSS content with variables resolved
  */
 export function resolveVariables(
   css: string,
   values: Record<string, string>,
+  variables?: Record<string, VariableDescriptor>,
 ): string {
+  // First, handle USO-style variable resolution with CSS snippets
+  if (variables) {
+    for (const [varName, varDesc] of Object.entries(variables)) {
+      if (varDesc.type === 'select' && varDesc.optionCss && values[varName]) {
+        const selectedValue = values[varName];
+        const cssSnippet = varDesc.optionCss[selectedValue];
+        if (cssSnippet) {
+          // Replace the variable placeholder with the CSS snippet
+          css = css.replace(new RegExp(`var\\(${varName}\\)`, 'g'), cssSnippet);
+        }
+      }
+    }
+  }
+
   // Replace variable placeholders with actual values
   return css.replace(/\/\*\[\[([^\]]+)\]\]\*\//g, (match, variableString) => {
     const parts = variableString.split("|");
     const variableName = parts[0];
+
+    // Check if this is a select variable with optionCss mapping
+    if (variables && variables[variableName] && variables[variableName].type === 'select' && variables[variableName].optionCss) {
+      const selectedValue = values[variableName];
+      if (selectedValue && variables[variableName].optionCss[selectedValue]) {
+        // Use the CSS content from optionCss mapping
+        return variables[variableName].optionCss[selectedValue];
+      }
+    }
 
     // Return the value if it exists, otherwise return the original placeholder
     if (values[variableName]) {

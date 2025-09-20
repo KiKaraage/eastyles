@@ -56,8 +56,8 @@ export class UserCSSDomainDetector implements DomainDetector {
    */
   matches(url: string, rules: DomainRule[]): boolean {
     if (!rules || rules.length === 0) {
-      this.debug("No rules provided, not matching any URLs (styles should have explicit domain rules)");
-      return false; // No rules means don't apply to any URLs - styles should have explicit domain rules
+      this.debug("No rules provided, matching all URLs (global styles)");
+      return true; // No rules means apply to all URLs (global styles like fonts)
     }
 
     const normalizedUrl = this.normalizeURL(url);
@@ -151,13 +151,19 @@ export class UserCSSDomainDetector implements DomainDetector {
       );
     }
 
+    // Handle trailing wildcard patterns (e.g., old.reddit.com* matches old.reddit.com)
+    if (normalizedPattern.endsWith("*")) {
+      const basePattern = normalizedPattern.slice(0, -1);
+      return normalizedDomain.startsWith(basePattern);
+    }
+
     // Special handling for www subdomain - treat www.example.com the same as example.com
-    if (normalizedDomain.startsWith("www.") && 
+    if (normalizedDomain.startsWith("www.") &&
         normalizedDomain.substring(4) === normalizedPattern) {
       return true;
     }
-    
-    if (normalizedPattern.startsWith("www.") && 
+
+    if (normalizedPattern.startsWith("www.") &&
         normalizedPattern.substring(4) === normalizedDomain) {
       return true;
     }
@@ -168,12 +174,12 @@ export class UserCSSDomainDetector implements DomainDetector {
     if (normalizedDomain === normalizedPattern) {
       return true;
     }
-    
+
     // Check if domain is a subdomain of pattern
     if (normalizedDomain.endsWith(`.${normalizedPattern}`)) {
       return true;
     }
-    
+
     // Check if pattern is a subdomain of domain
     if (normalizedPattern.endsWith(`.${normalizedDomain}`)) {
       return true;
