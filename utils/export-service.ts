@@ -91,7 +91,7 @@ class CompressionUtils {
       const inputData = encoder.encode(data);
 
       // Use CompressionStream API if available (modern browsers)
-      if ("CompressionStream" in window) {
+      if (typeof window !== "undefined" && "CompressionStream" in window) {
         const compressionStream = new CompressionStream("gzip");
         const writer = compressionStream.writable.getWriter();
         const reader = compressionStream.readable.getReader();
@@ -149,7 +149,7 @@ class CompressionUtils {
    */
   static async decompress(compressedData: string): Promise<string> {
     try {
-      if ("DecompressionStream" in window) {
+      if (typeof window !== "undefined" && "DecompressionStream" in window) {
         // Convert base64 back to Uint8Array
         const binaryString = atob(compressedData);
         const inputData = new Uint8Array(binaryString.length);
@@ -797,7 +797,7 @@ export class ExportService {
         canImport: true,
         canExport: true,
         supportedFormats: ["json"],
-        compressionSupported: "CompressionStream" in window,
+        compressionSupported: typeof window !== "undefined" && "CompressionStream" in window,
       };
     } catch (error) {
       logger.error(

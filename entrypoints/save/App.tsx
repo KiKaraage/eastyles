@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { EditorView, basicSetup } from "codemirror";
 import { css } from "@codemirror/lang-css";
+import { browser } from "@wxt-dev/browser";
 import { useSaveActions } from "../../hooks/useMessage";
 
 // Define types for our data
@@ -18,14 +19,37 @@ interface StyleMetadata {
   author: string;
   sourceUrl: string;
   domains: string[];
+  variables?: Record<string, any>;
 }
 
 interface ParseResult {
   meta: StyleMetadata;
   css: string;
+  metadataBlock?: string;
   warnings: string[];
   errors: string[];
 }
+
+// Format domains for display
+const formatDomainForDisplay = (domain: string, cssContent: string, metadataBlock?: string): string => {
+  // Check both CSS content and metadata block for domain rules
+  const fullContent = metadataBlock ? `${metadataBlock}\n${cssContent}` : cssContent;
+
+  // Check if this domain came from a url-prefix rule by looking at the content
+  const urlPrefixPattern = new RegExp(`url-prefix\\(["']?https?://[^"']*${domain.replace('.', '\\.')}`, 'i');
+  if (urlPrefixPattern.test(fullContent)) {
+    return `start with ${domain}`;
+  }
+
+  // Check if this domain came from a domain rule
+  const domainPattern = new RegExp(`domain\\(["']?${domain.replace('.', '\\.')}`, 'i');
+  if (domainPattern.test(fullContent)) {
+    return domain;
+  }
+
+  // Default fallback
+  return domain;
+};
 
 const SavePage: React.FC = () => {
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
@@ -40,8 +64,13 @@ const SavePage: React.FC = () => {
   useEffect(() => {
     if (parseResult && editorRef.current && !editorViewRef.current) {
       try {
+        // Combine metadata block and CSS content for display
+        const displayContent = parseResult.metadataBlock
+          ? `${parseResult.metadataBlock}\n\n${parseResult.css}`
+          : parseResult.css;
+
         editorViewRef.current = new EditorView({
-          doc: parseResult.css,
+          doc: displayContent,
           extensions: [
             basicSetup,
             css(),
@@ -83,11 +112,16 @@ const SavePage: React.FC = () => {
       parseResult &&
       editorViewRef.current.state?.doc
     ) {
+      // Combine metadata block and CSS content for display
+      const displayContent = parseResult.metadataBlock
+        ? `${parseResult.metadataBlock}\n\n${parseResult.css}`
+        : parseResult.css;
+
       editorViewRef.current.dispatch({
         changes: {
           from: 0,
           to: editorViewRef.current.state.doc.length,
-          insert: parseResult.css,
+          insert: displayContent,
         },
       });
     }
@@ -95,9 +129,26 @@ const SavePage: React.FC = () => {
 
   // Load and parse UserCSS content
   useEffect(() => {
-    const loadUserCSS = async () => {
+    const loadUserCSS = async (): Promise<void> => {
       try {
+        // Guard against running in non-browser context
+        if (typeof window === 'undefined' || !window.location) {
+          console.warn('Window not available, skipping UserCSS loading');
+          setError('Page not fully loaded. Please refresh and try again.');
+          setLoading(false);
+          return;
+        }
+
+        // Guard against browser API not being available
+        if (typeof browser === 'undefined' || !browser.storage) {
+          console.warn('Browser APIs not available, skipping UserCSS loading');
+          setError('Extension context not available. Please refresh and try again.');
+          setLoading(false);
+          return;
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
+        const storageId = urlParams.get("storageId");
         const cssContent = urlParams.get("css");
         const userCssUrl = urlParams.get("url");
         const source = urlParams.get("source");
@@ -105,7 +156,53 @@ const SavePage: React.FC = () => {
         let cssText: string;
         let sourceUrl: string;
 
-        if (cssContent) {
+        if (storageId) {
+          const storageType = urlParams.get("storage") || "session";
+
+          if (storageType === "local") {
+            // Content stored in browser local storage (for external files)
+            try {
+              const storedData = await browser.storage.local.get(storageId);
+              const data = storedData[storageId];
+              if (!data || !data.content) {
+                throw new Error("CSS content not found in browser storage");
+              }
+              cssText = data.content;
+              sourceUrl = data.sourceUrl || urlParams.get("sourceUrl") || urlParams.get("filename") || "external file";
+
+              // Clean up the storage after retrieving
+              await browser.storage.local.remove(storageId);
+
+              console.log(
+                "Loading UserCSS from browser storage, length:",
+                cssText.length,
+                "source:",
+                source,
+              );
+            } catch (error) {
+              console.error("Failed to read from browser storage:", error);
+              throw new Error("CSS content not found in browser storage");
+            }
+          } else {
+            // Content stored in sessionStorage (for local files)
+            cssText = sessionStorage.getItem(storageId) || "";
+            if (!cssText) {
+              throw new Error("CSS content not found in sessionStorage");
+            }
+            // Clean up the storage after retrieving
+            sessionStorage.removeItem(storageId);
+            sourceUrl =
+              urlParams.get("sourceUrl") ||
+              urlParams.get("filename") ||
+              "local file";
+            console.log(
+              "Loading UserCSS from sessionStorage, length:",
+              cssText.length,
+              "source:",
+              source,
+            );
+          }
+        } else if (cssContent) {
           // Content passed directly (for local files or CORS-restricted external URLs)
           const encoding = urlParams.get("encoding");
           if (encoding === "base64") {
@@ -181,6 +278,7 @@ const SavePage: React.FC = () => {
               domains: parseResponse.meta.domains || [],
             },
             css: parseResponse.css,
+            metadataBlock: parseResponse.metadataBlock,
             warnings: parseResponse.warnings || [],
             errors: parseResponse.errors || [],
           });
@@ -213,10 +311,14 @@ const SavePage: React.FC = () => {
     };
 
     // Check if we can go back (document.referrer exists)
-    setCanGoBack(!!document.referrer);
+    if (typeof document !== 'undefined' && document.referrer) {
+      setCanGoBack(true);
+    } else {
+      setCanGoBack(false);
+    }
 
     loadUserCSS();
-  }, [parseUserCSS]); // Include parseUserCSS to satisfy dependency rule
+  }, [parseUserCSS]);
 
   const handleInstall = async () => {
     if (!parseResult) return;
@@ -224,10 +326,22 @@ const SavePage: React.FC = () => {
     try {
       setLoading(true); // Show loading state during installation
 
+      // Extract variables from the parsed result
+      const variables = parseResult.meta.variables
+        ? Object.values(parseResult.meta.variables).map(variable => ({
+            name: variable.name,
+            type: variable.type,
+            default: variable.default,
+            min: variable.min,
+            max: variable.max,
+            options: variable.options,
+          }))
+        : [];
+
       const response = await installStyle(
         parseResult.meta,
         parseResult.css,
-        [], // TODO: Extract variables from CSS
+        variables,
       );
 
       if (response.success) {
@@ -235,33 +349,35 @@ const SavePage: React.FC = () => {
         setError(null); // Clear any previous errors
 
         // Show success toast with better styling
-        const successToast = document.createElement("div");
-        successToast.className = "toast toast-top toast-end z-50";
-        successToast.innerHTML = `
-          <div class="alert alert-success shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <h3 class="font-bold">Success!</h3>
-              <div class="text-xs">Style "${parseResult.meta.name}" installed successfully</div>
+        if (typeof document !== 'undefined' && document.createElement && document.body) {
+          const successToast = document.createElement("div");
+          successToast.className = "toast toast-top toast-end z-50";
+          successToast.innerHTML = `
+            <div class="alert alert-success shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h3 class="font-bold">Success!</h3>
+                <div class="text-xs">Style "${parseResult.meta.name}" installed successfully</div>
+              </div>
             </div>
-          </div>
-        `;
-        document.body.appendChild(successToast);
+          `;
+          document.body.appendChild(successToast);
 
-        // Remove toast after 4 seconds
-        setTimeout(() => {
-          if (successToast.parentNode) {
-            successToast.parentNode.removeChild(successToast);
-          }
-        }, 4000);
+          // Remove toast after 4 seconds
+          setTimeout(() => {
+            if (successToast.parentNode) {
+              successToast.parentNode.removeChild(successToast);
+            }
+          }, 4000);
+        }
 
         // Don't close immediately - let user see the success message
         setTimeout(() => {
-          if (canGoBack) {
+          if (canGoBack && typeof window !== 'undefined' && window.history) {
             window.history.back();
-          } else {
+          } else if (typeof window !== 'undefined' && window.close) {
             // Try to close the window, but handle the error gracefully
             try {
               window.close();
@@ -285,7 +401,7 @@ const SavePage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    if (canGoBack) {
+    if (canGoBack && typeof window !== 'undefined' && window.history) {
       window.history.back();
     }
   };
@@ -325,9 +441,9 @@ const SavePage: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                if (canGoBack) {
+                if (canGoBack && typeof window !== 'undefined' && window.history) {
                   window.history.back();
-                } else {
+                } else if (typeof window !== 'undefined' && window.close) {
                   try {
                     window.close();
                   } catch {
@@ -372,11 +488,15 @@ const SavePage: React.FC = () => {
                 <div>
                   <h3 className="font-semibold">Target Domains</h3>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {parseResult.meta.domains.map((domain, index) => (
-                      <span key={index} className="badge badge-primary">
-                        {domain}
-                      </span>
-                    ))}
+                    {parseResult.meta.domains.length > 0 ? (
+                      parseResult.meta.domains.map((domain, index) => (
+                        <span key={index} className="badge badge-primary">
+                          {formatDomainForDisplay(domain, parseResult.css, parseResult.metadataBlock)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-base-content/50">No specific domains detected</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -416,6 +536,9 @@ const SavePage: React.FC = () => {
           <div className="card bg-base-100 shadow-sm border">
             <div className="card-body p-6">
               <h2 className="card-title text-xl mb-4">Code Preview</h2>
+              <p className="text-sm text-base-content/70 mb-4">
+                Shows the complete UserCSS content including metadata block with variables and CSS rules.
+              </p>
               <div className="bg-base-300 rounded-lg overflow-hidden border">
                 <div ref={editorRef} className="min-h-[400px]" />
               </div>

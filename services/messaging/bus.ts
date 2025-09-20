@@ -208,7 +208,6 @@ export class MessageBus {
     try {
       // Use the message handler service to process the message
       const result = await messageHandlerService.handleMessage(message, tabId);
-      console.log("[MessageBus] Message handler returned:", result);
       return result;
     } catch (error) {
       console.error("[MessageBus] Message handler threw error:", error);
@@ -396,7 +395,8 @@ export class MessageBus {
     }, 5000);
 
     // Listen for browser events that might indicate connectivity changes
-    if (typeof window !== "undefined") {
+    // In service worker context, window is not available, so we skip online/offline event listeners
+    if (typeof window !== "undefined" && typeof window.addEventListener !== "undefined") {
       window.addEventListener("online", () => {
         this.isOnline = true;
         this.processOfflineMessages();
