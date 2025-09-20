@@ -55,7 +55,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
 
   const handleCustomFontCheck = async () => {
     if (!customFontName.trim()) {
-      setFontError(t("font.error.emptyName"));
+      setFontError(t("font_error_emptyName"));
       return;
     }
 
@@ -68,10 +68,10 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       setSelectedFont(null);
 
       if (!font.isAvailable) {
-        setFontError(t("font.error.notAvailable", customFontName));
+        setFontError(t("font_error_notAvailable", customFontName));
       }
     } catch (error: unknown) {
-      setFontError(t("font.error.checkFailed"));
+      setFontError(t("font_error_checkFailed"));
       if (error instanceof Error) {
         console.error("Font check failed:", error.message);
       } else {
@@ -93,40 +93,33 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       const application: FontApplication = {
         fontName: fontToApply.name,
         fontType: selectedFont ? "builtin" : "custom",
-        targetElements: "body", // Default to body, could be made configurable
+        targetElements: "html, body", // Use html and body for better coverage
         cssRule: "",
+        domain: undefined, // Not needed for temporary injection
       };
 
-      // Generate UserCSS
-      const userCSS = fontRegistry.generateFontUserCSS(application);
+      // Generate CSS for the font
+      const css = fontRegistry.generateFontCSS(application);
 
-      // Send to background for parsing and installation
-      const result = await sendMessage(SaveMessageType.PARSE_USERCSS, {
-        text: userCSS,
-        sourceUrl: `eastyles://font/${fontToApply.name}`,
+      // Send to background for direct injection
+      const result = await sendMessage(SaveMessageType.INJECT_FONT, {
+        fontName: fontToApply.name,
+        css,
       });
 
-      // Type guard for parseUserCSS result
+      // Type guard for injectFont result
       if ("success" in result && result.success) {
-        // Install the style
-        const installResult = await sendMessage(SaveMessageType.INSTALL_STYLE, {
-          meta: result.meta!,
-          compiledCss: result.css || "",
-          variables: [],
-        });
-
-        // Type guard for installStyle result
-        if ("success" in installResult && installResult.success) {
-          onFontApplied?.(application);
-          onClose?.();
-        } else {
-          setFontError(t("font.error.installFailed"));
-        }
+        onFontApplied?.(application);
+        onClose?.();
       } else {
-        setFontError(t("font.error.parseFailed"));
+        const errorMsg =
+          "error" in result && result.error
+            ? result.error
+            : t("font_error_applyFailed");
+        setFontError(errorMsg);
       }
     } catch (error: unknown) {
-      setFontError(t("font.error.applyFailed"));
+      setFontError(t("font_error_applyFailed"));
       if (error instanceof Error) {
         console.error("Font application failed:", error.message);
       } else {
@@ -146,7 +139,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
   return (
     <div className="font-selector p-4 bg-base-100 rounded-lg shadow-lg max-w-2xl mx-auto">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">{t("font.selector.title")}</h3>
+        <h3 className="text-lg font-semibold">{t("font_selector_title")}</h3>
         <button
           onClick={onClose}
           className="btn btn-sm btn-ghost"
@@ -162,13 +155,13 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
           className={`tab ${activeTab === "builtin" ? "tab-active" : ""}`}
           onClick={() => setActiveTab("builtin")}
         >
-          {t("font.tabs.builtin")}
+          {t("font_tabs_builtin")}
         </button>
         <button
           className={`tab ${activeTab === "custom" ? "tab-active" : ""}`}
           onClick={() => setActiveTab("custom")}
         >
-          {t("font.tabs.custom")}
+          {t("font_tabs_custom")}
         </button>
       </div>
 
@@ -176,7 +169,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       {activeTab === "builtin" && (
         <div className="space-y-4">
           <p className="text-sm text-base-content/70">
-            {t("font.builtin.description")}
+            {t("font_builtin_description")}
           </p>
 
           {fontCategories.map((category) => {
@@ -186,7 +179,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
             return (
               <div key={category} className="space-y-2">
                 <h4 className="font-medium text-sm capitalize">
-                  {t(`font.categories.${category}`)}
+                  {t(`font_categories_${category.replace(/-/g, "_")}`)}
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {categoryFonts.map((font) => (
@@ -211,7 +204,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
                       <div
                         className="text-2xl font-bold text-center mb-1"
                         style={{
-                          fontFamily: `'${font.name}', ${font.category}`,
+                          fontFamily: `'${font.name}', sans-serif`,
                         }}
                       >
                         {sampleText}
@@ -232,19 +225,19 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       {activeTab === "custom" && (
         <div className="space-y-4">
           <p className="text-sm text-base-content/70">
-            {t("font.custom.description")}
+            {t("font_custom_description")}
           </p>
 
           <div className="form-control">
             <label className="label">
-              <span className="label-text">{t("font.custom.inputLabel")}</span>
+              <span className="label-text">{t("font_custom_inputLabel")}</span>
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={customFontName}
                 onChange={(e) => setCustomFontName(e.target.value)}
-                placeholder={t("font.custom.placeholder")}
+                placeholder={t("font_custom_placeholder")}
                 className="input input-bordered flex-1"
                 onKeyPress={(e) => e.key === "Enter" && handleCustomFontCheck()}
               />
@@ -256,7 +249,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
                 {isCheckingFont ? (
                   <span className="loading loading-spinner loading-sm"></span>
                 ) : (
-                  t("font.custom.checkButton")
+                  t("font_custom_checkButton")
                 )}
               </button>
             </div>
@@ -265,7 +258,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
           {customFont && (
             <div className="font-preview p-4 border rounded-lg bg-base-50">
               <div className="text-sm mb-2">
-                {t("font.custom.previewLabel")}:
+                {t("font_custom_previewLabel")}:
               </div>
               <div
                 className={`text-xl font-medium ${customFont.isAvailable ? "" : "text-error"}`}
@@ -279,8 +272,8 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
               </div>
               <div className="text-xs mt-2">
                 {customFont.isAvailable
-                  ? t("font.custom.available")
-                  : t("font.custom.notAvailable")}
+                  ? t("font_custom_available")
+                  : t("font_custom_notAvailable")}
               </div>
             </div>
           )}
@@ -311,10 +304,10 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
           {isApplying ? (
             <>
               <span className="loading loading-spinner loading-sm"></span>
-              {t("font.applying")}
+              {t("font_applying")}
             </>
           ) : (
-            t("font.applyButton")
+            t("font_applyButton")
           )}
         </button>
       </div>

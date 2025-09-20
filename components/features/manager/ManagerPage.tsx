@@ -7,8 +7,16 @@ import React, { useState, useEffect, useCallback } from "react";
 import { browser } from "@wxt-dev/browser";
 import { storageClient } from "../../../services/storage/client";
 import { UserCSSStyle } from "../../../services/storage/schema";
-import { useMessage, PopupMessageType } from "../../../hooks/useMessage";
+import {
+  useMessage,
+  PopupMessageType,
+  SaveMessageType,
+} from "../../../hooks/useMessage";
 import { VariableControls } from "../VariableControls";
+import {
+  fontRegistry,
+  BuiltInFont,
+} from "../../../services/usercss/font-registry";
 import { Trash, Edit, Settings, Upload, Download } from "iconoir-react";
 
 const ManagerPage: React.FC = () => {
@@ -17,6 +25,7 @@ const ManagerPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showFontModal, setShowFontModal] = useState(false);
 
   const { sendMessage } = useMessage();
 
@@ -90,15 +99,18 @@ const ManagerPage: React.FC = () => {
       try {
         await storageClient.updateUserCSSStyleVariables(styleId, variables);
 
-        // For now, we'll just update storage
-        // Content script will be updated when the page is refreshed
+        // Notify content script to update variables immediately
+        await sendMessage(PopupMessageType.UPDATE_VARIABLES, {
+          styleId,
+          variables,
+        });
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to update variables",
         );
       }
     },
-    [],
+    [sendMessage],
   );
 
   // Handle file import via button click
@@ -116,13 +128,16 @@ const ManagerPage: React.FC = () => {
           const cssContent = await file.text();
           console.log("Read imported UserCSS file, length:", cssContent.length);
 
-          // Pass content as base64 to avoid encoding issues
-          const saveUrl = browser.runtime.getURL("/save.html");
-          const encodedCss = btoa(encodeURIComponent(cssContent));
-          const filename = encodeURIComponent(file.name);
-          const finalUrl = `${saveUrl}?css=${encodedCss}&filename=${filename}&source=local&encoding=base64`;
+          // Store content in sessionStorage to avoid URL length limits
+          const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          sessionStorage.setItem(storageId, cssContent);
 
-          console.log("Redirecting to Save page with imported file content");
+          // Pass storage ID instead of content
+          const saveUrl = browser.runtime.getURL("/save.html");
+          const filename = encodeURIComponent(file.name);
+          const finalUrl = `${saveUrl}?storageId=${storageId}&filename=${filename}&source=local`;
+
+          console.log("Redirecting to Save page with storage reference");
           window.location.href = finalUrl;
         } catch (error) {
           console.error("Failed to read imported UserCSS file:", error);
@@ -200,13 +215,16 @@ const ManagerPage: React.FC = () => {
         const cssContent = await userCssFile.text();
         console.log("Read local UserCSS file, length:", cssContent.length);
 
-        // Pass content as base64 to avoid encoding issues
-        const saveUrl = browser.runtime.getURL("/save.html");
-        const encodedCss = btoa(encodeURIComponent(cssContent));
-        const filename = encodeURIComponent(userCssFile.name);
-        const finalUrl = `${saveUrl}?css=${encodedCss}&filename=${filename}&source=local&encoding=base64`;
+        // Store content in sessionStorage to avoid URL length limits
+        const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        sessionStorage.setItem(storageId, cssContent);
 
-        console.log("Redirecting to Save page with local file content");
+        // Pass storage ID instead of content
+        const saveUrl = browser.runtime.getURL("/save.html");
+        const filename = encodeURIComponent(userCssFile.name);
+        const finalUrl = `${saveUrl}?storageId=${storageId}&filename=${filename}&source=local`;
+
+        console.log("Redirecting to Save page with storage reference");
         window.location.href = finalUrl;
       } catch (error) {
         console.error("Failed to read local UserCSS file:", error);
@@ -222,13 +240,19 @@ const ManagerPage: React.FC = () => {
       .map((rule) => {
         switch (rule.kind) {
           case "url":
-            return rule.pattern;
+            return `exact: ${rule.pattern}`;
           case "url-prefix":
-            return `${rule.pattern}*`;
+            try {
+              const url = new URL(rule.pattern);
+              const domain = url.hostname;
+              return `start with ${domain}`;
+            } catch {
+              return `start with ${rule.pattern}`;
+            }
           case "domain":
             return rule.pattern;
           case "regexp":
-            return `/${rule.pattern}/`;
+            return `pattern: /${rule.pattern}/`;
           default:
             return rule.pattern;
         }
@@ -258,6 +282,13 @@ const ManagerPage: React.FC = () => {
           <button className="btn btn-outline" onClick={handleExportClick}>
             <Download className="w-4 h-4 mr-2" />
             Export
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowFontModal(true)}
+          >
+            <span className="text-lg mr-2">Aa</span>
+            New Font Style
           </button>
           <button className="btn btn-primary" onClick={handleImportClick}>
             <Upload className="w-4 h-4 mr-2" />
@@ -357,20 +388,21 @@ const ManagerPage: React.FC = () => {
 
                     {/* Action Buttons */}
                     <div className="flex space-x-1">
-                      {/* Configure Button - only show if variables exist */}
-                      {Object.keys(style.variables).length > 0 && (
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          onClick={() =>
-                            setExpandedStyleId(
-                              expandedStyleId === style.id ? null : style.id,
-                            )
-                          }
-                          title="Configure variables"
-                        >
-                          <Settings className="w-4 h-4" />
-                        </button>
-                      )}
+                      {/* Configure Button - only show if variables exist and style is enabled */}
+                      {Object.keys(style.variables).length > 0 &&
+                        style.enabled && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() =>
+                              setExpandedStyleId(
+                                expandedStyleId === style.id ? null : style.id,
+                              )
+                            }
+                            title="Configure variables"
+                          >
+                            <Settings className="w-4 h-4" />
+                          </button>
+                        )}
 
                       {/* Edit Button - disabled for now */}
                       <button
@@ -395,7 +427,8 @@ const ManagerPage: React.FC = () => {
 
                 {/* Expanded Variable Controls */}
                 {expandedStyleId === style.id &&
-                  Object.keys(style.variables).length > 0 && (
+                  Object.keys(style.variables).length > 0 &&
+                  style.enabled && (
                     <div className="mt-4 pt-4 border-t border-base-300">
                       <h4 className="font-medium mb-3">Configure Variables</h4>
                       <VariableControls
@@ -411,6 +444,160 @@ const ManagerPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* New Font Style Modal */}
+      {showFontModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold">Create Font Style</h3>
+                <button
+                  onClick={() => setShowFontModal(false)}
+                  className="btn btn-sm btn-ghost"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <FontStyleModal
+                onSave={async (domain, fontName) => {
+                  try {
+                    // Use the new CREATE_FONT_STYLE message
+                    const result = await sendMessage(
+                      SaveMessageType.CREATE_FONT_STYLE,
+                      {
+                        domain: domain || undefined,
+                        fontName,
+                      },
+                    );
+
+                    if ("success" in result && result.success) {
+                      setShowFontModal(false);
+                      loadStyles(); // Refresh the styles list
+                    } else {
+                      const errorMsg =
+                        "error" in result && result.error
+                          ? result.error
+                          : "Failed to create font style";
+                      setError(errorMsg);
+                    }
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Failed to create font style",
+                    );
+                  }
+                }}
+                onClose={() => setShowFontModal(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Font Style Modal Component
+interface FontStyleModalProps {
+  onSave: (domain: string, fontName: string) => Promise<void>;
+  onClose: () => void;
+}
+
+const FontStyleModal: React.FC<FontStyleModalProps> = ({ onSave, onClose }) => {
+  const [domain, setDomain] = useState("");
+  const [selectedFont, setSelectedFont] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  const builtInFonts = fontRegistry.getBuiltInFonts();
+
+  const handleSave = async () => {
+    if (!selectedFont) {
+      setModalError("Please select a font");
+      return;
+    }
+
+    setIsSaving(true);
+    setModalError(null);
+    try {
+      await onSave(domain.trim(), selectedFont);
+    } catch (err) {
+      setModalError(
+        err instanceof Error ? err.message : "Failed to save font style",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {modalError && (
+        <div className="alert alert-error">
+          <span>{modalError}</span>
+        </div>
+      )}
+
+      <div className="form-control">
+        <label className="label" htmlFor="domain-input">
+          <span className="label-text">Domain (optional)</span>
+        </label>
+        <input
+          id="domain-input"
+          type="text"
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          placeholder="e.g., example.com (leave empty for all sites)"
+          className="input input-bordered w-full"
+        />
+        <label className="label" htmlFor="domain-input">
+          <span className="label-text text-xs text-base-content/60">
+            Leave empty to apply to all sites
+          </span>
+        </label>
+      </div>
+
+      <div className="form-control">
+        <label className="label" htmlFor="font-select">
+          <span className="label-text">Font</span>
+        </label>
+        <select
+          id="font-select"
+          value={selectedFont}
+          onChange={(e) => setSelectedFont(e.target.value)}
+          className="select select-bordered w-full"
+        >
+          <option value="">Select a font...</option>
+          {builtInFonts.map((font: BuiltInFont) => (
+            <option key={font.name} value={font.name}>
+              {font.name} ({font.category})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose} className="btn btn-ghost" disabled={isSaving}>
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={!selectedFont || isSaving}
+          className="btn btn-primary"
+        >
+          {isSaving ? (
+            <>
+              <span className="loading loading-spinner loading-sm"></span>
+              Saving...
+            </>
+          ) : (
+            "Save Font Style"
+          )}
+        </button>
+      </div>
     </div>
   );
 };

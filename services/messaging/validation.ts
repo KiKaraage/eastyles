@@ -62,6 +62,7 @@ function isPopupMessage(type: string): boolean {
     "THEME_CHANGED",
     "GET_CURRENT_TAB",
     "TOGGLE_THEME",
+    "UPDATE_VARIABLES",
   ].includes(type);
 }
 
@@ -84,6 +85,8 @@ function isApplyMessage(type: string): boolean {
   return [
     "PARSE_USERCSS",
     "INSTALL_STYLE",
+    "INJECT_FONT",
+    "CREATE_FONT_STYLE",
   ].includes(type);
 }
 
@@ -93,6 +96,7 @@ function isApplyMessage(type: string): boolean {
 function isContentMessage(type: string): boolean {
   return [
     "QUERY_STYLES_FOR_URL",
+    "FETCH_ASSETS",
   ].includes(type);
 }
 
@@ -106,7 +110,8 @@ function validatePopupMessage(message: unknown, type: string): boolean {
     type === "OPEN_SETTINGS" ||
     type === "GET_STYLES" ||
     type === "TOGGLE_STYLE" ||
-    type === "THEME_CHANGED"
+    type === "THEME_CHANGED" ||
+    type === "UPDATE_VARIABLES"
   ) {
     // These messages can have optional payload
     if (message && typeof message === "object") {
@@ -130,6 +135,18 @@ function validatePopupMessage(message: unknown, type: string): boolean {
           }
           // If payload exists but url is not present, it's invalid for OPEN_MANAGER
           if (url === undefined) {
+            return false;
+          }
+        }
+
+        // For UPDATE_VARIABLES, validate styleId and variables
+        if (type === "UPDATE_VARIABLES") {
+          const styleId = (payload as { styleId?: unknown }).styleId;
+          const variables = (payload as { variables?: unknown }).variables;
+          if (typeof styleId !== "string" || styleId.length === 0) {
+            return false;
+          }
+          if (typeof variables !== "object" || variables === null) {
             return false;
           }
         }
@@ -222,6 +239,32 @@ function validateApplyMessage(message: unknown, type: string): boolean {
         );
       }
       return false;
+    case "INJECT_FONT":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "fontName" in payload &&
+          "css" in payload &&
+          typeof (payload as { fontName?: unknown }).fontName === "string" &&
+          typeof (payload as { css?: unknown }).css === "string"
+        );
+      }
+      return false;
+    case "CREATE_FONT_STYLE":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "fontName" in payload &&
+          typeof (payload as { fontName?: unknown }).fontName === "string" &&
+          (payload as { fontName: string }).fontName.length > 0 &&
+          (!("domain" in payload) || typeof (payload as { domain?: unknown }).domain === "string")
+        );
+      }
+      return false;
     default:
       return false;
   }
@@ -241,6 +284,17 @@ function validateContentMessage(message: unknown, type: string): boolean {
           "url" in payload &&
           typeof (payload as { url?: unknown }).url === "string" &&
           (payload as { url: string }).url.length > 0
+        );
+      }
+      return false;
+    case "FETCH_ASSETS":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "assets" in payload &&
+          Array.isArray((payload as { assets?: unknown }).assets)
         );
       }
       return false;

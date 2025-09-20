@@ -5,6 +5,7 @@
  * This allows fonts to be managed as regular UserCSS styles with persistence and management.
  */
 
+import { browser } from "wxt/browser";
 import { FontApplication } from './font-registry';
 import { StyleMeta, VariableDescriptor } from './types';
 
@@ -81,7 +82,9 @@ export class FontUserCSSGenerator {
       variables: {},
       assets: fontType === 'builtin' ? [{
         type: 'font',
-        url: `/fonts/${fontName}.woff2`,
+        url: browser?.runtime?.getURL ?
+          browser.runtime.getURL(`/fonts/${fontName}.woff2` as any) :
+          `/fonts/${fontName}.woff2`,
         format: 'woff2'
       }] : []
     };
@@ -98,16 +101,21 @@ export class FontUserCSSGenerator {
   }
 
   /**
-   * Generate @font-face rule for built-in font
-   */
+    * Generate @font-face rule for built-in font
+    */
   private generateFontFaceRule(fontName: string): string | null {
     // This would typically come from the font registry
     // For now, we'll generate a basic @font-face rule
     const fontPath = `/fonts/${fontName}.woff2`;
 
+    // Convert relative path to absolute extension URL
+    const absoluteFontPath = browser?.runtime?.getURL ?
+      browser.runtime.getURL(fontPath as any) :
+      fontPath; // Fallback for non-extension environments
+
     return `@font-face {
   font-family: '${fontName}';
-  src: url('${fontPath}') format('woff2');
+  src: url('${absoluteFontPath}') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -137,7 +145,7 @@ export class FontUserCSSGenerator {
     }
 
     return `${targetElements} {
-  font-family: ${fontFamilyValue};
+  font-family: ${fontFamilyValue} !important;
 }`;
   }
 

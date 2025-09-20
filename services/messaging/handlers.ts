@@ -597,6 +597,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         sourceUrl: sourceUrl || parseResult.meta.sourceUrl,
       },
       css: parseResult.css,
+      metadataBlock: parseResult.metadataBlock,
       warnings: parseResult.warnings,
       errors: parseResult.errors,
     };
@@ -674,14 +675,57 @@ const handleInstallStyle: MessageHandler = async (message) => {
           }
         });
       }
+
+      // Extract url-prefix patterns from CSS @-moz-document rules
+      const urlPrefixMatches = mozDocumentRule.match(
+        /url-prefix\(["']?([^"')]+)["']?\)/g,
+      );
+      if (urlPrefixMatches) {
+        urlPrefixMatches.forEach((match) => {
+          const urlMatch = match.match(/url-prefix\(["']?([^"')]+)["']?\)/);
+          if (urlMatch) {
+            try {
+              const url = new URL(urlMatch[1]);
+              const domain = url.hostname;
+              if (!allDomains.includes(domain)) {
+                allDomains.push(domain);
+                console.log(
+                  "[handleInstallStyle] Extracted domain from url-prefix:",
+                  domain,
+                );
+              }
+            } catch {
+              // Ignore invalid URLs
+            }
+          }
+        });
+      }
     }
 
     // Convert string domains to DomainRule format
+    const { normalizePattern } = await import("../usercss/domains");
     const domainRules: DomainRule[] = allDomains.map((domain) => ({
       kind: "domain" as const,
-      pattern: domain,
+      pattern: normalizePattern(domain),
       include: true,
     }));
+
+    // Also extract proper DomainRule objects from CSS content
+    const { extractDomains } = await import("../usercss/domains");
+    const extractedRules = extractDomains(compiledCss);
+    if (extractedRules.length > 0) {
+      console.log("[handleInstallStyle] Extracted domain rules from CSS:", extractedRules);
+      // Merge with existing rules, avoiding duplicates
+      for (const rule of extractedRules) {
+        const exists = domainRules.some(
+          (existing) =>
+            existing.kind === rule.kind && existing.pattern === rule.pattern
+        );
+        if (!exists) {
+          domainRules.push(rule);
+        }
+      }
+    }
 
     console.log("[handleInstallStyle] Final domains:", allDomains);
     console.log("[handleInstallStyle] Domain rules:", domainRules);
@@ -748,6 +792,36 @@ const handleInstallStyle: MessageHandler = async (message) => {
     console.log("Style installed successfully:", savedStyle.id, savedStyle);
     console.log("Style domains:", savedStyle.domains);
 
+    // Notify all content scripts to apply the new style
+    console.log("[handleInstallStyle] Notifying content scripts about new style");
+    browser.tabs.query({}).then((tabs) => {
+      tabs.forEach((tab) => {
+        if (tab.id) {
+          browser.tabs
+            .sendMessage(tab.id, {
+              type: "styleUpdate",
+              styleId: savedStyle.id,
+              style: savedStyle,
+            })
+            .catch((error) => {
+              // Silently ignore errors for tabs that don't have content scripts
+              // This is normal for extension pages, about: pages, etc.
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              if (
+                !errorMessage.includes("Could not establish connection") &&
+                !errorMessage.includes("Receiving end does not exist")
+              ) {
+                console.warn(
+                  `[handleInstallStyle] Unexpected error notifying tab ${tab.id}:`,
+                  error,
+                );
+              }
+            });
+        }
+      });
+    });
+
     // Verify the style was saved by retrieving all styles
     const allStyles = await storageClient.getUserCSSStyles();
     console.log("Total styles after installation:", allStyles.length);
@@ -764,6 +838,222 @@ const handleInstallStyle: MessageHandler = async (message) => {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     console.error("Failed to install style:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
+ * Handle creating a new font style
+ */
+const handleCreateFontStyle: MessageHandler = async (message) => {
+  try {
+    const { domain, fontName } = (
+      message as {
+        payload: { domain?: string; fontName: string };
+      }
+    ).payload;
+
+    console.log("[handleCreateFontStyle] Creating font style:", fontName, "for domain:", domain);
+
+    // Validate font name
+    if (!fontName || typeof fontName !== "string" || fontName.trim().length === 0) {
+      throw new Error("Font name is required and cannot be empty");
+    }
+
+    // Validate domain if provided
+    if (domain && typeof domain === "string") {
+      // Basic domain validation - should contain at least one dot and no spaces
+      const trimmedDomain = domain.trim();
+      if (trimmedDomain.length === 0) {
+        throw new Error("Domain cannot be empty");
+      }
+      if (trimmedDomain.includes(" ")) {
+        throw new Error("Domain cannot contain spaces");
+      }
+      if (!trimmedDomain.includes(".")) {
+        throw new Error("Domain must contain at least one dot (e.g., example.com)");
+      }
+      // Additional validation for common domain patterns
+      const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+      if (!domainRegex.test(trimmedDomain)) {
+        throw new Error("Invalid domain format");
+      }
+    }
+
+    // Import required services
+    const { normalizePattern } = await import("../usercss/domains");
+
+    // Validate that the font exists (inline check)
+    const builtInFonts = [
+      { name: "Inter", file: "Inter.woff2", category: "sans-serif", weight: "400", style: "normal" },
+      { name: "JetBrains Mono", file: "JetBrains Mono.woff2", category: "monospace", weight: "400", style: "normal" },
+      { name: "Parkinsans", file: "Parkinsans.woff2", category: "sans-serif", weight: "400", style: "normal" },
+      { name: "Atkinson Hyperlegible", file: "Atkinson Hyperlegible.woff2", category: "sans-serif", weight: "400", style: "normal" },
+      { name: "Crimson Pro", file: "Crimson Pro.woff2", category: "serif", weight: "400", style: "normal" },
+      { name: "Faculty Glyphic", file: "Faculty Glyphic.woff2", category: "display", weight: "400", style: "normal" },
+      { name: "Fraunces", file: "Fraunces.woff2", category: "serif", weight: "400", style: "normal" },
+      { name: "Henny Penny", file: "Henny Penny.woff2", category: "handwriting", weight: "400", style: "normal" },
+      { name: "Jost", file: "Jost.woff2", category: "sans-serif", weight: "400", style: "normal" },
+      { name: "Kode Mono", file: "Kode Mono.woff2", category: "monospace", weight: "400", style: "normal" },
+      { name: "Outfit", file: "Outfit.woff2", category: "sans-serif", weight: "400", style: "normal" },
+      { name: "Parkinsans", file: "Parkinsans.woff2", category: "sans-serif", weight: "400", style: "normal" },
+      { name: "Playwrite IN", file: "Playwrite IN.woff2", category: "handwriting", weight: "400", style: "normal" },
+      { name: "SUSE", file: "SUSE.woff2", category: "sans-serif", weight: "400", style: "normal" },
+      { name: "Unbounded", file: "Unbounded.woff2", category: "sans-serif", weight: "400", style: "normal" },
+    ];
+    const fontExists = builtInFonts.some(font => font.name === fontName);
+    if (!fontExists) {
+      throw new Error(`Font "${fontName}" is not available. Please select a font from the available options.`);
+    }
+
+    // Get font data
+    const font = builtInFonts.find(f => f.name === fontName);
+    if (!font) {
+      throw new Error(`Font "${fontName}" not found`);
+    }
+
+    // Generate UserCSS for the font (inline generation)
+    const fontPath = `/fonts/${font.file}`;
+    const absoluteFontPath = browser?.runtime?.getURL ?
+      browser.runtime.getURL(fontPath as any) :
+      fontPath;
+
+    const fontFaceRule = `
+  @font-face {
+    font-family: '${fontName}';
+    src: url('${absoluteFontPath}') format('woff2');
+    font-weight: ${font.weight};
+    font-style: ${font.style};
+    font-display: swap;
+  }`;
+
+    const fontFamilyRule = `
+   body {
+     font-family: '${fontName}', sans-serif;
+   }`;
+
+    // Process domain for title
+    const titleDomain = domain ? domain.replace(/\.(com|org|net|edu)$/, '').replace(/\./g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
+    const name = domain ? `${fontName} in ${titleDomain}` : `Eastyles Font: ${fontName}`;
+    const matchRule = domain ? `@match *://${domain}/*` : '';
+
+    const userCSS = `/* ==UserStyle==
+  @name ${name}
+  @namespace github.com/KiKaraage/Eastyles
+  @version 1.0.0
+  @description Apply ${fontName} font to ${domain || 'all sites'}
+  @author Eastyles
+  ${matchRule}
+  ==/UserStyle== */
+
+  ${fontFaceRule}
+  ${fontFamilyRule}`;
+
+    // Create domain rules directly
+    const domainRules: DomainRule[] = domain ? [{
+      kind: "domain" as const,
+      pattern: normalizePattern(domain),
+      include: true,
+    }] : [];
+
+    // Create the style data directly without parsing
+    const styleData = {
+      name,
+      namespace: "github.com/KiKaraage/Eastyles",
+      version: "1.0.0",
+      description: `Apply ${fontName} font to ${domain || 'all sites'}`,
+      author: "Eastyles",
+      sourceUrl: "",
+      domains: domainRules,
+      compiledCss: `${fontFaceRule}\n${fontFamilyRule}`.trim(),
+      variables: {},
+      originalDefaults: {},
+      assets: [],
+      installedAt: Date.now(),
+      enabled: true,
+      source: userCSS,
+      updatedAt: Date.now(),
+    };
+
+    // Save the style
+    const savedStyle = await storageClient.addUserCSSStyle(styleData);
+
+    console.log("[handleCreateFontStyle] Font style created successfully:", savedStyle.id);
+
+    return {
+      success: true,
+      styleId: savedStyle.id,
+    };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("[handleCreateFontStyle] Failed to create font style:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
+ * Handle direct font injection
+ */
+const handleInjectFont: MessageHandler = async (message) => {
+  try {
+    const { fontName, css } = (
+      message as {
+        payload: { fontName: string; css: string };
+      }
+    ).payload;
+
+    console.log("[handleInjectFont] Injecting font:", fontName);
+
+    // Get the current active tab
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const currentTab = tabs[0];
+
+    if (!currentTab?.id) {
+      throw new Error("No active tab found");
+    }
+
+    // Try to send to content script first
+    try {
+      await browser.tabs.sendMessage(currentTab.id, {
+        type: "injectFont",
+        fontName,
+        css,
+      });
+      console.log("[handleInjectFont] Successfully sent to content script");
+    } catch (contentScriptError) {
+      // Content script not available, inject directly using executeScript
+      console.log("[handleInjectFont] Content script not available, injecting directly");
+
+      const errorMessage = contentScriptError instanceof Error ? contentScriptError.message : String(contentScriptError);
+      if (errorMessage.includes("Could not establish connection") ||
+          errorMessage.includes("Receiving end does not exist")) {
+
+        // Inject CSS directly using insertCSS
+        await browser.tabs.insertCSS(currentTab.id, {
+          code: css,
+          cssOrigin: "user",
+          runAt: "document_start",
+        });
+
+        console.log("[handleInjectFont] Successfully injected font directly");
+      } else {
+        // Re-throw unexpected errors
+        throw contentScriptError;
+      }
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("[handleInjectFont] Failed to inject font:", errorMessage);
     return {
       success: false,
       error: errorMessage,
@@ -806,42 +1096,20 @@ const handleUpdateVariables: MessageHandler = async (message) => {
  * Handle queries for styles applicable to a specific URL
  */
 const handleQueryStylesForUrl: MessageHandler = async (message) => {
-  console.log("[handleQueryStylesForUrl] Processing message:", message);
   try {
     const { url } = (message as { payload: { url: string } }).payload;
-    console.log("[handleQueryStylesForUrl] Querying styles for URL:", url);
 
     // Get all UserCSS styles
     const userCSSStyles = await storageClient.getUserCSSStyles();
-    console.log(
-      "[handleQueryStylesForUrl] Retrieved UserCSS styles:",
-      userCSSStyles.length,
-    );
 
     // Filter styles that match the URL using domain detection
     const { domainDetector } = await import("../usercss/domain-detector");
     const matchingStyles = userCSSStyles.filter((style: UserCSSStyle) => {
-      // First check if style has domain rules
-      if (!style.domains || style.domains.length === 0) {
-        console.log(
-          `[handleQueryStylesForUrl] Style ${style.id}: no domain rules, skipping`,
-        );
-        return false;
-      }
-
-      const matchesDomain = domainDetector.matches(url, style.domains);
-      console.log(
-        `[handleQueryStylesForUrl] Style ${style.id}: matchesDomain=${matchesDomain}, enabled=${style.enabled}, domains=${JSON.stringify(style.domains)}`,
-      );
+      const matchesDomain = domainDetector.matches(url, style.domains || []);
 
       // Only return styles that match the domain (regardless of enabled state for popup display)
       return matchesDomain;
     });
-
-    console.log(
-      "[handleQueryStylesForUrl] Found matching styles:",
-      matchingStyles.length,
-    );
 
     return {
       success: true,
@@ -851,6 +1119,43 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     console.error("[handleQueryStylesForUrl] Error:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
+ * Handle fetching external assets and converting to data URLs
+ */
+const handleFetchAssets: MessageHandler = async (message) => {
+  console.log("[handleFetchAssets] Processing message:", message);
+  try {
+    const { assets } = (message as { payload: { assets: Array<{ url: string; type: 'image' | 'font' | 'other' }> } }).payload;
+    console.log(`[handleFetchAssets] Fetching ${assets.length} assets`);
+
+    // Import asset processor
+    const { fetchAssetAsDataUrl } = await import("../usercss/asset-processor");
+
+    // Fetch all assets in parallel
+    const fetchPromises = assets.map(asset => fetchAssetAsDataUrl({
+      url: asset.url,
+      type: asset.type,
+      originalUrl: asset.url,
+    }));
+    const results = await Promise.all(fetchPromises);
+
+    console.log(`[handleFetchAssets] Successfully processed ${results.filter(r => r.dataUrl).length}/${assets.length} assets`);
+
+    return {
+      success: true,
+      assets: results,
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("[handleFetchAssets] Error:", errorMessage);
     return {
       success: false,
       error: errorMessage,
@@ -876,8 +1181,11 @@ const handlerRegistry: HandlerRegistry = {
   GET_ALL_STYLES: withErrorHandling(handleGetAllStyles),
   PARSE_USERCSS: withErrorHandling(handleParseUserCSS),
   INSTALL_STYLE: withErrorHandling(handleInstallStyle),
+  INJECT_FONT: withErrorHandling(handleInjectFont),
+  CREATE_FONT_STYLE: withErrorHandling(handleCreateFontStyle),
   UPDATE_VARIABLES: withErrorHandling(handleUpdateVariables),
   QUERY_STYLES_FOR_URL: withErrorHandling(handleQueryStylesForUrl),
+  FETCH_ASSETS: withErrorHandling(handleFetchAssets),
 };
 
 /**
@@ -1021,6 +1329,7 @@ export class MessageHandlerService {
       "GET_ALL_STYLES",
       "PARSE_USERCSS",
       "INSTALL_STYLE",
+      "FETCH_ASSETS",
     ];
 
     const missingHandlers: string[] = [];
@@ -1111,5 +1420,6 @@ export {
   handleGetAllStyles,
   handleParseUserCSS,
   handleInstallStyle,
+  handleFetchAssets,
   withErrorHandling,
 };

@@ -31,12 +31,23 @@ export interface SaveMessageResponses {
       author: string;
       sourceUrl: string;
       domains: string[];
+          variables?: Record<string, any>;
     };
     css?: string;
+    metadataBlock?: string;
     warnings?: string[];
     errors?: string[];
   };
   INSTALL_STYLE: {
+    success: boolean;
+    error?: string;
+    styleId?: string;
+  };
+  INJECT_FONT: {
+    success: boolean;
+    error?: string;
+  };
+  CREATE_FONT_STYLE: {
     success: boolean;
     error?: string;
     styleId?: string;
@@ -49,6 +60,16 @@ export interface ContentMessageResponses {
     success: boolean;
     error?: string;
     styles?: import("../storage/schema").UserCSSStyle[];
+  };
+  FETCH_ASSETS: {
+    success: boolean;
+    error?: string;
+    assets?: Array<{
+      url: string;
+      type: 'image' | 'font' | 'other';
+      dataUrl?: string;
+      error?: string;
+    }>;
   };
 }
 
@@ -188,6 +209,7 @@ export type SaveMessages =
           author: string;
           sourceUrl: string;
           domains: string[];
+      variables?: Record<string, any>;
         };
         compiledCss: string;
         variables: Array<{
@@ -198,18 +220,42 @@ export type SaveMessages =
           max?: number;
           options?: string[];
         }>;
+    };
+  }
+  | {
+      type: "INJECT_FONT";
+      payload: {
+        fontName: string;
+        css: string;
+      };
+    }
+  | {
+      type: "CREATE_FONT_STYLE";
+      payload: {
+        domain?: string;
+        fontName: string;
       };
     };
 
 /**
  * Messages sent from the content script to the background script.
  */
-export type ContentMessages = {
-  type: "QUERY_STYLES_FOR_URL";
-  payload: {
-    url: string;
-  };
-};
+export type ContentMessages =
+  | {
+      type: "QUERY_STYLES_FOR_URL";
+      payload: {
+        url: string;
+      };
+    }
+  | {
+      type: "FETCH_ASSETS";
+      payload: {
+        assets: Array<{
+          url: string;
+          type: 'image' | 'font' | 'other';
+        }>;
+      };
+    };
 
 /**
  * Union type of all possible message types that can be received by the background script.

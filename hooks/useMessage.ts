@@ -10,6 +10,7 @@ import type {
   PopupMessageResponses,
   SaveMessageResponses,
 } from "../services/messaging/types";
+import type { VariableDescriptor } from "../services/usercss/types";
 
 /**
  * Message types for popup communication
@@ -22,6 +23,7 @@ export enum PopupMessageType {
   TOGGLE_STYLE = "TOGGLE_STYLE",
   THEME_CHANGED = "THEME_CHANGED",
   QUERY_STYLES_FOR_URL = "QUERY_STYLES_FOR_URL",
+  UPDATE_VARIABLES = "UPDATE_VARIABLES",
 }
 
 /**
@@ -30,6 +32,8 @@ export enum PopupMessageType {
 export enum SaveMessageType {
   PARSE_USERCSS = "PARSE_USERCSS",
   INSTALL_STYLE = "INSTALL_STYLE",
+  INJECT_FONT = "INJECT_FONT",
+  CREATE_FONT_STYLE = "CREATE_FONT_STYLE",
 }
 
 /**
@@ -62,6 +66,10 @@ export interface PopupMessagePayloads {
   [PopupMessageType.QUERY_STYLES_FOR_URL]: {
     url: string;
   };
+  [PopupMessageType.UPDATE_VARIABLES]: {
+    styleId: string;
+    variables: Record<string, string>;
+  };
 }
 
 /**
@@ -91,6 +99,14 @@ export interface SaveMessagePayloads {
       max?: number;
       options?: string[];
     }>;
+  };
+  [SaveMessageType.INJECT_FONT]: {
+    fontName: string;
+    css: string;
+  };
+  [SaveMessageType.CREATE_FONT_STYLE]: {
+    domain?: string;
+    fontName: string;
   };
 }
 
@@ -228,18 +244,6 @@ export function useMessage(): UseMessageReturn {
         browser?.runtime
           ?.sendMessage(message)
           .then((response: unknown) => {
-            console.log("[useMessage] Received response:", response);
-            console.log("[useMessage] Response type:", typeof response);
-            console.log(
-              "[useMessage] Response is object:",
-              typeof response === "object",
-            );
-            console.log(
-              "[useMessage] Response keys:",
-              response && typeof response === "object"
-                ? Object.keys(response)
-                : "N/A",
-            );
             clearTimeout(timeoutId);
             setPendingMessages((count) => count - 1);
             resolve(response as MessageResponses[T]);
@@ -496,6 +500,7 @@ export function useSaveActions() {
         author: string;
         sourceUrl: string;
         domains: string[];
+        variables?: Record<string, VariableDescriptor>;
       },
       compiledCss: string,
       variables: Array<{
