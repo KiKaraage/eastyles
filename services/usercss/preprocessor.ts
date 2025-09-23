@@ -55,7 +55,11 @@ export function detectPreprocessor(text: string): PreprocessorDetection {
   if (text.includes("UserStyle")) usoScore += 1;
 
   if (usoScore >= 3) {
-    return { type: "uso", source: "heuristic", confidence: Math.min(usoScore / 6, 0.9) };
+    return {
+      type: "uso",
+      source: "heuristic",
+      confidence: Math.min(usoScore / 6, 0.9),
+    };
   }
 
   // Heuristic detection based on syntax patterns
@@ -81,7 +85,11 @@ export function detectPreprocessor(text: string): PreprocessorDetection {
   // Handle cases where multiple preprocessors might match
   // USO has highest priority due to specific patterns
   if (usoScore > 0 && usoScore >= Math.max(lessScore, stylusScore)) {
-    return { type: "uso", source: "heuristic", confidence: Math.min(usoScore / 6, 0.9) };
+    return {
+      type: "uso",
+      source: "heuristic",
+      confidence: Math.min(usoScore / 6, 0.9),
+    };
   }
 
   // Handle cases where both might match (prioritize less when scores are equal or close)
@@ -224,10 +232,32 @@ export class PreprocessorEngine {
     if (!this.lessModule) {
       try {
         // Guard against running in non-browser context
-        if (typeof window === 'undefined') {
+        if (typeof window === "undefined") {
           throw new Error("Less preprocessor cannot run in background context");
         }
-        this.lessModule = await import("less");
+
+        // Check if DOM is available before importing Less
+        // In service worker context, document is not defined at all
+        // Use safer detection that doesn't trigger ReferenceError
+        const hasDom = "document" in globalThis;
+
+        if (!hasDom) {
+          throw new Error("Less preprocessor requires DOM access");
+        }
+
+        // Import Less with additional error handling
+        try {
+          this.lessModule = await import("less");
+        } catch (importError) {
+          const errorMessage = (importError as Error).message;
+          if (
+            errorMessage.includes("document is not defined") ||
+            errorMessage.includes("DOM")
+          ) {
+            throw new Error("Less preprocessor requires DOM access");
+          }
+          throw importError;
+        }
       } catch (error) {
         throw new Error(
           `Failed to load Less preprocessor: ${(error as Error).message}`,
@@ -244,10 +274,34 @@ export class PreprocessorEngine {
     if (!this.stylusModule) {
       try {
         // Guard against running in non-browser context
-        if (typeof window === 'undefined') {
-          throw new Error("Stylus preprocessor cannot run in background context");
+        if (typeof window === "undefined") {
+          throw new Error(
+            "Stylus preprocessor cannot run in background context",
+          );
         }
-        this.stylusModule = await import("stylus");
+
+        // Check if DOM is available before importing Stylus
+        // In service worker context, document is not defined at all
+        // Use safer detection that doesn't trigger ReferenceError
+        const hasDom = "document" in globalThis;
+
+        if (!hasDom) {
+          throw new Error("Stylus preprocessor requires DOM access");
+        }
+
+        // Import Stylus with additional error handling
+        try {
+          this.stylusModule = await import("stylus");
+        } catch (importError) {
+          const errorMessage = (importError as Error).message;
+          if (
+            errorMessage.includes("document is not defined") ||
+            errorMessage.includes("DOM")
+          ) {
+            throw new Error("Stylus preprocessor requires DOM access");
+          }
+          throw importError;
+        }
       } catch (error) {
         throw new Error(
           `Failed to load Stylus preprocessor: ${(error as Error).message}`,
@@ -264,9 +318,7 @@ export class PreprocessorEngine {
     try {
       const less = (await this.loadLess()) as {
         default: {
-          render: (
-            text: string,
-          ) => Promise<{
+          render: (text: string) => Promise<{
             css: string;
             warnings?: { message: string; line?: number; column?: number }[];
           }>;
@@ -275,12 +327,16 @@ export class PreprocessorEngine {
       const result = await less.default.render(text);
 
       // Handle background context error
-      if (result && typeof result === 'object' && 'message' in result &&
-          typeof result.message === 'string' &&
-          result.message.includes('cannot run in background context')) {
+      if (
+        result &&
+        typeof result === "object" &&
+        "message" in result &&
+        typeof result.message === "string" &&
+        result.message.includes("cannot run in background context")
+      ) {
         return {
           css: text,
-          warnings: ['Less preprocessor not available in background context'],
+          warnings: ["Less preprocessor not available in background context"],
           errors: [],
         };
       }
@@ -393,10 +449,13 @@ export class PreprocessorEngine {
     } catch (error: unknown) {
       const errorMessage = (error as Error).message;
       // Handle background context error
-      if (errorMessage && errorMessage.includes('cannot run in background context')) {
+      if (
+        errorMessage &&
+        errorMessage.includes("cannot run in background context")
+      ) {
         return {
           css: text,
-          warnings: ['Stylus preprocessor not available in background context'],
+          warnings: ["Stylus preprocessor not available in background context"],
           errors: [],
         };
       }
@@ -424,6 +483,20 @@ export class PreprocessorEngine {
       };
     }
 
+    // In background context, DOM is not available, so skip preprocessing for preprocessors that require DOM
+    // Check if we're in a browser context with DOM access
+    const hasDom = typeof window !== "undefined" && typeof document !== "undefined";
+
+    // If we're in a background context where DOM is not available,
+    // and we need a preprocessor other than USO, return the original text with a warning
+    if (!hasDom && engine !== "uso" && engine !== "none") {
+      return {
+        css: text,
+        warnings: [`Preprocessor ${engine} requires DOM access, skipping preprocessing`],
+        errors: [],
+      };
+    }
+
     // Check cache first
     const cacheKey = this.generateCacheKey(engine, text);
     const cachedResult = this.cache.get(cacheKey);
@@ -436,10 +509,28 @@ export class PreprocessorEngine {
     try {
       switch (engine) {
         case "less":
-          result = await this.processLess(text);
+          // Only process with Less if we have DOM access
+          if (hasDom) {
+            result = await this.processLess(text);
+          } else {
+            result = {
+              css: text,
+              warnings: ["Less preprocessor not available in background context"],
+              errors: [],
+            };
+          }
           break;
         case "stylus":
-          result = await this.processStylus(text);
+          // Only process with Stylus if we have DOM access
+          if (hasDom) {
+            result = await this.processStylus(text);
+          } else {
+            result = {
+              css: text,
+              warnings: ["Stylus preprocessor not available in background context"],
+              errors: [],
+            };
+          }
           break;
         case "uso":
           // USO mode: no preprocessing needed, variables are handled differently

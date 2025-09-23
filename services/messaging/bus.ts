@@ -5,13 +5,39 @@
  */
 
 import { browser } from "@wxt-dev/browser";
-import { storage } from "@wxt-dev/storage";
 import { ReceivedMessages, SentMessages, ErrorDetails } from "./types";
 import {
   isValidReceivedMessage,
   createInvalidMessageError,
 } from "./validation";
 import { messageHandlerService } from "./handlers";
+import { storageClient } from "../storage/client";
+
+// Storage interface for offline message handling
+interface StorageInterface {
+  setItem: (key: string, value: unknown) => Promise<void>;
+  getItem: <T>(key: string, options?: { fallback?: T }) => Promise<T>;
+}
+
+// Try to import storage from @wxt-dev/storage, but provide fallback for background context
+let storage: StorageInterface | null = null;
+
+// Initialize storage when module loads
+(async () => {
+  try {
+    // In background context, this might fail due to window access
+    const storageModule = await import("@wxt-dev/storage");
+    storage = storageModule.storage;
+  } catch (error) {
+    console.warn("[MessageBus] Failed to import @wxt-dev/storage, using fallback:", error);
+    // Fallback implementation that doesn't actually store data
+    storage = {
+      setItem: async () => Promise.resolve(),
+      getItem: async <T>(key: string, options?: { fallback?: T }) => 
+        Promise.resolve(options?.fallback ?? undefined as unknown as T),
+    };
+  }
+})();
 
 // Default timeout for message responses (5 seconds)
 export const DEFAULT_TIMEOUT = 5000;
@@ -435,6 +461,11 @@ export class MessageBus {
     message: ReceivedMessages,
     tabId?: number,
   ): Promise<void> {
+    // If storage is not available, silently fail
+    if (!storage) {
+      return;
+    }
+    
     try {
       const offlineMessage: OfflineMessage = {
         id: this.generateId(),
@@ -466,6 +497,11 @@ export class MessageBus {
    * Get offline messages from storage.
    */
   private async getOfflineMessages(): Promise<OfflineMessage[]> {
+    // If storage is not available, return empty array
+    if (!storage) {
+      return [];
+    }
+    
     try {
       const messages = await storage.getItem("local:offlineMessages", {
         fallback: [] as OfflineMessage[],
@@ -510,7 +546,7 @@ export class MessageBus {
       }
 
       // Remove processed messages from storage
-      if (processedMessageIds.length > 0) {
+      if (processedMessageIds.length > 0 && storage) {
         const remainingMessages = offlineMessages.filter(
           (msg) => !processedMessageIds.includes(msg.id),
         );
@@ -565,6 +601,11 @@ export class MessageBus {
    * Clear all offline messages.
    */
   async clearOfflineMessages(): Promise<void> {
+    // If storage is not available, silently fail
+    if (!storage) {
+      return;
+    }
+    
     try {
       await storage.setItem("local:offlineMessages", []);
     } catch {

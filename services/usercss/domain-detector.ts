@@ -158,13 +158,17 @@ export class UserCSSDomainDetector implements DomainDetector {
     }
 
     // Special handling for www subdomain - treat www.example.com the same as example.com
-    if (normalizedDomain.startsWith("www.") &&
-        normalizedDomain.substring(4) === normalizedPattern) {
+    if (
+      normalizedDomain.startsWith("www.") &&
+      normalizedDomain.substring(4) === normalizedPattern
+    ) {
       return true;
     }
 
-    if (normalizedPattern.startsWith("www.") &&
-        normalizedPattern.substring(4) === normalizedDomain) {
+    if (
+      normalizedPattern.startsWith("www.") &&
+      normalizedPattern.substring(4) === normalizedDomain
+    ) {
       return true;
     }
 
@@ -223,11 +227,12 @@ export class UserCSSDomainDetector implements DomainDetector {
    * Extract domain from URL
    */
   extractDomain(url: string): string {
-    try {
-      const urlObj = new URL(url);
-      return urlObj.hostname.toLowerCase();
-    } catch (error) {
-      this.debug(`Failed to extract domain from URL: ${url}`, error);
+    // Use regex to extract hostname to avoid URL constructor dependencies
+    const urlRegex = new RegExp("^https?://([^/]+)", "i");
+    const match = url.match(urlRegex);
+    if (match) {
+      return match[1].toLowerCase();
+    } else {
       return url; // Fallback to original URL if parsing fails
     }
   }
@@ -236,37 +241,33 @@ export class UserCSSDomainDetector implements DomainDetector {
    * Normalize URL for consistent processing
    */
   normalizeURL(url: string): string {
+    // Use regex-based normalization to avoid URL constructor dependencies
     try {
       // Check if it's already a valid URL with protocol
-      if (url.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//)) {
-        const urlObj = new URL(url);
+      if (url.match(new RegExp("^[a-zA-Z][a-zA-Z0-9+.-]*://"))) {
+        // Simple normalization: lowercase protocol and hostname, remove trailing slash
+        let normalized = url.replace(
+          new RegExp("^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/"),
+          (match, protocol) => protocol.toLowerCase() + "://",
+        );
 
-        // Normalize protocol to lowercase
-        urlObj.protocol = urlObj.protocol.toLowerCase();
+        // Extract and lowercase hostname (rough approximation)
+        normalized = normalized.replace(
+          new RegExp(":\\/\\/([^/]+)"),
+          (match, hostname) => "://" + hostname.toLowerCase(),
+        );
 
-        // Remove default ports
-        if (
-          (urlObj.protocol === "https:" && urlObj.port === "443") ||
-          (urlObj.protocol === "http:" && urlObj.port === "80")
-        ) {
-          urlObj.port = "";
-        }
-
-        // Normalize hostname to lowercase
-        urlObj.hostname = urlObj.hostname.toLowerCase();
-
-        return urlObj.toString().replace(/\/$/, ""); // Remove trailing slash
+        return normalized.replace(/\/$/, ""); // Remove trailing slash
       }
 
-      // For URLs without protocol, try to add https:// and parse
-      try {
-        const urlWithProtocol = `https://${url}`;
-        const urlObj = new URL(urlWithProtocol);
-        urlObj.hostname = urlObj.hostname.toLowerCase();
-        return urlObj.toString().replace(/\/$/, "");
-      } catch {
-        return url; // Return original URL if can't parse even with protocol
-      }
+      // For URLs without protocol, assume https://
+      const urlWithProtocol = `https://${url}`;
+      // Simple normalization
+      const normalized = urlWithProtocol.replace(
+        new RegExp(":\\/\\/([^/]+)"),
+        (match, hostname) => "://" + hostname.toLowerCase(),
+      );
+      return normalized.replace(/\/$/, "");
     } catch (error) {
       this.debug(`Failed to normalize URL: ${url}`, error);
       return url; // Return original URL if parsing fails

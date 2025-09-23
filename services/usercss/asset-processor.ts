@@ -26,7 +26,7 @@ export function extractExternalUrls(css: string): ExternalAsset[] {
   const assets: ExternalAsset[] = [];
 
   // Regex to match url() references in CSS
-  const urlRegex = /url\(["']?([^"'\)]+)["']?\)/g;
+  const urlRegex = /url\(["']?([^"')]+)["']?\)/g;
   let match;
 
   while ((match = urlRegex.exec(css)) !== null) {

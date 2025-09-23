@@ -173,12 +173,12 @@ function ensureFontFamilyQuotes(value: string): string {
  * Helper function to inject CSS as a style element
  */
 function injectStyleElement(css: string, isFontStyle: boolean): void {
-  if (typeof document === 'undefined') {
+  if (typeof globalThis.document === 'undefined') {
     // Not in browser environment
     return;
   }
 
-  const style = document.createElement('style');
+  const style = globalThis.document.createElement('style');
   style.textContent = css;
 
   if (isFontStyle) {
@@ -186,7 +186,7 @@ function injectStyleElement(css: string, isFontStyle: boolean): void {
   }
 
   // Insert at the beginning of head to ensure fonts load before other styles
-  const head = document.head;
+  const head = globalThis.document.head;
   if (head.firstChild) {
     head.insertBefore(style, head.firstChild);
   } else {

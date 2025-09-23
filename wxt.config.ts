@@ -38,6 +38,14 @@ export default defineConfig({
         resources: ["fonts/*"],
         matches: ["<all_urls>"],
       },
+      {
+        resources: ["*.user.css"],
+        matches: ["<all_urls>"],
+      },
+      {
+        resources: ["save.html"],
+        matches: ["<all_urls>"],
+      },
     ],
   },
   vite: () => ({
@@ -51,8 +59,13 @@ export default defineConfig({
       rollupOptions: {
         onwarn(warning, warn) {
           // Suppress Stylus-related externalization warnings
-          if (warning.code === 'MODULE_LEVEL_DIRECTIVE' ||
-              (warning.message && warning.message.includes('has been externalized for browser compatibility'))) {
+          if (
+            warning.code === "MODULE_LEVEL_DIRECTIVE" ||
+            (warning.message &&
+              warning.message.includes(
+                "has been externalized for browser compatibility",
+              ))
+          ) {
             return;
           }
           warn(warning);

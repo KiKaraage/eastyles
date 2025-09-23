@@ -4,7 +4,7 @@
  * Extracts variable descriptors from CSS content and resolves variables in CSS.
  */
 
-import { VariableDescriptor } from "@services/usercss/types";
+import { VariableDescriptor } from "./types";
 
 /**
  * Extracts variable descriptors from CSS content

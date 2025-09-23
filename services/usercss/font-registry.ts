@@ -191,9 +191,19 @@ export class FontRegistryService {
   async checkFontAvailability(fontName: string): Promise<boolean> {
     // Check if we're in a browser extension context with DOM access
     // Background scripts don't have window/document, so we can't check font availability there
-    if (typeof globalThis === "undefined" ||
-        typeof document === "undefined" ||
-        typeof window === "undefined") {
+    let hasDocument = false;
+    let hasWindow = false;
+    try {
+      hasDocument = typeof globalThis.document !== 'undefined';
+      hasWindow = typeof globalThis.window !== 'undefined';
+    } catch (e) {
+      console.debug(
+        "Font detection: DOM not available (likely background context), returning false",
+      );
+      return false;
+    }
+    
+    if (!hasDocument || !hasWindow) {
       console.debug(
         "Font detection: DOM not available (likely background context), returning false",
       );
@@ -201,7 +211,7 @@ export class FontRegistryService {
     }
 
     // Additional checks for window and document objects
-    if (!window || !document) {
+    if (!globalThis.window || !globalThis.document) {
       console.debug(
         "Font detection: window or document not available, returning false",
       );
@@ -209,30 +219,30 @@ export class FontRegistryService {
     }
 
     // Check if document is fully initialized
-    if (!document.body || !document.head) {
+    if (!globalThis.document.body || !globalThis.document.head) {
       console.debug(
         "Font detection: document not fully initialized, returning false",
       );
       return false;
     }
 
-     try {
-      // Use document.fonts.check if available (modern browsers)
-      if (document.fonts && typeof document.fonts.check === 'function') {
-        const isAvailable = document.fonts.check(`12px "${fontName}"`);
-        console.debug(`Font detection result for "${fontName}" using document.fonts.check: ${isAvailable}`);
-        return isAvailable;
-      }
+      try {
+       // Use document.fonts.check if available (modern browsers)
+       if (globalThis.document.fonts && typeof globalThis.document.fonts.check === 'function') {
+         const isAvailable = globalThis.document.fonts.check(`12px "${fontName}"`);
+         console.debug(`Font detection result for "${fontName}" using document.fonts.check: ${isAvailable}`);
+         return isAvailable;
+       }
 
-      // Fallback to canvas-based detection
-      // Check if DOM methods are available
-      if (typeof document.createElement !== 'function') {
-        console.debug("Font detection: document.createElement not available");
-        return false;
-      }
+       // Fallback to canvas-based detection
+       // Check if DOM methods are available
+       if (typeof globalThis.document.createElement !== 'function') {
+         console.debug("Font detection: document.createElement not available");
+         return false;
+       }
 
-      // Create a temporary element to test font loading
-      const testElement = document.createElement("span");
+       // Create a temporary element to test font loading
+       const testElement = globalThis.document.createElement("span");
       testElement.style.fontFamily = `'${fontName}', monospace`;
       testElement.style.fontSize = "12px";
       testElement.style.position = "absolute";
@@ -241,32 +251,32 @@ export class FontRegistryService {
       testElement.textContent = "Test";
       testElement.setAttribute("aria-hidden", "true");
 
-      // Double-check document.body exists before using it
-      if (!document.body || typeof document.body.appendChild !== 'function') {
-        console.debug("Font detection: document.body or appendChild not available");
-        return false;
-      }
+       // Double-check document.body exists before using it
+       if (!globalThis.document.body || typeof globalThis.document.body.appendChild !== 'function') {
+         console.debug("Font detection: document.body or appendChild not available");
+         return false;
+       }
 
-      document.body.appendChild(testElement);
+       globalThis.document.body.appendChild(testElement);
 
-      // Use canvas to measure text width with the font
-      const canvas = document.createElement("canvas");
-      if (typeof canvas.getContext !== 'function') {
-        console.debug("Font detection: canvas.getContext not available");
-        if (document.body && typeof document.body.removeChild === 'function') {
-          document.body.removeChild(testElement);
-        }
-        return false;
-      }
+       // Use canvas to measure text width with the font
+       const canvas = globalThis.document.createElement("canvas");
+       if (typeof canvas.getContext !== 'function') {
+         console.debug("Font detection: canvas.getContext not available");
+         if (globalThis.document.body && typeof globalThis.document.body.removeChild === 'function') {
+           globalThis.document.body.removeChild(testElement);
+         }
+         return false;
+       }
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        console.debug("Font detection: Canvas context not available");
-        if (document.body && typeof document.body.removeChild === 'function') {
-          document.body.removeChild(testElement);
-        }
-        return false;
-      }
+       const ctx = canvas.getContext("2d");
+       if (!ctx) {
+         console.debug("Font detection: Canvas context not available");
+         if (globalThis.document.body && typeof globalThis.document.body.removeChild === 'function') {
+           globalThis.document.body.removeChild(testElement);
+         }
+         return false;
+       }
 
        // Wait a bit for font to load
        await new Promise(resolve => setTimeout(resolve, 100));
@@ -279,32 +289,32 @@ export class FontRegistryService {
         ctx.font = "12px monospace";
         const widthWithFallback = ctx.measureText("Test").width;
 
-        if (document.body && typeof document.body.removeChild === 'function') {
-          document.body.removeChild(testElement);
-        }
+        if (globalThis.document.body && typeof globalThis.document.body.removeChild === 'function') {
+           globalThis.document.body.removeChild(testElement);
+         }
 
-       // If widths are different, the font is likely available
-       const isAvailable = Math.abs(widthWithFont - widthWithFallback) > 0.5; // Increased threshold for better accuracy
-       console.debug(`Font detection result for "${fontName}": ${isAvailable} (widths: ${widthWithFont} vs ${widthWithFallback}, diff: ${Math.abs(widthWithFont - widthWithFallback)})`);
+        // If widths are different, the font is likely available
+        const isAvailable = Math.abs(widthWithFont - widthWithFallback) > 0.5; // Increased threshold for better accuracy
+        console.debug(`Font detection result for "${fontName}": ${isAvailable} (widths: ${widthWithFont} vs ${widthWithFallback}, diff: ${Math.abs(widthWithFont - widthWithFallback)})`);
 
-         // Additional check: try to detect if the font is actually loaded
-         if (isAvailable) {
-           // Check if the computed font family includes our font
-           const computedFont = window.getComputedStyle && typeof window.getComputedStyle === 'function'
-             ? window.getComputedStyle(testElement).fontFamily
-             : '';
-           const fontLoaded = computedFont.includes(fontName) || computedFont.includes(fontName.replace(/\s+/g, ''));
-           console.debug(`Font loading check for "${fontName}": computed font family = "${computedFont}", font loaded = ${fontLoaded}`);
-           if (document.body && typeof document.body.removeChild === 'function') {
-             document.body.removeChild(testElement);
-           }
+          // Additional check: try to detect if the font is actually loaded
+          if (isAvailable) {
+            // Check if the computed font family includes our font
+            const computedFont = globalThis.window.getComputedStyle && typeof globalThis.window.getComputedStyle === 'function'
+              ? globalThis.window.getComputedStyle(testElement).fontFamily
+              : '';
+            const fontLoaded = computedFont.includes(fontName) || computedFont.includes(fontName.replace(/\s+/g, ''));
+            console.debug(`Font loading check for "${fontName}": computed font family = "${computedFont}", font loaded = ${fontLoaded}`);
+            if (globalThis.document.body && typeof globalThis.document.body.removeChild === 'function') {
+              globalThis.document.body.removeChild(testElement);
+            }
            return fontLoaded;
          }
 
-         if (document.body && typeof document.body.removeChild === 'function') {
-           document.body.removeChild(testElement);
-         }
-        return false;
+          if (globalThis.document.body && typeof globalThis.document.body.removeChild === 'function') {
+            globalThis.document.body.removeChild(testElement);
+          }
+         return false;
      } catch (error) {
        console.warn(`Font availability check failed for "${fontName}":`, error);
        return false;

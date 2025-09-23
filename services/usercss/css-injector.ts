@@ -69,7 +69,7 @@ export class UserCSSInjector implements CSSInjector {
 
     // Prioritize style elements for better reliability and performance
     // Style elements are more compatible and have better CSS parsing support
-    if (typeof document !== "undefined" && document) {
+    if (typeof globalThis.document !== "undefined" && globalThis.document) {
       console.log(
         "[CSSInjector] Document available - using style-element method",
       );
@@ -97,9 +97,9 @@ export class UserCSSInjector implements CSSInjector {
     // Check if constructable stylesheets are supported as last resort
     try {
       if (
-        typeof document !== "undefined" &&
-        document &&
-        "adoptedStyleSheets" in document &&
+        typeof globalThis.document !== "undefined" &&
+        globalThis.document &&
+        "adoptedStyleSheets" in globalThis.document &&
         typeof CSSStyleSheet !== "undefined"
       ) {
         console.log(
@@ -200,7 +200,7 @@ export class UserCSSInjector implements CSSInjector {
     console.log(
       `[CSSInjector] Injecting via constructable stylesheet for ${styleId}`,
     );
-    if (!("adoptedStyleSheets" in document)) {
+    if (!("adoptedStyleSheets" in globalThis.document)) {
       console.error(
         `[CSSInjector] Constructable stylesheets not supported in this environment`,
       );
@@ -215,16 +215,16 @@ export class UserCSSInjector implements CSSInjector {
     );
 
     // Log current adoptedStyleSheets state
-    const currentSheets = document.adoptedStyleSheets || [];
+    const currentSheets = globalThis.document.adoptedStyleSheets || [];
     console.log(
       `[CSSInjector] Current adoptedStyleSheets count: ${currentSheets.length}`,
     );
 
     // Append to adoptedStyleSheets without overwriting existing ones
-    document.adoptedStyleSheets = [...currentSheets, sheet];
+    globalThis.document.adoptedStyleSheets = [...currentSheets, sheet];
 
     console.log(
-      `[CSSInjector] Added stylesheet to adoptedStyleSheets, new count: ${document.adoptedStyleSheets.length}`,
+      `[CSSInjector] Added stylesheet to adoptedStyleSheets, new count: ${globalThis.document.adoptedStyleSheets.length}`,
     );
     this.registry.set(styleId, sheet);
   }
@@ -235,7 +235,7 @@ export class UserCSSInjector implements CSSInjector {
   ): Promise<void> {
     console.log(`[CSSInjector] Injecting via style element for ${styleId}`);
 
-    const style = document.createElement("style");
+    const style = globalThis.document.createElement("style");
     style.setAttribute("data-eastyles-id", styleId);
     style.setAttribute("type", "text/css");
 
@@ -246,7 +246,7 @@ export class UserCSSInjector implements CSSInjector {
     );
 
     // Insert at the end of head to ensure proper cascade, but before any existing UserCSS styles
-    const head = document.head || document.documentElement;
+    const head = globalThis.document.head || globalThis.document.documentElement;
 
     // Find the last existing Eastyles style to maintain order
     const existingStyles = head.querySelectorAll("style[data-eastyles-id]");
@@ -383,14 +383,14 @@ export class UserCSSInjector implements CSSInjector {
     _styleId: string,
     sheet: CSSStyleSheet,
   ): Promise<void> {
-    if (!("adoptedStyleSheets" in document)) {
+    if (!("adoptedStyleSheets" in globalThis.document)) {
       return;
     }
 
-    const sheets = Array.from(document.adoptedStyleSheets || []);
+    const sheets = Array.from(globalThis.document.adoptedStyleSheets || []);
     const filteredSheets = sheets.filter((s) => s !== sheet);
 
-    document.adoptedStyleSheets = filteredSheets;
+    globalThis.document.adoptedStyleSheets = filteredSheets;
   }
 
   private async removeStyleElement(style: HTMLStyleElement): Promise<void> {
