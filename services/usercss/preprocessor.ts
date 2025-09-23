@@ -212,6 +212,17 @@ export class PreprocessorEngine {
   }
 
   /**
+   * Safely check if DOM is available
+   */
+  private isDomAvailable(): boolean {
+    try {
+      return typeof window !== "undefined" && typeof document !== "undefined";
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Generate cache key from engine and content hash
    */
   private generateCacheKey(engine: PreprocessorType, content: string): string {
@@ -232,16 +243,7 @@ export class PreprocessorEngine {
     if (!this.lessModule) {
       try {
         // Guard against running in non-browser context
-        if (typeof window === "undefined") {
-          throw new Error("Less preprocessor cannot run in background context");
-        }
-
-        // Check if DOM is available before importing Less
-        // In service worker context, document is not defined at all
-        // Use safer detection that doesn't trigger ReferenceError
-        const hasDom = "document" in globalThis;
-
-        if (!hasDom) {
+        if (!this.isDomAvailable()) {
           throw new Error("Less preprocessor requires DOM access");
         }
 
@@ -274,18 +276,7 @@ export class PreprocessorEngine {
     if (!this.stylusModule) {
       try {
         // Guard against running in non-browser context
-        if (typeof window === "undefined") {
-          throw new Error(
-            "Stylus preprocessor cannot run in background context",
-          );
-        }
-
-        // Check if DOM is available before importing Stylus
-        // In service worker context, document is not defined at all
-        // Use safer detection that doesn't trigger ReferenceError
-        const hasDom = "document" in globalThis;
-
-        if (!hasDom) {
+        if (!this.isDomAvailable()) {
           throw new Error("Stylus preprocessor requires DOM access");
         }
 
@@ -485,7 +476,7 @@ export class PreprocessorEngine {
 
     // In background context, DOM is not available, so skip preprocessing for preprocessors that require DOM
     // Check if we're in a browser context with DOM access
-    const hasDom = typeof window !== "undefined" && typeof document !== "undefined";
+    const hasDom = this.isDomAvailable();
 
     // If we're in a background context where DOM is not available,
     // and we need a preprocessor other than USO, return the original text with a warning

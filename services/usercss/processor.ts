@@ -473,17 +473,52 @@ export function parseUserCSS(raw: string): ParseResult {
     console.log("[parseUserCSS] Matching metadata block...");
     const metadataBlockMatch = raw.match(METADATA_BLOCK_REGEX);
 
-    if (!metadataBlockMatch) {
-      console.log("[parseUserCSS] No metadata block found");
-      throw new Error(
-        "No UserCSS metadata block found. Expected block between ==UserStyle== and ==/UserStyle==",
-      );
+    let metadataContent = "";
+    if (metadataBlockMatch) {
+      console.log("[parseUserCSS] Metadata block found");
+      metadataBlock = metadataBlockMatch[0];
+      metadataContent = metadataBlockMatch[1];
+      css = raw.replace(metadataBlockMatch[0], "").trim();
+    } else {
+      console.log("[parseUserCSS] No ==UserStyle== metadata block found, checking for general comment");
+      // Try to find a general comment block at the start
+      const generalCommentMatch = raw.match(/^\/\*\*([\s\S]*?)\*\//);
+      if (generalCommentMatch) {
+        console.log("[parseUserCSS] Found general comment block");
+        metadataBlock = generalCommentMatch[0];
+        metadataContent = generalCommentMatch[1];
+        css = raw.replace(generalCommentMatch[0], "").trim();
+      } else {
+        console.log("[parseUserCSS] No metadata block found, proceeding without metadata");
+        meta = {
+          id: "",
+          name: "",
+          namespace: "",
+          version: "",
+          description: "",
+          author: "",
+          sourceUrl: "",
+          domains: [],
+          compiledCss: "",
+          variables: {},
+          assets: undefined,
+        };
+        css = raw;
+        metadataBlock = "";
+        return {
+          meta,
+          css,
+          metadataBlock,
+          warnings,
+          errors,
+        };
+      }
     }
 
-    console.log("[parseUserCSS] Metadata block found, processing content...");
-    const metadataContent = metadataBlockMatch[1].trim();
+    console.log("[parseUserCSS] Processing metadata content...");
+    const trimmedMetadataContent = metadataContent.trim();
     const lineStart =
-      (raw.substring(0, metadataBlockMatch.index!).match(/\r?\n/g) || [])
+      (raw.substring(0, metadataBlock.indexOf(metadataContent)).match(/\r?\n/g) || [])
         .length + 1;
 
     // Check for malformed blocks - be more permissive but still safe
@@ -520,11 +555,7 @@ export function parseUserCSS(raw: string): ParseResult {
       );
     }
 
-    // Extract metadata block for display purposes
-    metadataBlock = metadataBlockMatch[0];
 
-    // Remove metadata block from CSS content
-    css = raw.replace(METADATA_BLOCK_REGEX, "").trim();
 
     // Parse individual directives
     const directives: Record<string, string> = {};

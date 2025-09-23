@@ -15,8 +15,8 @@ import { storageClient } from "../storage/client";
 
 // Storage interface for offline message handling
 interface StorageInterface {
-  setItem: (key: string, value: unknown) => Promise<void>;
-  getItem: <T>(key: string, options?: { fallback?: T }) => Promise<T>;
+  setItem: <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, value: T | null) => Promise<void>;
+  getItem: <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, options?: { fallback?: T }) => Promise<T>;
 }
 
 // Try to import storage from @wxt-dev/storage, but provide fallback for background context
@@ -32,8 +32,8 @@ let storage: StorageInterface | null = null;
     console.warn("[MessageBus] Failed to import @wxt-dev/storage, using fallback:", error);
     // Fallback implementation that doesn't actually store data
     storage = {
-      setItem: async () => Promise.resolve(),
-      getItem: async <T>(key: string, options?: { fallback?: T }) => 
+      setItem: async <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, value: T | null) => Promise.resolve(),
+      getItem: async <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, options?: { fallback?: T }) =>
         Promise.resolve(options?.fallback ?? undefined as unknown as T),
     };
   }

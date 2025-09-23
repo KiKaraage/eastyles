@@ -52,20 +52,22 @@ export function parseUserCSSUltraMinimal(raw: string): UltraMinimalParseResult {
 
   // Basic metadata extraction
   const metadataMatch = raw.match(/\/\*\s*==UserStyle==\s*\r?\n([\s\S]*?)\s*==\/UserStyle==\s*\*\//);
-  if (!metadataMatch) {
-    errors.push('No UserCSS metadata block found');
-    return {
-      meta: { id: '', name: '', namespace: '', version: '', description: '', author: '', sourceUrl: '', domains: [] },
-      css: raw,
-      metadataBlock: '',
-      warnings,
-      errors
-    };
+  let metadataContent = '';
+  if (metadataMatch) {
+    metadataBlock = metadataMatch[0];
+    metadataContent = metadataMatch[1];
+    css = raw.replace(metadataMatch[0], '').trim();
+  } else {
+    // Try to find a general comment block at the start
+    const generalCommentMatch = raw.match(/^\/\*\*([\s\S]*?)\*\//);
+    if (generalCommentMatch) {
+      metadataBlock = generalCommentMatch[0];
+      metadataContent = generalCommentMatch[1];
+      css = raw.replace(generalCommentMatch[0], '').trim();
+    } else {
+      css = raw;
+    }
   }
-
-  metadataBlock = metadataMatch[0];
-  const metadataContent = metadataMatch[1];
-  css = raw.replace(metadataMatch[0], '').trim();
 
   // Extract basic directives
   const nameMatch = metadataContent.match(/@name\s+([^\r\n]+)/);
@@ -76,15 +78,17 @@ export function parseUserCSSUltraMinimal(raw: string): UltraMinimalParseResult {
   const namespace = namespaceMatch ? namespaceMatch[1].trim() : '';
   const version = versionMatch ? versionMatch[1].trim() : '';
 
-  // Validation
-  if (!name) {
-    errors.push('Missing required @name directive');
-  }
-  if (!namespace) {
-    errors.push('Missing required @namespace directive');
-  }
-  if (!version) {
-    errors.push('Missing required @version directive');
+  // Validation - only if metadata block exists
+  if (metadataMatch) {
+    if (!name) {
+      errors.push('Missing required @name directive');
+    }
+    if (!namespace) {
+      errors.push('Missing required @namespace directive');
+    }
+    if (!version) {
+      errors.push('Missing required @version directive');
+    }
   }
 
   // Extract domains

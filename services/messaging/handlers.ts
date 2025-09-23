@@ -503,39 +503,43 @@ const handleToggleStyle: MessageHandler = async (message) => {
       `[handleToggleStyle] Style ${id} ${enabled ? "enabled" : "disabled"}`,
     );
 
-    // Notify all content scripts to update/remove the style
-    // Get the updated style
-    const updatedStyle = await storageClient.getUserCSSStyle(id);
-    if (updatedStyle) {
-      // Broadcast style update to all tabs
-      browser.tabs.query({}).then((tabs) => {
-        tabs.forEach((tab) => {
-          if (tab.id) {
-            browser.tabs
-              .sendMessage(tab.id, {
-                type: enabled ? "styleUpdate" : "styleRemove",
-                styleId: id,
-                style: enabled ? updatedStyle : undefined,
-              })
-              .catch((error) => {
-                // Silently ignore errors for tabs that don't have content scripts
-                // This is normal for extension pages, about: pages, etc.
-                const errorMessage =
-                  error instanceof Error ? error.message : String(error);
-                if (
-                  !errorMessage.includes("Could not establish connection") &&
-                  !errorMessage.includes("Receiving end does not exist")
-                ) {
-                  console.warn(
-                    `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
-                    error,
-                  );
-                }
-              });
-          }
-        });
-      });
-    }
+      // Notify all content scripts to update/remove the style
+      // Get the updated style
+      const updatedStyle = await storageClient.getUserCSSStyle(id);
+      if (updatedStyle) {
+        // Broadcast style update to all tabs
+        try {
+          browser.tabs.query({}).then((tabs) => {
+            tabs.forEach((tab) => {
+              if (tab.id) {
+                browser.tabs
+                  .sendMessage(tab.id, {
+                    type: enabled ? "styleUpdate" : "styleRemove",
+                    styleId: id,
+                    style: enabled ? updatedStyle : undefined,
+                  })
+                  .catch((error) => {
+                    // Silently ignore errors for tabs that don't have content scripts
+                    // This is normal for extension pages, about: pages, etc.
+                    const errorMessage =
+                      error instanceof Error ? error.message : String(error);
+                    if (
+                      !errorMessage.includes("Could not establish connection") &&
+                      !errorMessage.includes("Receiving end does not exist")
+                    ) {
+                      console.warn(
+                        `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
+                        error,
+                      );
+                    }
+                  });
+              }
+            });
+          });
+        } catch (error) {
+          console.warn("[handleToggleStyle] Error notifying content scripts:", error);
+        }
+      }
 
     return {
       success: true,
@@ -623,29 +627,22 @@ const handleParseUserCSS: MessageHandler = async (message) => {
 
       // Basic metadata extraction
       const metadataMatch = raw.match(METADATA_BLOCK_REGEX);
-      if (!metadataMatch) {
-        errors.push("No UserCSS metadata block found");
-        return {
-          meta: {
-            id: "",
-            name: "",
-            namespace: "",
-            version: "",
-            description: "",
-            author: "",
-            sourceUrl: "",
-            domains: [],
-          },
-          css: raw,
-          metadataBlock: "",
-          warnings,
-          errors,
-        };
+      let metadataContent = "";
+      if (metadataMatch) {
+        metadataBlock = metadataMatch[0];
+        metadataContent = metadataMatch[1];
+        css = raw.replace(metadataMatch[0], "").trim();
+      } else {
+        // Try to find a general comment block at the start
+        const generalCommentMatch = raw.match(/^\/\*\*([\s\S]*?)\*\//);
+        if (generalCommentMatch) {
+          metadataContent = generalCommentMatch[1];
+          metadataBlock = generalCommentMatch[0];
+          css = raw.replace(generalCommentMatch[0], "").trim();
+        } else {
+          css = raw;
+        }
       }
-
-      metadataBlock = metadataMatch[0];
-      const metadataContent = metadataMatch[1];
-      css = raw.replace(metadataMatch[0], "").trim();
 
       // Extract basic directives
       const nameMatch = metadataContent.match(/@name\s+([^\r\n]+)/);
@@ -656,15 +653,17 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       const namespace = namespaceMatch ? namespaceMatch[1].trim() : "";
       const version = versionMatch ? versionMatch[1].trim() : "";
 
-      // Validation
-      if (!name) {
-        errors.push("Missing required @name directive");
-      }
-      if (!namespace) {
-        errors.push("Missing required @namespace directive");
-      }
-      if (!version) {
-        errors.push("Missing required @version directive");
+      // Validation - only if metadata block exists
+      if (metadataMatch) {
+        if (!name) {
+          errors.push("Missing required @name directive");
+        }
+        if (!namespace) {
+          errors.push("Missing required @namespace directive");
+        }
+        if (!version) {
+          errors.push("Missing required @version directive");
+        }
       }
 
       // Extract domains
@@ -1087,33 +1086,37 @@ const handleInstallStyle: MessageHandler = async (message) => {
     console.log(
       "[handleInstallStyle] Notifying content scripts about new style",
     );
-    browser.tabs.query({}).then((tabs) => {
-      tabs.forEach((tab) => {
-        if (tab.id) {
-          browser.tabs
-            .sendMessage(tab.id, {
-              type: "styleUpdate",
-              styleId: savedStyle.id,
-              style: savedStyle,
-            })
-            .catch((error) => {
-              // Silently ignore errors for tabs that don't have content scripts
-              // This is normal for extension pages, about: pages, etc.
-              const errorMessage =
-                error instanceof Error ? error.message : String(error);
-              if (
-                !errorMessage.includes("Could not establish connection") &&
-                !errorMessage.includes("Receiving end does not exist")
-              ) {
-                console.warn(
-                  `[handleInstallStyle] Unexpected error notifying tab ${tab.id}:`,
-                  error,
-                );
-              }
-            });
-        }
+    try {
+      browser.tabs.query({}).then((tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.id) {
+            browser.tabs
+              .sendMessage(tab.id, {
+                type: "styleUpdate",
+                styleId: savedStyle.id,
+                style: savedStyle,
+              })
+              .catch((error) => {
+                // Silently ignore errors for tabs that don't have content scripts
+                // This is normal for extension pages, about: pages, etc.
+                const errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                if (
+                  !errorMessage.includes("Could not establish connection") &&
+                  !errorMessage.includes("Receiving end does not exist")
+                ) {
+                  console.warn(
+                    `[handleInstallStyle] Unexpected error notifying tab ${tab.id}:`,
+                    error,
+                  );
+                }
+              });
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.warn("[handleInstallStyle] Error notifying content scripts:", error);
+    }
 
     // Verify the style was saved by retrieving all styles
     const allStyles = await storageClient.getUserCSSStyles();
