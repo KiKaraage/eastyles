@@ -14,8 +14,13 @@ import {
   SaveMessageType,
 } from "../../../hooks/useMessage";
 import { VariableControls } from "../VariableControls";
-
-import { Trash, Edit, Settings, Upload, Download } from "iconoir-react";
+import {
+  Trash,
+  Edit,
+  Settings,
+  TransitionRight,
+  TextSize,
+} from "iconoir-react";
 import NewFontStyle from "../NewFontStyle";
 
 const ManagerPage: React.FC = () => {
@@ -24,6 +29,7 @@ const ManagerPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [dragError, setDragError] = useState<string | null>(null);
   const [showFontModal, setShowFontModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingStyle, setEditingStyle] = useState<UserCSSStyle | null>(null);
@@ -325,16 +331,19 @@ const ManagerPage: React.FC = () => {
   const handleImportClick = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".user.css";
+    input.accept = ".css,.user.css";
     input.multiple = false;
 
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file && file.name.endsWith(".user.css")) {
+      if (
+        file &&
+        (file.name.endsWith(".user.css") || file.name.endsWith(".css"))
+      ) {
         try {
           // Read the file content directly
           const cssContent = await file.text();
-          console.log("Read imported UserCSS file, length:", cssContent.length);
+          console.log("Read imported CSS file, length:", cssContent.length);
 
           // Store content in sessionStorage to avoid URL length limits
           const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -348,97 +357,111 @@ const ManagerPage: React.FC = () => {
           console.log("Redirecting to Save page with storage reference");
           window.location.href = finalUrl;
         } catch (error) {
-          console.error("Failed to read imported UserCSS file:", error);
-          setError("Failed to read the UserCSS file");
+          console.error("Failed to read imported CSS file:", error);
+          setError("Failed to read the CSS file");
         }
       } else if (file) {
-        setError("Please select a .user.css file");
+        setError("Please select a .css or .user.css file");
       }
     };
 
     input.click();
   }, []);
 
-  // Handle export functionality
-  const handleExportClick = useCallback(async () => {
-    try {
-      setError(null);
-      // Get all UserCSS styles for export
-      const userCSSStyles = await storageClient.getUserCSSStyles();
+  // Handle drag and drop for the entire document to show modal when files are dragged over the page
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
-      if (userCSSStyles.length === 0) {
-        setError("No styles to export");
-        return;
+  useEffect(() => {
+    let dragCounter = 0; // Track multiple dragenter/dragleave events
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = "copy"; // Show copy cursor
+      if (e.dataTransfer?.types.includes("Files")) {
+        dragCounter++;
+        if (dragCounter === 1) {
+          setIsDragOver(true);
+          setDragError(null); // Clear any previous drag errors
+        }
       }
+    };
 
-      // Create export data structure
-      const exportData = {
-        styles: userCSSStyles,
-        timestamp: Date.now(),
-        version: "1.0.0",
-      };
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = "copy"; // Show copy cursor
+    };
 
-      // Convert to JSON and create download
-      const json = JSON.stringify(exportData, null, 2);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `eastyles_styles_${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      // Show success message
-      setError(null);
-      // You could add a success toast here similar to the Save page
-    } catch (error) {
-      console.error("Failed to export styles:", error);
-      setError("Failed to export styles");
-    }
-  }, []);
-
-  // Handle drag and drop
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    const userCssFile = files.find((file) => file.name.endsWith(".user.css"));
-
-    if (userCssFile) {
-      try {
-        // Read the file content directly
-        const cssContent = await userCssFile.text();
-        console.log("Read local UserCSS file, length:", cssContent.length);
-
-        // Store content in sessionStorage to avoid URL length limits
-        const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        sessionStorage.setItem(storageId, cssContent);
-
-        // Pass storage ID instead of content
-        const saveUrl = browser.runtime.getURL("/save.html");
-        const filename = encodeURIComponent(userCssFile.name);
-        const finalUrl = `${saveUrl}?storageId=${storageId}&filename=${filename}&source=local`;
-
-        console.log("Redirecting to Save page with storage reference");
-        window.location.href = finalUrl;
-      } catch (error) {
-        console.error("Failed to read local UserCSS file:", error);
-        setError("Failed to read the UserCSS file");
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types.includes("Files")) {
+        dragCounter--;
+        if (dragCounter === 0) {
+          setIsDragOver(false);
+          setDragError(null); // Clear drag error when leaving
+        }
       }
-    }
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter = 0; // Reset counter
+
+      if (e.dataTransfer) {
+        const files = Array.from(e.dataTransfer.files);
+        const cssFile = files.find(
+          (file) =>
+            file.name.endsWith(".css") || file.name.endsWith(".user.css"),
+        );
+
+        if (cssFile) {
+          setDragError(null); // Clear any error for valid file
+          cssFile
+            .text()
+            .then((cssContent) => {
+              const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              sessionStorage.setItem(storageId, cssContent);
+              const saveUrl = browser.runtime.getURL("/save.html");
+              const filename = encodeURIComponent(cssFile.name);
+              const finalUrl = `${saveUrl}?storageId=${storageId}&filename=${filename}&source=local`;
+              window.location.href = finalUrl;
+            })
+            .catch((error) => {
+              console.error("Failed to read CSS file:", error);
+              setDragError("Failed to read the CSS file");
+              // Keep the modal open for 3 seconds to show the error
+              setTimeout(() => {
+                setIsDragOver(false);
+                setDragError(null);
+              }, 3000);
+            });
+        } else {
+          setDragError(
+            "Only CSS files (.css or .user.css) are supported. Please drag a valid CSS file.",
+          );
+          // Keep the modal open for 3 seconds to show the error
+          setTimeout(() => {
+            setIsDragOver(false);
+            setDragError(null);
+          }, 3000);
+        }
+      } else {
+        setIsDragOver(false);
+      }
+    };
+
+    // Add event listeners to the document to catch all drag operations
+    document.addEventListener("dragenter", handleDragEnter);
+    document.addEventListener("dragover", handleDragOver);
+    document.addEventListener("dragleave", handleDragLeave);
+    document.addEventListener("drop", handleDrop);
+
+    return () => {
+      document.removeEventListener("dragenter", handleDragEnter);
+      document.removeEventListener("dragover", handleDragOver);
+      document.removeEventListener("dragleave", handleDragLeave);
+      document.removeEventListener("drop", handleDrop);
+    };
   }, []);
 
   // Format domains for display
@@ -477,30 +500,25 @@ const ManagerPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
         <div>
-          <h2 className="text-2xl font-bold">Manage Styles</h2>
           <p className="text-base-content/70">
             Manage your installed UserCSS styles
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-outline" onClick={handleExportClick}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
+          <button className="btn btn-primary" onClick={handleImportClick}>
+            <TransitionRight className="w-4 h-4 mr-2" />
+            Add UserCSS File
           </button>
           <button
             className="btn btn-secondary"
             onClick={() => setShowFontModal(true)}
           >
-            <span className="text-lg mr-2">Aa</span>
+            <TextSize className="w-4 h-4 mr-2" />
             New Font Style
-          </button>
-          <button className="btn btn-primary" onClick={handleImportClick}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import
           </button>
         </div>
       </div>
@@ -518,25 +536,26 @@ const ManagerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Drag and Drop Zone */}
-      <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          isDragOver
-            ? "border-primary bg-primary/10"
-            : "border-base-300 hover:border-primary/50"
-        }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <Upload className="w-12 h-12 mx-auto mb-4 text-base-content/50" />
-        <p className="text-lg font-medium mb-2">
-          Drop UserCSS files here to import
-        </p>
-        <p className="text-sm text-base-content/70">
-          or click the Import button above
-        </p>
-      </div>
+      {/* Drag and Drop Modal */}
+      {isDragOver && (
+        <dialog className="modal modal-open">
+          <div className="modal-box w-6xl flex flex-col items-center justify-center text-center scale-95 animate-in fade-in-90 zoom-in-90 duration-200">
+            <TransitionRight className="w-16 h-16 mx-auto mb-6 text-base-content/70" />
+            <h3 className="text-2xl font-bold mb-2">
+              Drop CSS files here to import
+            </h3>
+            <p className="text-base text-base-content/80 mb-4">
+              Supports .css and .user.css files
+            </p>
+
+            {dragError && (
+              <div className="alert alert-warning w-full mt-4">
+                <span className="text-center block w-full">{dragError}</span>
+              </div>
+            )}
+          </div>
+        </dialog>
+      )}
 
       {/* Styles Table */}
       {styles.length === 0 ? (
@@ -549,12 +568,15 @@ const ManagerPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {styles.map((style) => (
-            <div key={style.id} className="card bg-base-100 shadow-sm border">
-              <div className="card-body p-4">
+            <div
+              key={style.id}
+              className="card bg-base-200 shadow-md flex flex-col h-full"
+            >
+              <div className="card-body p-4 flex flex-col flex-grow">
                 {/* Main Style Row */}
-                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
+                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 flex-grow">
                   {/* Toggle Switch */}
                   <input
                     type="checkbox"
@@ -565,9 +587,9 @@ const ManagerPage: React.FC = () => {
                   />
 
                   {/* Style Info */}
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex flex-col justify-center">
                     <h3 className="font-semibold truncate" title={style.name}>
-                      {style.name}
+                      {style.name} by {style.author}
                     </h3>
                     <p
                       className="text-sm text-base-content/70 truncate"
@@ -648,15 +670,8 @@ const ManagerPage: React.FC = () => {
         onClose={() => setShowFontModal(false)}
       >
         <div className="modal-box max-w-md">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-left mb-4">
             <h3 className="text-lg font-bold">Create Font Style</h3>
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={() => fontDialogRef.current?.close()}
-              aria-label="Close modal"
-            >
-              ✕
-            </button>
           </div>
 
           <NewFontStyle
@@ -700,15 +715,8 @@ const ManagerPage: React.FC = () => {
         onClose={() => setShowEditModal(false)}
       >
         <div className="modal-box max-w-lg flex flex-col max-h-[90vh]">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold">Edit Style</h3>
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={() => editDialogRef.current?.close()}
-              aria-label="Close modal"
-            >
-              ✕
-            </button>
+          <div className="flex justify-left mb-4">
+            <h3 className="text-lg font-bold">Edit Metadata</h3>
           </div>
 
           <form

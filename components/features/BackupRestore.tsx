@@ -119,8 +119,10 @@ const BackupRestore = () => {
 
       {/* Export Section */}
       <div className="card bg-base-200 shadow-md p-4">
-        <h3 className="card-title">Export Data</h3>
-        <p>Download a backup of your Eastyles data (settings and styles).</p>
+        <div className="card-actions justify-start mt-4">
+          <h3 className="card-title">Export Data</h3>
+          <p>Download a backup of your Eastyles data (settings and styles).</p>
+        </div>
         <div className="card-actions justify-end mt-4">
           <button
             className="btn btn-primary"

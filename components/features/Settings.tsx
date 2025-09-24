@@ -13,7 +13,7 @@ const Settings = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Settings</h2>
+      <h2 className="text-2xl font-bold">Settings</h2>
 
       {/* Debug Mode Toggle */}
       <div className="form-control">

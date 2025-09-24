@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { withErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { browser } from "wxt/browser";
-import { List, Plus, Settings } from "iconoir-react";
+import { List, Plus, TextSize, Settings } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useI18n } from "../../hooks/useI18n";
 import NewFontStyle from "../../components/features/NewFontStyle";
@@ -483,8 +483,8 @@ const App = () => {
                 onClick={handleOpenFontSelector}
                 className="btn btn-primary flex-1 justify-start normal-case ml-2"
               >
-                <span className="text-lg mr-3 flex-shrink-0">Aa</span>
-                <span className="truncate">{t("font_createNewStyle")}</span>
+                <TextSize className="w-5 h-5 mr-3 flex-shrink-0" />
+                <span className="truncate">{t("font_applyButton")}</span>
               </button>
             </div>
           </div>
