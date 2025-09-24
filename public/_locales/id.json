@@ -227,9 +227,9 @@
     "message": "Font '$1' berhasil diterapkan",
     "description": "Success message when font is applied"
   },
-  "font_applyTitle": {
-    "message": "Terapkan Font",
-    "description": "Title for the apply font dialog"
+  "font_createNewStyle": {
+    "message": "Gaya Font Baru",
+    "description": "Text for the New Font Style creation button and dialog title"
   },
   "font_selectLabel": {
     "message": "Pilih Font",

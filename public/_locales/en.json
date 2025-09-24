@@ -227,9 +227,9 @@
     "message": "Font '$1' applied successfully",
     "description": "Success message when font is applied"
   },
-  "font_applyTitle": {
-    "message": "Apply Font",
-    "description": "Title for the apply font dialog"
+  "font_createNewStyle": {
+    "message": "New Font Style",
+    "description": "Text for the New Font Style creation button and dialog title"
   },
   "font_selectLabel": {
     "message": "Select Font",

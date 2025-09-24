@@ -133,7 +133,7 @@ const METADATA_BLOCK_REGEX =
  * Regular expression to extract individual metadata directives
  */
 const DIRECTIVE_REGEX =
-  /@([^\s\r\n]+)[^\S\r\n]*([\s\S]*?)(?=\r?\n@|\r?\n==\/UserStyle==|$)/g;
+  /\s*@([^\s\r\n]+)[^\S\r\n]*([\s\S]*?)(?=\r?\n\s*@|\r?\n==\/UserStyle==|$)/g;
 
 /**
  * Regular expression to match URL fields for validation
@@ -480,7 +480,9 @@ export function parseUserCSS(raw: string): ParseResult {
       metadataContent = metadataBlockMatch[1];
       css = raw.replace(metadataBlockMatch[0], "").trim();
     } else {
-      console.log("[parseUserCSS] No ==UserStyle== metadata block found, checking for general comment");
+      console.log(
+        "[parseUserCSS] No ==UserStyle== metadata block found, checking for general comment",
+      );
       // Try to find a general comment block at the start
       const generalCommentMatch = raw.match(/^\/\*\*([\s\S]*?)\*\//);
       if (generalCommentMatch) {
@@ -489,7 +491,9 @@ export function parseUserCSS(raw: string): ParseResult {
         metadataContent = generalCommentMatch[1];
         css = raw.replace(generalCommentMatch[0], "").trim();
       } else {
-        console.log("[parseUserCSS] No metadata block found, proceeding without metadata");
+        console.log(
+          "[parseUserCSS] No metadata block found, proceeding without metadata",
+        );
         meta = {
           id: "",
           name: "",
@@ -516,10 +520,12 @@ export function parseUserCSS(raw: string): ParseResult {
     }
 
     console.log("[parseUserCSS] Processing metadata content...");
-    const trimmedMetadataContent = metadataContent.trim();
     const lineStart =
-      (raw.substring(0, metadataBlock.indexOf(metadataContent)).match(/\r?\n/g) || [])
-        .length + 1;
+      (
+        raw
+          .substring(0, metadataBlock.indexOf(metadataContent))
+          .match(/\r?\n/g) || []
+      ).length + 1;
 
     // Check for malformed blocks - be more permissive but still safe
     // Only reject the most obvious cases of malformed metadata
@@ -554,8 +560,6 @@ export function parseUserCSS(raw: string): ParseResult {
         "Metadata block contains nested comments - ensure they don't interfere with parsing",
       );
     }
-
-
 
     // Parse individual directives
     const directives: Record<string, string> = {};

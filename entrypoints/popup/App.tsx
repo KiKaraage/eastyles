@@ -4,14 +4,18 @@ import { browser } from "wxt/browser";
 import { List, Plus, Settings } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useI18n } from "../../hooks/useI18n";
-import ApplyFont from "./ApplyFont";
+import NewFontStyle from "../../components/features/NewFontStyle";
 import { VariableControls } from "../../components/features/VariableControls";
-import { useMessage, PopupMessageType } from "../../hooks/useMessage";
+import {
+  useMessage,
+  PopupMessageType,
+  SaveMessageType,
+} from "../../hooks/useMessage";
 import { UserCSSStyle } from "../../services/storage/schema";
 
 interface PopupState {
   isLoading: boolean;
-  showFontSelector: boolean;
+  currentPage: "main" | "newFontStyle";
   currentTab: { url?: string; title?: string } | null;
   availableStyles: UserCSSStyle[];
   activeStyles: UserCSSStyle[];
@@ -21,7 +25,7 @@ interface PopupState {
 const App = () => {
   const [state, setState] = useState<PopupState>({
     isLoading: false,
-    showFontSelector: false,
+    currentPage: "main",
     currentTab: null,
     availableStyles: [],
     activeStyles: [],
@@ -223,16 +227,11 @@ const App = () => {
   };
 
   const handleOpenFontSelector = () => {
-    setState((prev) => ({ ...prev, showFontSelector: true }));
+    setState((prev) => ({ ...prev, currentPage: "newFontStyle" }));
   };
 
   const handleCloseFontSelector = () => {
-    setState((prev) => ({ ...prev, showFontSelector: false }));
-  };
-
-  const handleFontApplied = (application: unknown) => {
-    console.log("Font applied:", application);
-    // TODO: Handle successful font application
+    setState((prev) => ({ ...prev, currentPage: "main" }));
   };
 
   const handleToggleStyle = async (styleId: string, enabled: boolean) => {
@@ -362,7 +361,46 @@ const App = () => {
 
       {/* Main Content */}
       <div className={`flex-1 p-2 overflow-y-auto ${isDark ? "dark" : ""}`}>
-        {state.isLoading ? (
+        {state.currentPage === "newFontStyle" ? (
+          <div className="space-y-4 px-2">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handleCloseFontSelector}
+                className="btn btn-ghost btn-sm"
+              >
+                ← Back
+              </button>
+              <h2 className="text-lg font-bold">{t("font_createNewStyle")}</h2>
+              <div></div> {/* Spacer */}
+            </div>
+            <NewFontStyle
+              onSave={async (domain, fontName) => {
+                const result = await sendMessage(
+                  SaveMessageType.CREATE_FONT_STYLE,
+                  {
+                    domain: domain || undefined,
+                    fontName,
+                  },
+                );
+
+                if ("success" in result && result.success) {
+                  setState((prev) => ({ ...prev, currentPage: "main" }));
+                  // Close popup after successful creation
+                  setTimeout(() => {
+                    window.close();
+                  }, 1000);
+                } else {
+                  const errorMsg =
+                    "error" in result && result.error
+                      ? result.error
+                      : "Failed to create font style";
+                  throw new Error(errorMsg);
+                }
+              }}
+              onClose={handleCloseFontSelector}
+            />
+          </div>
+        ) : state.isLoading ? (
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
             <div className="loading loading-spinner loading-lg"></div>
             <p className="text-base-content/70">{t("loading")}</p>
@@ -372,9 +410,6 @@ const App = () => {
             {/* Show available styles for this site */}
             {state.availableStyles.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-base-content">
-                  Available for this site:
-                </h4>
                 {state.availableStyles.map((style) => (
                   <div key={style.id} className="space-y-2">
                     <div className="flex items-center justify-between p-3 bg-base-200 rounded-lg">
@@ -443,27 +478,15 @@ const App = () => {
                 <span className="truncate">{t("addNewStyle")}</span>
               </button>
 
-              {/* Apply Font Button */}
+              {/* New Font Style Button */}
               <button
                 onClick={handleOpenFontSelector}
                 className="btn btn-primary flex-1 justify-start normal-case ml-2"
               >
                 <span className="text-lg mr-3 flex-shrink-0">Aa</span>
-                <span className="truncate">{t("font_applyButton")}</span>
+                <span className="truncate">{t("font_createNewStyle")}</span>
               </button>
             </div>
-
-            {/* Apply Font Modal */}
-            {state.showFontSelector && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full">
-                  <ApplyFont
-                    onFontApplied={handleFontApplied}
-                    onClose={handleCloseFontSelector}
-                  />
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

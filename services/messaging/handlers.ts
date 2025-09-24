@@ -503,43 +503,46 @@ const handleToggleStyle: MessageHandler = async (message) => {
       `[handleToggleStyle] Style ${id} ${enabled ? "enabled" : "disabled"}`,
     );
 
-      // Notify all content scripts to update/remove the style
-      // Get the updated style
-      const updatedStyle = await storageClient.getUserCSSStyle(id);
-      if (updatedStyle) {
-        // Broadcast style update to all tabs
-        try {
-          browser.tabs.query({}).then((tabs) => {
-            tabs.forEach((tab) => {
-              if (tab.id) {
-                browser.tabs
-                  .sendMessage(tab.id, {
-                    type: enabled ? "styleUpdate" : "styleRemove",
-                    styleId: id,
-                    style: enabled ? updatedStyle : undefined,
-                  })
-                  .catch((error) => {
-                    // Silently ignore errors for tabs that don't have content scripts
-                    // This is normal for extension pages, about: pages, etc.
-                    const errorMessage =
-                      error instanceof Error ? error.message : String(error);
-                    if (
-                      !errorMessage.includes("Could not establish connection") &&
-                      !errorMessage.includes("Receiving end does not exist")
-                    ) {
-                      console.warn(
-                        `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
-                        error,
-                      );
-                    }
-                  });
-              }
-            });
+    // Notify all content scripts to update/remove the style
+    // Get the updated style
+    const updatedStyle = await storageClient.getUserCSSStyle(id);
+    if (updatedStyle) {
+      // Broadcast style update to all tabs
+      try {
+        browser.tabs.query({}).then((tabs) => {
+          tabs.forEach((tab) => {
+            if (tab.id) {
+              browser.tabs
+                .sendMessage(tab.id, {
+                  type: enabled ? "styleUpdate" : "styleRemove",
+                  styleId: id,
+                  style: enabled ? updatedStyle : undefined,
+                })
+                .catch((error) => {
+                  // Silently ignore errors for tabs that don't have content scripts
+                  // This is normal for extension pages, about: pages, etc.
+                  const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                  if (
+                    !errorMessage.includes("Could not establish connection") &&
+                    !errorMessage.includes("Receiving end does not exist")
+                  ) {
+                    console.warn(
+                      `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
+                      error,
+                    );
+                  }
+                });
+            }
           });
-        } catch (error) {
-          console.warn("[handleToggleStyle] Error notifying content scripts:", error);
-        }
+        });
+      } catch (error) {
+        console.warn(
+          "[handleToggleStyle] Error notifying content scripts:",
+          error,
+        );
       }
+    }
 
     return {
       success: true,
@@ -648,10 +651,25 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       const nameMatch = metadataContent.match(/@name\s+([^\r\n]+)/);
       const namespaceMatch = metadataContent.match(/@namespace\s+([^\r\n]+)/);
       const versionMatch = metadataContent.match(/@version\s+([^\r\n]+)/);
+      const descriptionMatch = metadataContent.match(
+        /@description\s+([^\r\n]+)/,
+      );
+      const authorMatch = metadataContent.match(/@author\s+([^\r\n]+)/);
+      const homepageURLMatch = metadataContent.match(
+        /@homepageURL\s+([^\r\n]+)/,
+      );
+      const supportURLMatch = metadataContent.match(/@supportURL\s+([^\r\n]+)/);
 
       const name = nameMatch ? nameMatch[1].trim() : "";
       const namespace = namespaceMatch ? namespaceMatch[1].trim() : "";
       const version = versionMatch ? versionMatch[1].trim() : "";
+      const description = descriptionMatch ? descriptionMatch[1].trim() : "";
+      const author = authorMatch ? authorMatch[1].trim() : "";
+      const sourceUrl = homepageURLMatch
+        ? homepageURLMatch[1].trim()
+        : supportURLMatch
+          ? supportURLMatch[1].trim()
+          : "";
 
       // Validation - only if metadata block exists
       if (metadataMatch) {
@@ -727,9 +745,9 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         name,
         namespace,
         version,
-        description: "",
-        author: "",
-        sourceUrl: "",
+        description,
+        author,
+        sourceUrl,
         domains,
       };
 
@@ -1115,7 +1133,10 @@ const handleInstallStyle: MessageHandler = async (message) => {
         });
       });
     } catch (error) {
-      console.warn("[handleInstallStyle] Error notifying content scripts:", error);
+      console.warn(
+        "[handleInstallStyle] Error notifying content scripts:",
+        error,
+      );
     }
 
     // Verify the style was saved by retrieving all styles
@@ -1191,8 +1212,32 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
       }
     }
 
-    // Import required services
-    const { normalizePattern } = await import("../usercss/domains");
+    // Create inline normalizePattern function to avoid window/URL issues in background script
+    const normalizePattern = (pattern: string): string => {
+      try {
+        // Remove leading/trailing whitespace
+        let normalized = pattern.trim();
+
+        // If it's a full URL, extract just the hostname using simple string manipulation
+        if (normalized.includes("://")) {
+          // Simple hostname extraction without URL constructor
+          const protocolIndex = normalized.indexOf("://");
+          const afterProtocol = normalized.slice(protocolIndex + 3);
+          const pathIndex = afterProtocol.indexOf("/");
+          const hostname =
+            pathIndex >= 0 ? afterProtocol.slice(0, pathIndex) : afterProtocol;
+          return hostname;
+        }
+
+        // Remove trailing slashes
+        normalized = normalized.replace(/\/+$/, "");
+
+        return normalized;
+      } catch {
+        // If parsing fails, return as-is (but still trim and remove trailing slashes)
+        return pattern.trim().replace(/\/+$/, "");
+      }
+    };
 
     // Validate that the font exists (inline check)
     const builtInFonts = [
@@ -1331,8 +1376,8 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
   }`;
 
     const fontFamilyRule = `
-   body {
-     font-family: '${fontName}', sans-serif;
+   * {
+     font-family: '${fontName}', sans-serif !important;
    }`;
 
     // Process domain for title
@@ -1398,6 +1443,42 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
       "[handleCreateFontStyle] Font style created successfully:",
       savedStyle.id,
     );
+
+    // Notify all content scripts to apply the new font style
+    try {
+      browser.tabs.query({}).then((tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.id) {
+            browser.tabs
+              .sendMessage(tab.id, {
+                type: "styleUpdate",
+                styleId: savedStyle.id,
+                style: savedStyle,
+              })
+              .catch((error) => {
+                // Silently ignore errors for tabs that don't have content scripts
+                // This is normal for extension pages, about: pages, etc.
+                const errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                if (
+                  !errorMessage.includes("Could not establish connection") &&
+                  !errorMessage.includes("Receiving end does not exist")
+                ) {
+                  console.warn(
+                    `[handleCreateFontStyle] Unexpected error notifying tab ${tab.id}:`,
+                    error,
+                  );
+                }
+              });
+          }
+        });
+      });
+    } catch (error) {
+      console.warn(
+        "[handleCreateFontStyle] Error notifying content scripts:",
+        error,
+      );
+    }
 
     return {
       success: true,

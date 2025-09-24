@@ -7,17 +7,16 @@ import React, { useState, useEffect, useCallback } from "react";
 import { browser } from "@wxt-dev/browser";
 import { storageClient } from "../../../services/storage/client";
 import { UserCSSStyle } from "../../../services/storage/schema";
+import { DomainRule } from "../../../services/usercss/types";
 import {
   useMessage,
   PopupMessageType,
   SaveMessageType,
 } from "../../../hooks/useMessage";
 import { VariableControls } from "../VariableControls";
-import {
-  fontRegistry,
-  BuiltInFont,
-} from "../../../services/usercss/font-registry";
+
 import { Trash, Edit, Settings, Upload, Download } from "iconoir-react";
+import NewFontStyle from "../NewFontStyle";
 
 const ManagerPage: React.FC = () => {
   const [styles, setStyles] = useState<UserCSSStyle[]>([]);
@@ -26,6 +25,18 @@ const ManagerPage: React.FC = () => {
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showFontModal, setShowFontModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingStyle, setEditingStyle] = useState<UserCSSStyle | null>(null);
+  const [editingName, setEditingName] = useState<string>("");
+  const [editingNamespace, setEditingNamespace] = useState<string>("");
+  const [editingVersion, setEditingVersion] = useState<string>("");
+  const [editingDescription, setEditingDescription] = useState<string>("");
+  const [editingAuthor, setEditingAuthor] = useState<string>("");
+  const [editingSourceUrl, setEditingSourceUrl] = useState<string>("");
+  const [editingDomains, setEditingDomains] = useState<string>("");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const editDialogRef = React.useRef<HTMLDialogElement>(null);
+  const fontDialogRef = React.useRef<HTMLDialogElement>(null);
 
   const { sendMessage } = useMessage();
 
@@ -112,6 +123,203 @@ const ManagerPage: React.FC = () => {
     },
     [sendMessage],
   );
+
+  // Serialize domains to CSS-like format for editing
+  const serializeDomains = useCallback((domains: DomainRule[]): string => {
+    return domains
+      .map((d) => {
+        switch (d.kind) {
+          case "domain":
+            return `domain("${d.pattern}")`;
+          case "url-prefix":
+            return `url-prefix("${d.pattern}")`;
+          case "url":
+            return `url("${d.pattern}")`;
+          case "regexp":
+            return `regexp("${d.pattern}")`;
+          default:
+            return `${d.kind}("${d.pattern}")`;
+        }
+      })
+      .join(", ");
+  }, []);
+
+  // Parse CSS-like string to domains
+  const parseDomains = useCallback((text: string): DomainRule[] => {
+    const domains: DomainRule[] = [];
+    // Split by comma, but handle quotes
+    const regex = /([^,()]+)\(("([^"]*)")\)/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const kind = match[1].trim();
+      const pattern = match[3];
+      if (["url", "url-prefix", "domain", "regexp"].includes(kind)) {
+        domains.push({
+          kind: kind as DomainRule["kind"],
+          pattern,
+          include: true,
+        });
+      }
+    }
+    if (domains.length === 0 && text.trim()) {
+      throw new Error("No valid domain rules found");
+    }
+    return domains;
+  }, []);
+
+  // Handle editing style
+  const handleEditStyle = useCallback(
+    (style: UserCSSStyle) => {
+      setEditingStyle(style);
+      setEditingName(style.name);
+      setEditingNamespace(style.namespace);
+      setEditingVersion(style.version);
+      setEditingDescription(style.description);
+      setEditingAuthor(style.author);
+      setEditingSourceUrl(style.sourceUrl);
+      setEditingDomains(serializeDomains(style.domains));
+      setHasUnsavedChanges(false);
+      setShowEditModal(true);
+    },
+    [serializeDomains],
+  );
+
+  // Handle dialog open/close
+  useEffect(() => {
+    if (showEditModal && editDialogRef.current) {
+      editDialogRef.current.showModal();
+    } else if (!showEditModal && editDialogRef.current) {
+      editDialogRef.current.close();
+    }
+  }, [showEditModal]);
+
+  useEffect(() => {
+    if (showFontModal && fontDialogRef.current) {
+      fontDialogRef.current.showModal();
+    } else if (!showFontModal && fontDialogRef.current) {
+      fontDialogRef.current.close();
+    }
+  }, [showFontModal]);
+
+  // Detect unsaved changes
+  useEffect(() => {
+    if (editingStyle) {
+      const changed =
+        editingName !== editingStyle.name ||
+        editingNamespace !== editingStyle.namespace ||
+        editingVersion !== editingStyle.version ||
+        editingDescription !== editingStyle.description ||
+        editingAuthor !== editingStyle.author ||
+        editingSourceUrl !== editingStyle.sourceUrl ||
+        editingDomains !== serializeDomains(editingStyle.domains);
+      setHasUnsavedChanges(changed);
+    }
+  }, [
+    editingStyle,
+    editingName,
+    editingNamespace,
+    editingVersion,
+    editingDescription,
+    editingAuthor,
+    editingSourceUrl,
+    editingDomains,
+    serializeDomains,
+  ]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (editingStyle && editingName.trim()) {
+      try {
+        const updatedDomains = parseDomains(editingDomains);
+        await storageClient.updateUserCSSStyle(editingStyle.id, {
+          name: editingName.trim(),
+          namespace: editingNamespace.trim() || editingStyle.namespace,
+          version: editingVersion.trim() || editingStyle.version,
+          description: editingDescription.trim() || editingStyle.description,
+          author: editingAuthor.trim() || editingStyle.author,
+          sourceUrl: editingSourceUrl.trim() || editingStyle.sourceUrl,
+          domains: updatedDomains,
+        });
+        setShowEditModal(false);
+        setEditingStyle(null);
+        setEditingName("");
+        setEditingNamespace("");
+        setEditingVersion("");
+        setEditingDescription("");
+        setEditingAuthor("");
+        setEditingSourceUrl("");
+        setEditingDomains("");
+        setHasUnsavedChanges(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update style");
+      }
+    }
+  }, [
+    editingStyle,
+    editingName,
+    editingNamespace,
+    editingVersion,
+    editingDescription,
+    editingAuthor,
+    editingSourceUrl,
+    editingDomains,
+    parseDomains,
+  ]);
+
+  const handleCancelEdit = useCallback(
+    (force = false) => {
+      if (!force && hasUnsavedChanges) {
+        if (
+          !confirm(
+            "You have unsaved changes. Are you sure you want to discard them?",
+          )
+        ) {
+          return;
+        }
+      }
+      setShowEditModal(false);
+      setEditingStyle(null);
+      setEditingName("");
+      setEditingNamespace("");
+      setEditingVersion("");
+      setEditingDescription("");
+      setEditingAuthor("");
+      setEditingSourceUrl("");
+      setEditingDomains("");
+      setHasUnsavedChanges(false);
+    },
+    [hasUnsavedChanges],
+  );
+
+  const handleDialogCancel = useCallback(
+    (e: React.SyntheticEvent<HTMLDialogElement, Event>) => {
+      if (hasUnsavedChanges) {
+        if (
+          !confirm(
+            "You have unsaved changes. Are you sure you want to discard them?",
+          )
+        ) {
+          e.preventDefault();
+          return;
+        }
+      }
+      setShowEditModal(false);
+    },
+    [hasUnsavedChanges],
+  );
+
+  // Handle Esc key to close modal
+  useEffect(() => {
+    if (!showEditModal) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleCancelEdit(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showEditModal, handleCancelEdit]);
 
   // Handle file import via button click
   const handleImportClick = useCallback(() => {
@@ -271,7 +479,7 @@ const ManagerPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
         <div>
           <h2 className="text-2xl font-bold">Manage Styles</h2>
           <p className="text-base-content/70">
@@ -343,85 +551,73 @@ const ManagerPage: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {styles.map((style) => (
-            <div
-              key={style.id}
-              className={`card bg-base-100 shadow-sm border transition-opacity ${
-                !style.enabled ? "opacity-50" : ""
-              }`}
-            >
+            <div key={style.id} className="card bg-base-100 shadow-sm border">
               <div className="card-body p-4">
                 {/* Main Style Row */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4 flex-1">
-                    {/* Toggle Button */}
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => toggleStyle(style.id, !style.enabled)}
-                      title={style.enabled ? "Disable style" : "Enable style"}
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-full ${style.enabled ? "bg-success" : "bg-base-content/20"}`}
-                      />
-                    </button>
+                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
+                  {/* Toggle Switch */}
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary"
+                    checked={style.enabled}
+                    onChange={() => toggleStyle(style.id, !style.enabled)}
+                    title={style.enabled ? "Disable style" : "Enable style"}
+                  />
 
-                    {/* Style Info */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold truncate">{style.name}</h3>
-                      <p className="text-sm text-base-content/70 truncate">
-                        {style.description}
-                      </p>
-                      <p className="text-xs text-base-content/50 truncate">
-                        Domains: {formatDomains(style.domains)}
-                      </p>
-                    </div>
+                  {/* Style Info */}
+                  <div className="min-w-0">
+                    <h3 className="font-semibold truncate" title={style.name}>
+                      {style.name}
+                    </h3>
+                    <p
+                      className="text-sm text-base-content/70 truncate"
+                      title={style.description}
+                    >
+                      {style.description}
+                    </p>
+                    <p
+                      className="text-xs text-base-content/50 truncate"
+                      title={formatDomains(style.domains)}
+                    >
+                      Domains: {formatDomains(style.domains)}
+                    </p>
                   </div>
 
-                  {/* Status Badge */}
-                  <div className="flex items-center space-x-2">
-                    <div
-                      className={`badge ${
-                        style.enabled ? "badge-success" : "badge-ghost"
-                      }`}
+                  {/* Action Buttons */}
+                  <div className="flex space-x-1">
+                    {/* Configure Button - only show if variables exist and style is enabled */}
+                    {Object.keys(style.variables).length > 0 &&
+                      style.enabled && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() =>
+                            setExpandedStyleId(
+                              expandedStyleId === style.id ? null : style.id,
+                            )
+                          }
+                          title="Configure variables"
+                        >
+                          <Settings className="w-4 h-4" />
+                        </button>
+                      )}
+
+                    {/* Edit Style Button */}
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleEditStyle(style)}
+                      title="Edit style"
                     >
-                      {style.enabled ? "Active" : "Disabled"}
-                    </div>
+                      <Edit className="w-4 h-4" />
+                    </button>
 
-                    {/* Action Buttons */}
-                    <div className="flex space-x-1">
-                      {/* Configure Button - only show if variables exist and style is enabled */}
-                      {Object.keys(style.variables).length > 0 &&
-                        style.enabled && (
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() =>
-                              setExpandedStyleId(
-                                expandedStyleId === style.id ? null : style.id,
-                              )
-                            }
-                            title="Configure variables"
-                          >
-                            <Settings className="w-4 h-4" />
-                          </button>
-                        )}
-
-                      {/* Edit Button - disabled for now */}
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        disabled
-                        title="Edit (coming soon)"
-                      >
-                        <Edit className="w-4 h-4 opacity-50" />
-                      </button>
-
-                      {/* Delete Button */}
-                      <button
-                        className="btn btn-ghost btn-sm text-error hover:bg-error hover:text-error-content"
-                        onClick={() => deleteStyle(style.id, style.name)}
-                        title="Delete style"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {/* Delete Button */}
+                    <button
+                      className="btn btn-ghost btn-sm text-error hover:bg-error hover:text-error-content"
+                      onClick={() => deleteStyle(style.id, style.name)}
+                      title="Delete style"
+                    >
+                      <Trash className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -446,158 +642,210 @@ const ManagerPage: React.FC = () => {
       )}
 
       {/* New Font Style Modal */}
-      {showFontModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold">Create Font Style</h3>
-                <button
-                  onClick={() => setShowFontModal(false)}
-                  className="btn btn-sm btn-ghost"
-                >
-                  ✕
-                </button>
-              </div>
+      <dialog
+        ref={fontDialogRef}
+        className="modal"
+        onClose={() => setShowFontModal(false)}
+      >
+        <div className="modal-box max-w-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold">Create Font Style</h3>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => fontDialogRef.current?.close()}
+              aria-label="Close modal"
+            >
+              ✕
+            </button>
+          </div>
 
-              <FontStyleModal
-                onSave={async (domain, fontName) => {
-                  try {
-                    // Use the new CREATE_FONT_STYLE message
-                    const result = await sendMessage(
-                      SaveMessageType.CREATE_FONT_STYLE,
-                      {
-                        domain: domain || undefined,
-                        fontName,
-                      },
-                    );
+          <NewFontStyle
+            onSave={async (domain: string, fontName: string) => {
+              // Use the new CREATE_FONT_STYLE message
+              const result = await sendMessage(
+                SaveMessageType.CREATE_FONT_STYLE,
+                {
+                  domain: domain || undefined,
+                  fontName,
+                },
+              );
 
-                    if ("success" in result && result.success) {
-                      setShowFontModal(false);
-                      loadStyles(); // Refresh the styles list
-                    } else {
-                      const errorMsg =
-                        "error" in result && result.error
-                          ? result.error
-                          : "Failed to create font style";
-                      setError(errorMsg);
-                    }
-                  } catch (err) {
-                    setError(
-                      err instanceof Error
-                        ? err.message
-                        : "Failed to create font style",
-                    );
-                  }
-                }}
-                onClose={() => setShowFontModal(false)}
-              />
-            </div>
+              if ("success" in result && result.success) {
+                setShowFontModal(false);
+                loadStyles(); // Refresh the styles list
+              } else {
+                const errorMsg =
+                  "error" in result && result.error
+                    ? result.error
+                    : "Failed to create font style";
+                throw new Error(errorMsg);
+              }
+            }}
+            onClose={() => fontDialogRef.current?.close()}
+          />
+
+          <div className="modal-action">
+            <form method="dialog">
+              <button className="btn">Close</button>
+            </form>
           </div>
         </div>
-      )}
-    </div>
-  );
-};
+      </dialog>
 
-// Font Style Modal Component
-interface FontStyleModalProps {
-  onSave: (domain: string, fontName: string) => Promise<void>;
-  onClose: () => void;
-}
+      {/* Edit Style Modal */}
+      <dialog
+        ref={editDialogRef}
+        className="modal"
+        onCancel={handleDialogCancel}
+        onClose={() => setShowEditModal(false)}
+      >
+        <div className="modal-box max-w-lg flex flex-col max-h-[90vh]">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold">Edit Style</h3>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => editDialogRef.current?.close()}
+              aria-label="Close modal"
+            >
+              ✕
+            </button>
+          </div>
 
-const FontStyleModal: React.FC<FontStyleModalProps> = ({ onSave, onClose }) => {
-  const [domain, setDomain] = useState("");
-  const [selectedFont, setSelectedFont] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [modalError, setModalError] = useState<string | null>(null);
+          <form
+            className="flex flex-col flex-1 overflow-hidden"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveEdit();
+              editDialogRef.current?.close();
+            }}
+          >
+            <div className="flex-1 overflow-y-auto space-y-4">
+              <div>
+                <label className="label" htmlFor="style-name">
+                  <span className="label-text">Style Name</span>
+                </label>
+                <input
+                  id="style-name"
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  className="input input-bordered w-full"
+                  placeholder="Enter style name"
+                  required
+                />
+              </div>
 
-  const builtInFonts = fontRegistry.getBuiltInFonts();
+              <div>
+                <label className="label" htmlFor="style-namespace">
+                  <span className="label-text">Namespace</span>
+                </label>
+                <input
+                  id="style-namespace"
+                  type="text"
+                  value={editingNamespace}
+                  onChange={(e) => setEditingNamespace(e.target.value)}
+                  className="input input-bordered w-full"
+                  placeholder="Enter namespace"
+                />
+              </div>
 
-  const handleSave = async () => {
-    if (!selectedFont) {
-      setModalError("Please select a font");
-      return;
-    }
+              <div>
+                <label className="label" htmlFor="style-version">
+                  <span className="label-text">Version</span>
+                </label>
+                <input
+                  id="style-version"
+                  type="text"
+                  value={editingVersion}
+                  onChange={(e) => setEditingVersion(e.target.value)}
+                  className="input input-bordered w-full"
+                  placeholder="Enter version"
+                />
+              </div>
 
-    setIsSaving(true);
-    setModalError(null);
-    try {
-      await onSave(domain.trim(), selectedFont);
-    } catch (err) {
-      setModalError(
-        err instanceof Error ? err.message : "Failed to save font style",
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  };
+              <div>
+                <label className="label" htmlFor="style-description">
+                  <span className="label-text">Description</span>
+                </label>
+                <textarea
+                  id="style-description"
+                  value={editingDescription}
+                  onChange={(e) => setEditingDescription(e.target.value)}
+                  className="textarea textarea-bordered w-full h-24"
+                  placeholder="Enter description"
+                />
+              </div>
 
-  return (
-    <div className="space-y-4">
-      {modalError && (
-        <div className="alert alert-error">
-          <span>{modalError}</span>
+              <div>
+                <label className="label" htmlFor="style-author">
+                  <span className="label-text">Author</span>
+                </label>
+                <input
+                  id="style-author"
+                  type="text"
+                  value={editingAuthor}
+                  onChange={(e) => setEditingAuthor(e.target.value)}
+                  className="input input-bordered w-full"
+                  placeholder="Enter author"
+                />
+              </div>
+
+              <div>
+                <label className="label" htmlFor="style-source-url">
+                  <span className="label-text">Source URL</span>
+                </label>
+                <input
+                  id="style-source-url"
+                  type="text"
+                  value={editingSourceUrl}
+                  onChange={(e) => setEditingSourceUrl(e.target.value)}
+                  className="input input-bordered w-full"
+                  placeholder="Enter source URL"
+                />
+              </div>
+
+              <div>
+                <label className="label" htmlFor="style-domains">
+                  <span className="label-text">
+                    Domains (CSS format: domain("example.com"),
+                    url-prefix("https://example.org"))
+                  </span>
+                </label>
+                <input
+                  id="style-domains"
+                  type="text"
+                  value={editingDomains}
+                  onChange={(e) => setEditingDomains(e.target.value)}
+                  className="input input-bordered w-full"
+                  placeholder='domain("example.com"), url-prefix("https://example.org")'
+                />
+                <div className="text-xs text-base-content/70 mt-1">
+                  Separate multiple rules with commas
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-action">
+              <form method="dialog">
+                <button
+                  type="submit"
+                  className="btn btn-ghost"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+              </form>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={!editingName.trim()}
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
         </div>
-      )}
-
-      <div className="form-control">
-        <label className="label" htmlFor="domain-input">
-          <span className="label-text">Domain (optional)</span>
-        </label>
-        <input
-          id="domain-input"
-          type="text"
-          value={domain}
-          onChange={(e) => setDomain(e.target.value)}
-          placeholder="e.g., example.com (leave empty for all sites)"
-          className="input input-bordered w-full"
-        />
-        <label className="label" htmlFor="domain-input">
-          <span className="label-text text-xs text-base-content/60">
-            Leave empty to apply to all sites
-          </span>
-        </label>
-      </div>
-
-      <div className="form-control">
-        <label className="label" htmlFor="font-select">
-          <span className="label-text">Font</span>
-        </label>
-        <select
-          id="font-select"
-          value={selectedFont}
-          onChange={(e) => setSelectedFont(e.target.value)}
-          className="select select-bordered w-full"
-        >
-          <option value="">Select a font...</option>
-          {builtInFonts.map((font: BuiltInFont) => (
-            <option key={font.name} value={font.name}>
-              {font.name} ({font.category})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="btn btn-ghost" disabled={isSaving}>
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!selectedFont || isSaving}
-          className="btn btn-primary"
-        >
-          {isSaving ? (
-            <>
-              <span className="loading loading-spinner loading-sm"></span>
-              Saving...
-            </>
-          ) : (
-            "Save Font Style"
-          )}
-        </button>
-      </div>
+      </dialog>
     </div>
   );
 };
