@@ -43,6 +43,90 @@ body {
     expect(result.compiledCss).toContain("background: #ff0000");
   });
 
+  it("should process a Less UserCSS with variables", async () => {
+    const rawCSS = `/* ==UserStyle==
+@name Test Less Style with Variables
+@namespace test
+@version 1.0.0
+@description A test style with Less and variables
+@preprocessor less
+@var color bgColor "Background Color" #ff0000
+@var checkbox enableBorder "Enable Border" 1
+@var text fontSize "Font Size" "14px"
+==/UserStyle== */
+
+body {
+  background: @bgColor;
+  font-size: @fontSize;
+  .border-mixin() when (@enableBorder = 1) {
+    border: 1px solid #000;
+  }
+  .border-mixin();
+}`;
+
+    const result = await processUserCSS(rawCSS);
+    expect(result.errors).toHaveLength(0);
+    expect(result.preprocessorErrors).toHaveLength(0);
+    expect(result.meta.name).toBe("Test Less Style with Variables");
+    expect(result.meta.variables).toBeDefined();
+    expect(result.meta.variables!["bgColor"]).toBeDefined();
+    expect(result.meta.variables!["enableBorder"]).toBeDefined();
+    expect(result.meta.variables!["fontSize"]).toBeDefined();
+    expect(result.compiledCss).toContain("background: #ff0000");
+    expect(result.compiledCss).toContain("font-size: 14px");
+    expect(result.compiledCss).toContain("border: 1px solid #000");
+  });
+
+  it("should process a Stylus UserCSS", async () => {
+    const rawCSS = `/* ==UserStyle==
+@name Test Stylus Style
+@namespace test
+@version 1.0.0
+@description A test style with Stylus
+@preprocessor stylus
+==/UserStyle== */
+
+body
+  background: #ff0000`;
+
+    const result = await processUserCSS(rawCSS);
+    expect(result.errors).toHaveLength(0);
+    expect(result.preprocessorErrors).toHaveLength(0);
+    expect(result.meta.name).toBe("Test Stylus Style");
+    expect(result.compiledCss).toContain("background: #f00");
+  });
+
+  it("should process a Stylus UserCSS with variables", async () => {
+    const rawCSS = `/* ==UserStyle==
+@name Test Stylus Style with Variables
+@namespace test
+@version 1.0.0
+@description A test style with Stylus and variables
+@preprocessor stylus
+@var color bgColor "Background Color" #ff0000
+@var checkbox enableBorder "Enable Border" 1
+@var text fontSize "Font Size" "14px"
+==/UserStyle== */
+
+body
+  background: bgColor
+  font-size: fontSize
+  if enableBorder
+    border: 1px solid #000`;
+
+    const result = await processUserCSS(rawCSS);
+    expect(result.errors).toHaveLength(0);
+    expect(result.preprocessorErrors).toHaveLength(0);
+    expect(result.meta.name).toBe("Test Stylus Style with Variables");
+    expect(result.meta.variables).toBeDefined();
+    expect(result.meta.variables!["bgColor"]).toBeDefined();
+    expect(result.meta.variables!["enableBorder"]).toBeDefined();
+    expect(result.meta.variables!["fontSize"]).toBeDefined();
+    expect(result.compiledCss).toContain("background: #f00");
+    expect(result.compiledCss).toContain("font-size: 14px");
+    expect(result.compiledCss).toContain("border: 1px solid #000");
+  });
+
   it("should handle parsing errors", async () => {
     const rawCSS = `/* ==UserStyle==
 @namespace test

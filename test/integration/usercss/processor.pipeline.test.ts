@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { parseUserCSS } from "@services/usercss/processor";
 import { PreprocessorEngine } from "@services/usercss/preprocessor";
 
@@ -23,10 +23,10 @@ body {
 
     const parseResult = parseUserCSS(rawCSS);
     expect(parseResult.errors).toHaveLength(0);
-    
+
     const preprocessResult = await engine.process(parseResult.css, "none");
     expect(preprocessResult.errors).toHaveLength(0);
-    
+
     expect(preprocessResult.css).toContain("background: red");
   });
 
@@ -48,10 +48,10 @@ body {
     const parseResult = parseUserCSS(rawCSS);
     expect(parseResult.errors).toHaveLength(0);
     expect(parseResult.meta.name).toBe("Test Less Style");
-    
+
     const preprocessResult = await engine.process(parseResult.css, "less");
     expect(preprocessResult.errors).toHaveLength(0);
-    
+
     // Check that the variable was substituted (Less keeps the long format)
     expect(preprocessResult.css).toContain("background: #ff0000");
   });
@@ -71,10 +71,10 @@ body
     const parseResult = parseUserCSS(rawCSS);
     expect(parseResult.errors).toHaveLength(0);
     expect(parseResult.meta.name).toBe("Test Stylus Style");
-    
+
     const preprocessResult = await engine.process(parseResult.css, "stylus");
     expect(preprocessResult.errors).toHaveLength(0);
-    
+
     // Check that the CSS was processed (Stylus converts to shorthand)
     expect(preprocessResult.css).toContain("background: #f00");
   });
@@ -94,7 +94,7 @@ body {
 
     const parseResult = parseUserCSS(rawCSS);
     expect(parseResult.errors).toHaveLength(0);
-    
+
     const preprocessResult = await engine.process(parseResult.css, "less");
     expect(preprocessResult.errors).toHaveLength(1);
     expect(preprocessResult.errors[0]).toContain("Less compilation failed");

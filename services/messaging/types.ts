@@ -3,6 +3,8 @@
  * Defines the contract for message passing between background script, popup, and manager page.
  */
 
+import { VariableDescriptor } from "../usercss/types";
+
 // Response types for popup messages
 export interface PopupMessageResponses {
   [key: string]: {
@@ -31,7 +33,7 @@ export interface SaveMessageResponses {
       author: string;
       sourceUrl: string;
       domains: string[];
-          variables?: Record<string, any>;
+      variables?: Record<string, VariableDescriptor>;
     };
     css?: string;
     metadataBlock?: string;
@@ -66,7 +68,7 @@ export interface ContentMessageResponses {
     error?: string;
     assets?: Array<{
       url: string;
-      type: 'image' | 'font' | 'other';
+      type: "image" | "font" | "other";
       dataUrl?: string;
       error?: string;
     }>;
@@ -96,6 +98,14 @@ export type BackgroundMessages =
       payload: {
         styleId: string;
         variables: Record<string, string>;
+        timestamp: number;
+      };
+    }
+  | {
+      type: "STYLE_REAPPLY_REQUEST";
+      payload: {
+        styleId: string;
+        reason: string;
         timestamp: number;
       };
     };
@@ -209,7 +219,7 @@ export type SaveMessages =
           author: string;
           sourceUrl: string;
           domains: string[];
-      variables?: Record<string, any>;
+          variables?: Record<string, VariableDescriptor>;
         };
         compiledCss: string;
         variables: Array<{
@@ -220,8 +230,8 @@ export type SaveMessages =
           max?: number;
           options?: string[];
         }>;
-    };
-  }
+      };
+    }
   | {
       type: "INJECT_FONT";
       payload: {
@@ -252,7 +262,7 @@ export type ContentMessages =
       payload: {
         assets: Array<{
           url: string;
-          type: 'image' | 'font' | 'other';
+          type: "image" | "font" | "other";
         }>;
       };
     };

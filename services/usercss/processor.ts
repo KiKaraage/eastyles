@@ -435,9 +435,13 @@ function parseVarDirective(value: string): VariableDescriptor | null {
  * Parses a raw UserCSS string to extract metadata and CSS content
  *
  * @param raw - The raw UserCSS content
+ * @param variableOverrides - Optional current variable values to override defaults
  * @returns ParseResult containing metadata, CSS, and diagnostics
  */
-export function parseUserCSS(raw: string): ParseResult {
+export function parseUserCSS(
+  raw: string,
+  variableOverrides?: Record<string, string>,
+): ParseResult {
   console.log("[parseUserCSS] Function called, checking environment...");
 
   // Safely check for document availability without triggering ReferenceError
@@ -598,6 +602,13 @@ export function parseUserCSS(raw: string): ParseResult {
       if (directive === "var" || directive === "advanced") {
         const variable = parseVarDirective(value);
         if (variable) {
+          // Override default value if provided
+          if (
+            variableOverrides &&
+            variableOverrides[variable.name] !== undefined
+          ) {
+            variable.value = variableOverrides[variable.name];
+          }
           variables[variable.name] = variable;
         }
       }
@@ -857,11 +868,12 @@ export function parseUserCSS(raw: string): ParseResult {
  */
 export async function processUserCSS(
   raw: string,
+  variableOverrides?: Record<string, string>,
 ): Promise<
   ParseResult & { compiledCss: string; preprocessorErrors: string[] }
 > {
   // Step 1: Parse the UserCSS
-  const parseResult = parseUserCSS(raw);
+  const parseResult = parseUserCSS(raw, variableOverrides);
 
   // If parsing failed, return early
   if (parseResult.errors.length > 0) {
@@ -947,12 +959,20 @@ export async function processUserCSS(
       const { PreprocessorEngine } = await import("./preprocessor");
       const engine = new PreprocessorEngine();
 
-      // Step 3: Inject variables into CSS if preprocessor is used
+      // Step 3: Inject variables into CSS for preprocessing
       let cssToProcess = parseResult.css;
       if (parseResult.meta.variables) {
-        // For other preprocessors, inject variable definitions
+        // Inject variable definitions using preprocessor syntax
         const variableDefinitions = Object.entries(parseResult.meta.variables)
-          .map(([name, variable]) => `${name} = ${variable.value}`)
+          .map(([name, variable]) => {
+            if (preprocessorType === "less") {
+              return `@${name}: ${variable.value};`;
+            } else if (preprocessorType === "stylus") {
+              return `${name} = ${variable.value};`;
+            } else {
+              return `@${name}: ${variable.value};`; // fallback
+            }
+          })
           .join("\n");
         cssToProcess = variableDefinitions + "\n" + cssToProcess;
       }

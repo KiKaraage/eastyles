@@ -5,9 +5,10 @@
  * Integrates with StorageClient for persistence and MessageBus for real-time updates.
  */
 
-import { VariableDescriptor } from '../usercss/types';
-import { storageClient } from '../storage/client';
-import { messageBus } from '../messaging/bus';
+import { VariableDescriptor } from "../usercss/types";
+import { storageClient } from "../storage/client";
+import { messageBus } from "../messaging/bus";
+import { processUserCSS } from "./processor";
 
 export interface VariableUpdate {
   styleId: string;
@@ -27,10 +28,62 @@ export class VariablePersistenceService {
   /**
    * Update variables for a specific UserCSS style
    */
-  async updateVariables(styleId: string, variables: Record<string, string>): Promise<void> {
+  async updateVariables(
+    styleId: string,
+    variables: Record<string, string>,
+  ): Promise<void> {
     try {
       // Update the style in storage
-      await storageClient.updateUserCSSStyleVariables(styleId, variables);
+      const updatedStyle = await storageClient.updateUserCSSStyleVariables(
+        styleId,
+        variables,
+      );
+
+      // Check if this is a preprocessed style and re-process with new variables
+      if (updatedStyle.source.includes("@preprocessor")) {
+        const startTime = performance.now();
+
+        try {
+          const reprocessed = await processUserCSS(
+            updatedStyle.source,
+            variables,
+          );
+
+          if (reprocessed.preprocessorErrors.length === 0) {
+            // Update the compiled CSS in storage
+            await storageClient.updateUserCSSStyle(styleId, {
+              compiledCss: reprocessed.compiledCss,
+            });
+
+            const processingTime = performance.now() - startTime;
+            if (processingTime > 3000) {
+              console.warn(
+                `Variable re-processing took ${processingTime.toFixed(2)}ms for style ${styleId}`,
+              );
+            }
+
+            // Notify content scripts to reapply the style
+            await messageBus.broadcast({
+              type: "STYLE_REAPPLY_REQUEST",
+              payload: {
+                styleId,
+                reason: "variables_updated",
+                timestamp: Date.now(),
+              },
+            });
+          } else {
+            console.warn(
+              "Re-processing failed:",
+              reprocessed.preprocessorErrors,
+            );
+          }
+        } catch (processingError) {
+          console.error(
+            "Failed to re-process style after variable update:",
+            processingError,
+          );
+        }
+      }
 
       // Create the update payload
       const update: VariableUpdate = {
@@ -43,16 +96,15 @@ export class VariablePersistenceService {
 
       // Send message to content scripts for live updates
       await messageBus.broadcast({
-        type: 'VARIABLES_UPDATED',
+        type: "VARIABLES_UPDATED",
         payload: {
           styleId,
           variables,
           timestamp: Date.now(),
         },
       });
-
     } catch (error) {
-      console.error('Failed to update variables:', error);
+      console.error("Failed to update variables:", error);
       throw new Error(`Failed to update variables: ${error}`);
     }
   }
@@ -60,12 +112,14 @@ export class VariablePersistenceService {
   /**
    * Get current variables for a specific style
    */
-  async getVariables(styleId: string): Promise<Record<string, VariableDescriptor> | null> {
+  async getVariables(
+    styleId: string,
+  ): Promise<Record<string, VariableDescriptor> | null> {
     try {
       const style = await storageClient.getUserCSSStyle(styleId);
       return style?.variables || null;
     } catch (error) {
-      console.error('Failed to get variables:', error);
+      console.error("Failed to get variables:", error);
       return null;
     }
   }
@@ -84,12 +138,13 @@ export class VariablePersistenceService {
       const resetVariables: Record<string, string> = {};
       for (const [varName, varDescriptor] of Object.entries(style.variables)) {
         // Use originalDefaults if available, otherwise fall back to current default
-        resetVariables[varName] = style.originalDefaults?.[varName] || varDescriptor.default;
+        resetVariables[varName] =
+          style.originalDefaults?.[varName] || varDescriptor.default;
       }
 
       await this.updateVariables(styleId, resetVariables);
     } catch (error) {
-      console.error('Failed to reset variables:', error);
+      console.error("Failed to reset variables:", error);
       throw new Error(`Failed to reset variables: ${error}`);
     }
   }
@@ -110,11 +165,11 @@ export class VariablePersistenceService {
    * Broadcast update to all watchers
    */
   private broadcastUpdate(update: VariableUpdate): void {
-    this.watchers.forEach(callback => {
+    this.watchers.forEach((callback) => {
       try {
         callback(update);
       } catch (error) {
-        console.error('Error in variable change callback:', error);
+        console.error("Error in variable change callback:", error);
       }
     });
   }
@@ -124,20 +179,24 @@ export class VariablePersistenceService {
    */
   initialize(): void {
     // Watch for storage changes to broadcast updates
-    if (typeof storageClient.watchUserCSSStyles === 'function') {
+    if (typeof storageClient.watchUserCSSStyles === "function") {
       storageClient.watchUserCSSStyles((newStyles, oldStyles) => {
         if (!oldStyles) return; // Initial load, no need to broadcast
 
         // Find styles that have variable changes
         for (const newStyle of newStyles) {
-          const oldStyle = oldStyles.find(s => s.id === newStyle.id);
+          const oldStyle = oldStyles.find((s) => s.id === newStyle.id);
           if (!oldStyle) continue;
 
           // Check if variables changed
-          const variablesChanged = JSON.stringify(oldStyle.variables) !== JSON.stringify(newStyle.variables);
+          const variablesChanged =
+            JSON.stringify(oldStyle.variables) !==
+            JSON.stringify(newStyle.variables);
           if (variablesChanged) {
             const variables: Record<string, string> = {};
-            for (const [varName, varDescriptor] of Object.entries(newStyle.variables)) {
+            for (const [varName, varDescriptor] of Object.entries(
+              newStyle.variables,
+            )) {
               variables[varName] = varDescriptor.value;
             }
 
@@ -151,7 +210,7 @@ export class VariablePersistenceService {
         }
       });
     } else {
-      console.warn('watchUserCSSStyles method not available on storage client');
+      console.warn("watchUserCSSStyles method not available on storage client");
     }
   }
 }
