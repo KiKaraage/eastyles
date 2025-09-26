@@ -435,14 +435,17 @@ const App = () => {
                               <Settings className="w-4 h-4" />
                             </button>
                           )}
-                        <button
-                          onClick={() =>
+                        <input
+                          type="checkbox"
+                          className="toggle toggle-primary"
+                          checked={style.enabled}
+                          onChange={() =>
                             handleToggleStyle(style.id, !style.enabled)
                           }
-                          className={`btn btn-sm ${style.enabled ? "btn-success" : "btn-ghost"}`}
-                        >
-                          {style.enabled ? "Active" : "Enable"}
-                        </button>
+                          title={
+                            style.enabled ? "Disable style" : "Enable style"
+                          }
+                        />
                       </div>
                     </div>
 
