@@ -709,17 +709,17 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       }
 
       // Parse CSS content for @-moz-document rules
-      const mozDocumentCssMatch = css.match(/@-moz-document\s+([^}]+)\s*\{/);
+      const mozDocumentCssMatch = css.match(/@-moz-document\\s+([^}]+)\\s*\\{/);
       if (mozDocumentCssMatch) {
         const mozDocumentRule = mozDocumentCssMatch[1];
 
         // Extract domains from CSS @-moz-document rules
         const domainMatchesCss = mozDocumentRule.match(
-          /domain\(["']?([^"')]+)["']?\)/g,
+          /domain\\(["']?([^"')]+)["']?\\)/g,
         );
         if (domainMatchesCss) {
           domainMatchesCss.forEach((match) => {
-            const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
+            const domainMatch = match.match(/domain\\(["']?([^"')]+)["']?\\)/);
             if (domainMatch) {
               domains.push(domainMatch[1]);
             }
@@ -728,16 +728,161 @@ const handleParseUserCSS: MessageHandler = async (message) => {
 
         // Extract url-prefix patterns
         const urlPrefixMatches = mozDocumentRule.match(
-          /url-prefix\(["']?([^"')]+)["']?\)/g,
+          /url-prefix\\(["']?([^"')]+)["']?\\)/g,
         );
         if (urlPrefixMatches) {
           urlPrefixMatches.forEach((match) => {
-            const urlMatch = match.match(/url-prefix\(["']?([^"')]+)["']?\)/);
+            const urlMatch = match.match(/url-prefix\\(["']?([^"')]+)["']?\\)/);
             if (urlMatch) {
               domains.push(extractHostname(urlMatch[1]));
             }
           });
         }
+      }
+
+      // Helper function to parse USO EOT blocks (similar to processor.ts)
+      const parseEOTBlocksMinimal = (value: string) => {
+        // Regular expression to match EOT blocks in USO format
+        const eotRegex = /([\w\-]+)\s+"([^\"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+
+        const options: string[] = [];
+        const optionCss: Record<string, string> = {};
+        let defaultValue = "";
+        let hasDefault = false;
+
+        let match;
+        while ((match = eotRegex.exec(value)) !== null) {
+          const [displayLabel, cssContent] = match;
+
+          // Check if this is the default option (marked with * in display label like "Sky*")
+          const isDefault = displayLabel.includes("*");
+          const cleanDisplayLabel = displayLabel.replace(/\*$/, "");
+
+          options.push(cleanDisplayLabel);
+          // Preserve the CSS content for each option
+          optionCss[cleanDisplayLabel] = cssContent.trim();
+
+          if (isDefault && !hasDefault) {
+            defaultValue = cleanDisplayLabel;
+            hasDefault = true;
+          }
+        }
+
+        // If no default was found, use the first option's label as default
+        if (!hasDefault && options.length > 0) {
+          defaultValue = options[0];
+        }
+
+        return options.length > 0 ? { options, optionCss, defaultValue } : null;
+      };
+
+      // Extract variables from various directive formats (e.g., @var, @advanced, @path/type color name "label" default)
+      const variables: Record<string, any> = {};
+
+      // Enhanced regex to find variable directives in various formats
+      // This handles formats like:
+      // @var color name "label" default_value
+      // @advanced dropdown name "label" { options }
+      // @path/color name "label" default_value
+      // @path/range name "label" [default, min, max, step, unit]
+      // Using \s to match both spaces and tabs
+      const directiveRegex =
+        /@[\w\/\.\-:]+\s+(range|color|text|select|number|dropdown)\s+([\w\-]+)\s+"([^"]+)"\s*([^\r\n]+)/g;
+      let directiveMatch;
+
+      while ((directiveMatch = directiveRegex.exec(metadataContent)) !== null) {
+        const fullMatch = directiveMatch[0];
+        const type = directiveMatch[1]; // "range", "color", "text", "select", "number", "dropdown"
+        const name = directiveMatch[2]; // variable name
+        const label = directiveMatch[3]; // variable label
+        let defaultValue = directiveMatch[4] || ""; // default value or options
+
+        // Clean up the default value (remove leading/trailing spaces)
+        defaultValue = defaultValue.trim();
+
+        // Handle different types of default values
+        if (defaultValue.startsWith('"') && defaultValue.endsWith('"')) {
+          // Quoted string value
+          defaultValue = defaultValue.slice(1, -1);
+        } else if (defaultValue.startsWith("[") && defaultValue.endsWith("]")) {
+          // Array format [default, min, max, step, unit] - for ranges
+          const rangeParts = defaultValue
+            .slice(1, -1)
+            .split(",")
+            .map((s) => s.trim());
+          if (rangeParts.length >= 3) {
+            defaultValue = rangeParts[0]; // First value is typically the default
+          }
+        }
+
+        let varDescriptor: any = {
+          name: `--${name}`,
+          type: type === "range" ? "number" : type, // Convert 'range' to 'number' type
+          label,
+          default: defaultValue,
+          value: defaultValue,
+        };
+
+        // Handle range-specific properties
+        if (type === "range") {
+          // Parse range format [default, min, max, step, unit]
+          const rangeMatch = fullMatch.match(/\[([^\]]+)\]/);
+          if (rangeMatch) {
+            const rangeParts = rangeMatch[1].split(",").map((s) => s.trim());
+            if (rangeParts.length >= 3) {
+              varDescriptor.default = rangeParts[0];
+              varDescriptor.value = rangeParts[0];
+              varDescriptor.min = parseFloat(rangeParts[1]);
+              varDescriptor.max = parseFloat(rangeParts[2]);
+            }
+            if (rangeParts.length >= 4) {
+              varDescriptor.step = parseFloat(rangeParts[3]);
+            }
+          }
+        }
+
+        // Handle dropdown types that have options in braces - check if the full metadata contains the braces
+        if (
+          type === "select" ||
+          type === "dropdown" ||
+          fullMatch.includes("{")
+        ) {
+          // Find the opening brace in the full match
+          const braceStart = fullMatch.indexOf("{");
+          if (braceStart !== -1) {
+            // Find the matching closing brace in the full metadataContent
+            const globalPos = directiveMatch.index + braceStart;
+            let braceCount = 1;
+            let pos = globalPos + 1;
+
+            while (pos < metadataContent.length && braceCount > 0) {
+              if (metadataContent[pos] === "{") braceCount++;
+              else if (metadataContent[pos] === "}") braceCount--;
+              pos++;
+            }
+
+            if (braceCount === 0) {
+              const optionsBlock = metadataContent
+                .substring(globalPos + 1, pos - 1)
+                .trim();
+
+              // Use parseEOTBlocks equivalent logic for USO format
+              const dropdownOptions = parseEOTBlocksMinimal(optionsBlock);
+              if (dropdownOptions) {
+                varDescriptor = {
+                  ...varDescriptor,
+                  type: "select",
+                  options: dropdownOptions.options,
+                  default: dropdownOptions.defaultValue,
+                  value: dropdownOptions.defaultValue,
+                  optionCss: dropdownOptions.optionCss,
+                };
+              }
+            }
+          }
+        }
+
+        variables[varDescriptor.name] = varDescriptor;
       }
 
       const meta = {
@@ -755,6 +900,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         meta,
         css,
         metadataBlock,
+        variables,
         warnings,
         errors,
       };
@@ -816,6 +962,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       },
       css: compiledCss,
       metadataBlock: parseResult.metadataBlock,
+      variables: parseResult.variables || {}, // Include variables from ultra-minimal parser
       warnings: [...parseResult.warnings, ...preprocessorErrors],
       errors: parseResult.errors,
     };

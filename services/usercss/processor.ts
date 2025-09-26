@@ -244,36 +244,42 @@ function parseEOTBlocks(value: string): {
   defaultValue: string;
 } | null {
   // Regular expression to match EOT blocks
-  // Format: [*]optionLabel "Display Label" <<<EOT css content EOT;
-  const eotRegex = /(\*?\w+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+  // Format: [optionKey] "Display Label*" <<<EOT css content EOT;
+  // Default can be marked with * in display label (like "Sky*")
+  const eotRegex = /([\w\-]+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
 
   const options: string[] = [];
   const optionCss: Record<string, string> = {};
   let defaultValue = "";
   let hasDefault = false;
 
-  let match;
-  while ((match = eotRegex.exec(value)) !== null) {
-    const [, optionKey, displayLabel, cssContent] = match;
+  // Use a separate regex instance to avoid potential state issues in JS engines
+  const regexInstance = new RegExp(eotRegex.source, eotRegex.flags);
+  let match: RegExpExecArray | null;
+  while ((match = regexInstance.exec(value)) !== null) {
+    // Create a local copy to avoid potential hoisting issues
+    const currentMatch = [...match] as RegExpExecArray;
+    const [displayLabel, cssContent] = currentMatch;
 
-    // Check if this is the default option (marked with *)
-    const isDefault = optionKey.startsWith("*");
+    // Check if this is the default option (marked with * in display label)
+    const isDefault = displayLabel.includes("*");
+    const cleanDisplayLabel = displayLabel.replace(/\*$/, "");
 
-    options.push(displayLabel);
+    options.push(cleanDisplayLabel);
     // Preserve indentation but remove leading/trailing whitespace
-    optionCss[displayLabel] = cssContent
+    optionCss[cleanDisplayLabel] = cssContent
       .replace(/^\s*\n/, "")
       .replace(/\n\s*$/, "");
 
     if (isDefault && !hasDefault) {
-      defaultValue = cssContent.trim();
+      defaultValue = cleanDisplayLabel;
       hasDefault = true;
     }
   }
 
-  // If no default was found, use the first option's CSS content as default
+  // If no default was found, use the first option's label as default
   if (!hasDefault && options.length > 0) {
-    defaultValue = optionCss[options[0]];
+    defaultValue = options[0];
   }
 
   return options.length > 0 ? { options, optionCss, defaultValue } : null;

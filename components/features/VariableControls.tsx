@@ -5,8 +5,8 @@
  * Supports color picker, number input with min/max, text input, and select dropdown.
  */
 
-import React from 'react';
-import { VariableDescriptor } from '../../services/usercss/types';
+import React from "react";
+import { VariableDescriptor } from "../../services/usercss/types";
 
 interface VariableControlsProps {
   /** Array of variable descriptors to render controls for */
@@ -25,34 +25,55 @@ interface VariableControlProps {
   onChange: (value: string) => void;
 }
 
-const VariableControl: React.FC<VariableControlProps> = ({ variable, onChange }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+const VariableControl: React.FC<VariableControlProps> = ({
+  variable,
+  onChange,
+}) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     onChange(e.target.value);
   };
 
+  // Use label if available, otherwise fall back to name
+  const displayLabel = variable.label || variable.name.replace(/^--/, "");
+
   switch (variable.type) {
-      case 'color':
-        return (
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">{variable.name.replace(/^--/, '')}</span>
-            </label>
+    case "color":
+      return (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">
+              {displayLabel}
+            </span>
+          </label>
+          <div className="flex items-center space-x-2">
+            <input
+              type="color"
+              value={variable.value}
+              onChange={handleChange}
+              className="w-12 h-8 border border-base-300 rounded cursor-pointer"
+              title={`Color picker for ${variable.name}`}
+            />
             <input
               type="text"
               value={variable.value}
               onChange={handleChange}
-              className="input input-bordered input-sm"
+              className="input input-bordered input-xs flex-1"
               placeholder="#000000"
               title={`Color value for ${variable.name}`}
             />
           </div>
-        );
+        </div>
+      );
 
-    case 'number':
+    case "number":
       return (
         <div className="form-control">
           <label className="label">
-            <span className="label-text">{variable.name.replace(/^--/, '')}</span>
+            <span className="label-text">
+              {displayLabel}
+            </span>
           </label>
           <input
             type="number"
@@ -62,16 +83,18 @@ const VariableControl: React.FC<VariableControlProps> = ({ variable, onChange })
             max={variable.max}
             className="input input-bordered input-sm"
             placeholder={variable.default}
-            title={`Number input for ${variable.name}${variable.min !== undefined ? ` (min: ${variable.min})` : ''}${variable.max !== undefined ? ` (max: ${variable.max})` : ''}`}
+            title={`Number input for ${variable.name}${variable.min !== undefined ? ` (min: ${variable.min})` : ""}${variable.max !== undefined ? ` (max: ${variable.max})` : ""}`}
           />
         </div>
       );
 
-    case 'select':
+    case "select":
       return (
         <div className="form-control">
           <label className="label">
-            <span className="label-text">{variable.name.replace(/^--/, '')}</span>
+            <span className="label-text">
+              {displayLabel}
+            </span>
           </label>
           <select
             value={variable.value}
@@ -88,12 +111,32 @@ const VariableControl: React.FC<VariableControlProps> = ({ variable, onChange })
         </div>
       );
 
-    case 'text':
+    case "checkbox":
+      return (
+        <div className="form-control">
+          <label className="label cursor-pointer justify-start">
+            <span className="label-text">
+              {displayLabel}
+            </span>
+            <input
+              type="checkbox"
+              checked={variable.value === "1" || variable.value === "true"}
+              onChange={(e) => onChange(e.target.checked ? "1" : "0")}
+              className="checkbox checkbox-primary ml-2"
+              title={`Checkbox for ${variable.name}`}
+            />
+          </label>
+        </div>
+      );
+
+    case "text":
     default:
       return (
         <div className="form-control">
           <label className="label">
-            <span className="label-text">{variable.name.replace(/^--/, '')}</span>
+            <span className="label-text">
+              {displayLabel}
+            </span>
           </label>
           <input
             type="text"
@@ -114,7 +157,7 @@ const VariableControl: React.FC<VariableControlProps> = ({ variable, onChange })
 export const VariableControls: React.FC<VariableControlsProps> = ({
   variables = [],
   onChange,
-  className = ''
+  className = "",
 }) => {
   if (!variables || variables.length === 0) {
     return (

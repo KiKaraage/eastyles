@@ -13,31 +13,7 @@ import {
 import { messageHandlerService } from "./handlers";
 import { storageClient } from "../storage/client";
 
-// Storage interface for offline message handling
-interface StorageInterface {
-  setItem: <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, value: T | null) => Promise<void>;
-  getItem: <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, options?: { fallback?: T }) => Promise<T>;
-}
-
-// Try to import storage from @wxt-dev/storage, but provide fallback for background context
-let storage: StorageInterface | null = null;
-
-// Initialize storage when module loads
-(async () => {
-  try {
-    // In background context, this might fail due to window access
-    const storageModule = await import("@wxt-dev/storage");
-    storage = storageModule.storage;
-  } catch (error) {
-    console.warn("[MessageBus] Failed to import @wxt-dev/storage, using fallback:", error);
-    // Fallback implementation that doesn't actually store data
-    storage = {
-      setItem: async <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, value: T | null) => Promise.resolve(),
-      getItem: async <T>(key: `local:${string}` | `session:${string}` | `sync:${string}` | `managed:${string}`, options?: { fallback?: T }) =>
-        Promise.resolve(options?.fallback ?? undefined as unknown as T),
-    };
-  }
-})();
+// Note: Storage functionality removed to avoid initialization issues
 
 // Default timeout for message responses (5 seconds)
 export const DEFAULT_TIMEOUT = 5000;

@@ -13,6 +13,7 @@ const VariableTypeSchema = z.enum([
   "number",
   "text",
   "select",
+  "dropdown",
   "unknown",
 ]);
 

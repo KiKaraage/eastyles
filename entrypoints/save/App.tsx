@@ -9,6 +9,7 @@ import { EditorView, basicSetup } from "codemirror";
 import { css } from "@codemirror/lang-css";
 import { browser } from "@wxt-dev/browser";
 import { useSaveActions } from "../../hooks/useMessage";
+import { VariableDescriptor } from "../../services/usercss/types";
 
 // Define types for our data
 interface StyleMetadata {
@@ -19,30 +20,84 @@ interface StyleMetadata {
   author: string;
   sourceUrl: string;
   domains: string[];
-  variables?: Record<string, any>;
+  variables?: Record<string, VariableDescriptor>;
 }
 
 interface ParseResult {
   meta: StyleMetadata;
   css: string;
   metadataBlock?: string;
+  variables?: Record<string, VariableDescriptor>;
   warnings: string[];
   errors: string[];
 }
 
+// Extract simplified domain name from regexp pattern
+const extractDomainFromRegexp = (pattern: string): string => {
+  try {
+    // Look for https://hostname pattern
+    const httpsMatch = pattern.match(/https?:\/\/([^/?#]+)/);
+    if (httpsMatch) {
+      let hostname = httpsMatch[1];
+
+      // Remove regex special characters and groups
+      hostname = hostname.replace(/\([^)]*\)\*?\??/g, ''); // Remove (group)* or (group)?
+      hostname = hostname.replace(/\([^)]*\)/g, ''); // Remove any remaining (group)
+      hostname = hostname.replace(/[^\w.-]/g, ''); // Remove special regex chars
+      hostname = hostname.replace(/^\*?\./, ''); // Remove leading *. or .
+
+      // Extract the main domain (last two parts)
+      const parts = hostname.split('.').filter(p => p.length > 0);
+      if (parts.length >= 2) {
+        return parts.slice(-2).join('.');
+      }
+      return hostname || 'regexp';
+    }
+
+    // Fallback: try to extract domain-like pattern
+    const domainLike = pattern.match(/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/);
+    if (domainLike) {
+      return domainLike[0];
+    }
+
+    // If all else fails, return a truncated version
+    return pattern.length > 20 ? pattern.substring(0, 17) + '...' : pattern;
+  } catch {
+    return pattern.length > 20 ? pattern.substring(0, 17) + '...' : pattern;
+  }
+};
+
 // Format domains for display
-const formatDomainForDisplay = (domain: string, cssContent: string, metadataBlock?: string): string => {
+const formatDomainForDisplay = (
+  domain: string,
+  cssContent: string,
+  metadataBlock?: string,
+): string => {
+  // Handle regexp-prefixed domains from inline parser
+  if (domain.startsWith('regexp:')) {
+    const regexpPattern = domain.substring(7);
+    return extractDomainFromRegexp(regexpPattern);
+  }
+
   // Check both CSS content and metadata block for domain rules
-  const fullContent = metadataBlock ? `${metadataBlock}\n${cssContent}` : cssContent;
+  const fullContent = metadataBlock
+    ? `${metadataBlock}\n${cssContent}`
+    : cssContent;
 
   // Check if this domain came from a url-prefix rule by looking at the content
-  const urlPrefixPattern = new RegExp(`url-prefix\\(["']?https?://[^"']*${domain.replace('.', '\\.')}`, 'i');
+  const urlPrefixPattern = new RegExp(
+    `url-prefix\\(["']?https?://[^"']*${domain.replace(".", "\\.")}`,
+    "i",
+  );
   if (urlPrefixPattern.test(fullContent)) {
     return `start with ${domain}`;
   }
 
   // Check if this domain came from a domain rule
-  const domainPattern = new RegExp(`domain\\(["']?${domain.replace('.', '\\.')}`, 'i');
+  const domainPattern = new RegExp(
+    `domain\\(["']?${domain.replace(".", "\\.")}`,
+    "i",
+  );
   if (domainPattern.test(fullContent)) {
     return domain;
   }
@@ -132,17 +187,19 @@ const SavePage: React.FC = () => {
     const loadUserCSS = async (): Promise<void> => {
       try {
         // Guard against running in non-browser context
-        if (typeof window === 'undefined' || !window.location) {
-          console.warn('Window not available, skipping UserCSS loading');
-          setError('Page not fully loaded. Please refresh and try again.');
+        if (typeof window === "undefined" || !window.location) {
+          console.warn("Window not available, skipping UserCSS loading");
+          setError("Page not fully loaded. Please refresh and try again.");
           setLoading(false);
           return;
         }
 
         // Guard against browser API not being available
-        if (typeof browser === 'undefined' || !browser.storage) {
-          console.warn('Browser APIs not available, skipping UserCSS loading');
-          setError('Extension context not available. Please refresh and try again.');
+        if (typeof browser === "undefined" || !browser.storage) {
+          console.warn("Browser APIs not available, skipping UserCSS loading");
+          setError(
+            "Extension context not available. Please refresh and try again.",
+          );
           setLoading(false);
           return;
         }
@@ -168,7 +225,11 @@ const SavePage: React.FC = () => {
                 throw new Error("CSS content not found in browser storage");
               }
               cssText = data.content;
-              sourceUrl = data.sourceUrl || urlParams.get("sourceUrl") || urlParams.get("filename") || "external file";
+              sourceUrl =
+                data.sourceUrl ||
+                urlParams.get("sourceUrl") ||
+                urlParams.get("filename") ||
+                "external file";
 
               // Clean up the storage after retrieving
               await browser.storage.local.remove(storageId);
@@ -279,6 +340,7 @@ const SavePage: React.FC = () => {
             },
             css: parseResponse.css,
             metadataBlock: parseResponse.metadataBlock,
+            variables: (parseResponse as any).variables || {},
             warnings: parseResponse.warnings || [],
             errors: parseResponse.errors || [],
           });
@@ -311,7 +373,7 @@ const SavePage: React.FC = () => {
     };
 
     // Check if we can go back (document.referrer exists)
-    if (typeof document !== 'undefined' && document.referrer) {
+    if (typeof document !== "undefined" && document.referrer) {
       setCanGoBack(true);
     } else {
       setCanGoBack(false);
@@ -327,8 +389,8 @@ const SavePage: React.FC = () => {
       setLoading(true); // Show loading state during installation
 
       // Extract variables from the parsed result
-      const variables = parseResult.meta.variables
-        ? Object.values(parseResult.meta.variables).map(variable => ({
+      const variables = parseResult.variables
+        ? Object.values(parseResult.variables).map((variable) => ({
             name: variable.name,
             type: variable.type,
             default: variable.default,
@@ -349,7 +411,11 @@ const SavePage: React.FC = () => {
         setError(null); // Clear any previous errors
 
         // Show success toast with better styling
-        if (typeof document !== 'undefined' && document.createElement && document.body) {
+        if (
+          typeof document !== "undefined" &&
+          document.createElement &&
+          document.body
+        ) {
           const successToast = document.createElement("div");
           successToast.className = "toast toast-top toast-end z-50";
           successToast.innerHTML = `
@@ -375,9 +441,9 @@ const SavePage: React.FC = () => {
 
         // Don't close immediately - let user see the success message
         setTimeout(() => {
-          if (canGoBack && typeof window !== 'undefined' && window.history) {
+          if (canGoBack && typeof window !== "undefined" && window.history) {
             window.history.back();
-          } else if (typeof window !== 'undefined' && window.close) {
+          } else if (typeof window !== "undefined" && window.close) {
             // Try to close the window, but handle the error gracefully
             try {
               window.close();
@@ -401,7 +467,7 @@ const SavePage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    if (canGoBack && typeof window !== 'undefined' && window.history) {
+    if (canGoBack && typeof window !== "undefined" && window.history) {
       window.history.back();
     }
   };
@@ -441,9 +507,13 @@ const SavePage: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                if (canGoBack && typeof window !== 'undefined' && window.history) {
+                if (
+                  canGoBack &&
+                  typeof window !== "undefined" &&
+                  window.history
+                ) {
                   window.history.back();
-                } else if (typeof window !== 'undefined' && window.close) {
+                } else if (typeof window !== "undefined" && window.close) {
                   try {
                     window.close();
                   } catch {
@@ -491,11 +561,17 @@ const SavePage: React.FC = () => {
                     {parseResult.meta.domains.length > 0 ? (
                       parseResult.meta.domains.map((domain, index) => (
                         <span key={index} className="badge badge-primary">
-                          {formatDomainForDisplay(domain, parseResult.css, parseResult.metadataBlock)}
+                          {formatDomainForDisplay(
+                            domain,
+                            parseResult.css,
+                            parseResult.metadataBlock,
+                          )}
                         </span>
                       ))
                     ) : (
-                      <span className="text-base-content/50">No specific domains detected</span>
+                      <span className="text-base-content/50">
+                        No specific domains detected
+                      </span>
                     )}
                   </div>
                 </div>
@@ -537,7 +613,8 @@ const SavePage: React.FC = () => {
             <div className="card-body p-6">
               <h2 className="card-title text-xl mb-4">Code Preview</h2>
               <p className="text-sm text-base-content/70 mb-4">
-                Shows the complete UserCSS content including metadata block with variables and CSS rules.
+                Shows the complete UserCSS content including metadata block with
+                variables and CSS rules.
               </p>
               <div className="bg-base-300 rounded-lg overflow-hidden border">
                 <div ref={editorRef} className="min-h-[400px]" />

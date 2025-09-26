@@ -34,7 +34,7 @@ export interface VariableDescriptor {
   /** Name of the variable (e.g., '--accent-color') */
   name: string;
   /** Type of the variable for UI rendering */
-  type: 'color' | 'number' | 'text' | 'select' | 'unknown';
+  type: "color" | "number" | "text" | "select" | "checkbox" | "unknown";
   /** Human-readable label for the variable */
   label?: string;
   /** Default value as defined in the original UserCSS */
@@ -53,7 +53,7 @@ export interface VariableDescriptor {
 
 export interface DomainRule {
   /** Type of domain matching rule */
-  kind: 'url' | 'url-prefix' | 'domain' | 'regexp';
+  kind: "url" | "url-prefix" | "domain" | "regexp";
   /** Pattern to match against */
   pattern: string;
   /** Whether this rule should include or exclude the pattern */
@@ -88,7 +88,7 @@ export interface ExtensionErrorPayload {
 
 export interface Asset {
   /** Type of asset */
-  type: 'font' | 'image' | 'other';
+  type: "font" | "image" | "other";
   /** URL or data URI for the asset */
   url: string;
   /** Optional format specification */
@@ -132,7 +132,7 @@ export interface ParseOptions extends UserCSSOptions {
 
 export interface ValidationError {
   /** Type of validation error */
-  type: 'syntax' | 'metadata' | 'domain' | 'variable' | 'asset';
+  type: "syntax" | "metadata" | "domain" | "variable" | "asset";
   /** Error message */
   message: string;
   /** Line number where error occurred */
