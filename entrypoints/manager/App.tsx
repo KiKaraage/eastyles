@@ -35,7 +35,7 @@ const App = () => {
   return (
     <div className="bg-base-100 min-h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-base-200 p-4 border-b border-base-300">
+      <div className="sticky top-0 z-10 bg-base-200 p-4 border-b border-base-300">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             {/* Themed SVG Logo using mask */}

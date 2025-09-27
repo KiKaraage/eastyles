@@ -20,6 +20,8 @@ import {
   Settings,
   TransitionRight,
   TextSize,
+  ArrowLeft,
+  Check,
 } from "iconoir-react";
 import NewFontStyle from "../NewFontStyle";
 
@@ -43,6 +45,11 @@ const ManagerPage: React.FC = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const editDialogRef = React.useRef<HTMLDialogElement>(null);
   const fontDialogRef = React.useRef<HTMLDialogElement>(null);
+
+  // Font style creation state
+  const [fontDomain, setFontDomain] = useState("");
+  const [selectedFont, setSelectedFont] = useState("");
+  const [isSavingFont, setIsSavingFont] = useState(false);
 
   const { sendMessage } = useMessage();
 
@@ -663,47 +670,85 @@ const ManagerPage: React.FC = () => {
         </div>
       )}
 
-      {/* New Font Style Modal */}
-      <dialog
-        ref={fontDialogRef}
-        className="modal"
-        onClose={() => setShowFontModal(false)}
-      >
-        <div className="modal-box max-w-md">
-          <div className="flex justify-left mb-4">
-            <h3 className="text-lg font-bold">Create Font Style</h3>
-          </div>
+       {/* New Font Style Modal */}
+       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+       <dialog
+         ref={fontDialogRef}
+         className="modal"
+         onClose={() => setShowFontModal(false)}
+         onClick={(e) => {
+           if (e.target === e.currentTarget) {
+             setShowFontModal(false);
+           }
+         }}
+       >
+         <div className="modal-box max-w-md">
+           <div className="flex items-center justify-between mb-4">
+             <div className="flex items-center space-x-3">
+               <button
+                 onClick={() => setShowFontModal(false)}
+                 className="btn btn-ghost btn-sm p-2"
+               >
+                 <ArrowLeft className="w-4 h-4" />
+               </button>
+               <h3 className="text-lg font-bold">Create Font Style</h3>
+             </div>
+             <button
+               onClick={async () => {
+                 if (!selectedFont) return;
 
-          <NewFontStyle
-            onSave={async (domain: string, fontName: string) => {
-              // Use the new CREATE_FONT_STYLE message
-              const result = await sendMessage(
-                SaveMessageType.CREATE_FONT_STYLE,
-                {
-                  domain: domain || undefined,
-                  fontName,
-                },
-              );
+                 setIsSavingFont(true);
+                 try {
+                   const result = await sendMessage(
+                     SaveMessageType.CREATE_FONT_STYLE,
+                     {
+                       domain: fontDomain || undefined,
+                       fontName: selectedFont,
+                     },
+                   );
 
-              if ("success" in result && result.success) {
-                setShowFontModal(false);
-                loadStyles(); // Refresh the styles list
-              } else {
-                const errorMsg =
-                  "error" in result && result.error
-                    ? result.error
-                    : "Failed to create font style";
-                throw new Error(errorMsg);
-              }
-            }}
-            onClose={() => fontDialogRef.current?.close()}
-          />
+                   if ("success" in result && result.success) {
+                     setShowFontModal(false);
+                     loadStyles(); // Refresh the styles list
+                   } else {
+                     const errorMsg =
+                       "error" in result && result.error
+                         ? result.error
+                         : "Failed to create font style";
+                     throw new Error(errorMsg);
+                   }
+                 } catch (error) {
+                   console.error("Failed to save font style:", error);
+                 } finally {
+                   setIsSavingFont(false);
+                 }
+               }}
+               disabled={!selectedFont || isSavingFont}
+               className="btn btn-primary btn-sm p-2"
+             >
+               {isSavingFont ? (
+                 <>
+                   <span className="loading loading-spinner loading-sm"></span>
+                   Applying...
+                 </>
+               ) : (
+                 <>
+                   <Check className="w-4 h-4 mr-0.5" />
+                   Apply
+                 </>
+               )}
+             </button>
+           </div>
 
-          <div className="modal-action">
-            <form method="dialog">
-              <button className="btn">Close</button>
-            </form>
-          </div>
+           <NewFontStyle
+             domain={fontDomain}
+             selectedFont={selectedFont}
+             onDomainChange={setFontDomain}
+             onFontChange={setSelectedFont}
+             onClose={() => setShowFontModal(false)}
+           />
+
+
         </div>
       </dialog>
 
