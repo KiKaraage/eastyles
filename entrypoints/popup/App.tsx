@@ -1,7 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { withErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { browser } from "wxt/browser";
-import { List, Plus, TextSize, Settings, ArrowLeft, Check } from "iconoir-react";
+import {
+  TextSize,
+  Settings,
+  ArrowLeft,
+  Check,
+  Palette,
+  ViewGrid,
+} from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useI18n } from "../../hooks/useI18n";
 import NewFontStyle from "../../components/features/NewFontStyle";
@@ -209,23 +216,7 @@ const App = () => {
     }
   };
 
-  // Direct navigation handler for settings
-  const handleOpenSettings = async () => {
-    try {
-      // Open manager page with settings tab
-      await browser.tabs.create({ url: "/manager.html#settings" });
-      closePopup();
-    } catch (error) {
-      console.error("Failed to open settings page:", error);
-    }
-  };
 
-  const handleAddNewStyle = async () => {
-    setState((prev) => ({ ...prev, isLoading: true }));
-    // TODO: Implement add new style functionality
-    console.log("Add new style clicked - implementation needed");
-    setState((prev) => ({ ...prev, isLoading: false }));
-  };
 
   const handleOpenFontSelector = () => {
     setState((prev) => ({ ...prev, currentPage: "newFontStyle" }));
@@ -240,13 +231,10 @@ const App = () => {
 
     setIsSavingFont(true);
     try {
-      const result = await sendMessage(
-        SaveMessageType.CREATE_FONT_STYLE,
-        {
-          domain: fontDomain || undefined,
-          fontName: selectedFont,
-        },
-      );
+      const result = await sendMessage(SaveMessageType.CREATE_FONT_STYLE, {
+        domain: fontDomain || undefined,
+        fontName: selectedFont,
+      });
 
       if ("success" in result && result.success) {
         setState((prev) => ({ ...prev, currentPage: "main" }));
@@ -269,10 +257,13 @@ const App = () => {
   };
 
   // Extract current domain for auto-filling
-  const getCurrentDomain = (): string => {
+  const getCurrentDomain = useCallback((): string => {
     if (!state.currentTab?.url) return "";
     try {
-      if (state.currentTab.url === "current-site" || state.currentTab.url === "restricted-url") {
+      if (
+        state.currentTab.url === "current-site" ||
+        state.currentTab.url === "restricted-url"
+      ) {
         return "";
       }
       const url = new URL(state.currentTab.url);
@@ -280,19 +271,26 @@ const App = () => {
     } catch {
       return "";
     }
-  };
+  }, [state.currentTab]);
 
   // Font style creation state
   const [fontDomain, setFontDomain] = useState("");
   const [selectedFont, setSelectedFont] = useState("");
   const [isSavingFont, setIsSavingFont] = useState(false);
 
+  // Check if current page is restricted (browser/extension pages)
+  const isRestrictedPage = Boolean(state.currentTab?.url &&
+    (state.currentTab.url === "restricted-url" ||
+     state.currentTab.url.startsWith("chrome://") ||
+     state.currentTab.url.startsWith("about:") ||
+     state.currentTab.url.startsWith("chrome-extension://")));
+
   // Update font domain when current tab changes or when switching to font page
   useEffect(() => {
     if (state.currentPage === "newFontStyle") {
       setFontDomain(getCurrentDomain());
     }
-  }, [state.currentTab, state.currentPage]);
+  }, [state.currentTab, state.currentPage, getCurrentDomain]);
 
   const handleToggleStyle = async (styleId: string, enabled: boolean) => {
     try {
@@ -368,114 +366,53 @@ const App = () => {
     }
   };
 
-  return (
-    <div className="bg-base-100 min-h-screen flex flex-col">
-      {/* Header */}
-      <div className="bg-base-200 p-4 border-b border-base-300">
-        <div className="flex items-center justify-between">
-          {state.currentPage === "newFontStyle" ? (
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center space-x-3">
-                 <button
-                   onClick={handleCloseFontSelector}
-                   className="btn btn-ghost btn-sm p-2"
-                 >
-                   <ArrowLeft className="w-4 h-4" />
-                 </button>
-                <h3 className="text-lg font-bold text-base-content">
-                  {t("font_createNewStyle")}
-                </h3>
-              </div>
-              <button
-                onClick={handleSaveFontStyle}
-                disabled={!selectedFont || isSavingFont}
-                className="btn btn-primary btn-sm p-2"
-              >
-                {isSavingFont ? (
-                  <>
-                    <span className="loading loading-spinner loading-sm"></span>
-                    Applying...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4 mr-0.5" />
-                    Apply
-                  </>
-                )}
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-3">
-              <div
-                className="h-8 w-8 bg-current"
-                style={{
-                  WebkitMask: "url(/logo.svg) no-repeat center",
-                  WebkitMaskSize: "contain",
-                  mask: "url(/logo.svg) no-repeat center",
-                  maskSize: "contain",
-                }}
-                aria-hidden="true"
-              />
-              <h3 className="text-lg font-bold text-base-content">
-                {t("stylesFor")}{" "}
-                {state.currentTab?.url
-                  ? (() => {
-                      try {
-                        if (state.currentTab.url === "current-site") {
-                          return "current site";
-                        }
-                        if (state.currentTab.url === "restricted-url") {
-                          return "restricted page";
-                        }
-
-                        const url = new URL(state.currentTab.url);
-                        // Only remove 'www.' prefix, keep other subdomains
-                        const hostname = url.hostname.replace(/^www\./, "");
-                        return hostname;
-                      } catch {
-                        // For non-HTTP URLs, try to extract a meaningful name
-                        if (state.currentTab.url.startsWith("chrome://")) {
-                          return "Chrome page";
-                        }
-                        if (state.currentTab.url.startsWith("about:")) {
-                          return "Browser page";
-                        }
-                        if (
-                          state.currentTab.url.startsWith("chrome-extension://")
-                        ) {
-                          return "Extension page";
-                        }
-                        return "current site";
-                      }
-                    })()
-                  : "current site"}
-              </h3>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className={`flex-1 p-2 overflow-y-auto ${isDark ? "dark" : ""}`}>
-        {state.currentPage === "newFontStyle" ? (
-          <div className="space-y-4 px-2">
-            <NewFontStyle
-              domain={fontDomain}
-              selectedFont={selectedFont}
-              onDomainChange={setFontDomain}
-              onFontChange={setSelectedFont}
-              onClose={handleCloseFontSelector}
+  const renderContent = () => {
+    if (isRestrictedPage) {
+      return (
+        <div className="text-center py-12">
+          <div className="mb-4 flex justify-center">
+            <img
+              src="/icon/no-access.svg"
+              alt="No access"
+              className="w-24 h-24 opacity-70"
             />
           </div>
-        ) : state.isLoading ? (
-          <div className="flex flex-col items-center justify-center h-64 space-y-4">
-            <div className="loading loading-spinner loading-lg"></div>
-            <p className="text-base-content/70">{t("loading")}</p>
+          <h3 className="text-xl font-semibold mb-4">No styles allowed on this page</h3>
+          <div>
+             <button
+               onClick={() => browser.tabs.create({ url: 'https://userstyles.world/explore' })}
+               className="btn btn-primary btn-sm"
+             >
+               Explore UserStyles.world
+             </button>
           </div>
-        ) : (
-          <div className="space-y-4 px-2 py-2">
-            {/* Show available styles for this site */}
-            {state.availableStyles.length > 0 && (
+        </div>
+      );
+    } else if (state.currentPage === "newFontStyle") {
+      return (
+        <div className="space-y-4 px-2">
+          <NewFontStyle
+            domain={fontDomain}
+            selectedFont={selectedFont}
+            onDomainChange={setFontDomain}
+            onFontChange={setSelectedFont}
+            onClose={handleCloseFontSelector}
+          />
+        </div>
+      );
+    } else if (state.isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <div className="loading loading-spinner loading-lg"></div>
+          <p className="text-base-content/70">{t("loading")}</p>
+        </div>
+      );
+    } else {
+      return (
+        <div className="space-y-4 px-2 py-2">
+          {/* Show available styles for this site */}
+          {state.availableStyles.length > 0 ? (
+            <>
               <div className="space-y-2">
                 {state.availableStyles.map((style) => (
                   <div key={style.id} className="space-y-2">
@@ -536,53 +473,165 @@ const App = () => {
                   </div>
                 ))}
               </div>
-            )}
+              <div className="text-center mt-4">
+                 <button
+                   onClick={() => browser.tabs.create({ url: 'https://userstyles.world/explore' })}
+                   className="btn btn-primary btn-sm"
+                 >
+                   Explore UserStyles.world
+                 </button>
+              </div>
+            </>
+          ) : (
+             <div className="text-center py-8">
+               <div className="mb-2 flex justify-center">
+                 <img
+                   src="/icon/add-style.svg"
+                   alt="No styles available"
+                   className="w-24 h-24 opacity-70"
+                 />
+               </div>
+                <h3 className="text-xl font-semibold mb-0.5">No styles available yet</h3>
+                <p className="text-base-content/70 text-md">
+                  Create a custom style or find one online
+                </p>
+               <div className="mt-4">
+                 <button
+                   onClick={() => browser.tabs.create({ url: 'https://userstyles.world/explore' })}
+                   className="btn btn-primary btn-sm"
+                 >
+                   Explore UserStyles.world
+                 </button>
+               </div>
+             </div>
+          )}
+        </div>
+      );
+    }
+  };
 
-            <div className="flex justify-between">
-              {/* Add New Style Button */}
+  return (
+    <div className="bg-base-100 min-h-screen flex flex-col">
+      {/* Header */}
+      <div className="bg-base-200 p-4 border-b border-base-300">
+        <div className="flex items-center justify-between">
+          {state.currentPage === "newFontStyle" ? (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center space-x-3 overflow-hidden" style={{maxWidth: 'calc(100% - 3rem)'}}>
+                <button
+                  onClick={handleCloseFontSelector}
+                  className="btn btn-ghost btn-sm p-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                 <h3 className="text-lg font-bold text-base-content">
+                   {t("font_createFontStyle")}
+                 </h3>
+              </div>
               <button
-                onClick={handleAddNewStyle}
-                className="btn btn-secondary flex-1 justify-start normal-case"
+                onClick={handleSaveFontStyle}
+                disabled={!selectedFont || isSavingFont}
+                className="btn btn-primary btn-sm p-2"
               >
-                <Plus className="w-5 h-5 mr-3 flex-shrink-0" />
-                <span className="truncate">{t("addNewStyle")}</span>
-              </button>
-
-              {/* New Font Style Button */}
-              <button
-                onClick={handleOpenFontSelector}
-                className="btn btn-primary flex-1 justify-start normal-case ml-2"
-              >
-                <TextSize className="w-5 h-5 mr-3 flex-shrink-0" />
-                <span className="truncate">{t("font_applyButton")}</span>
+                {isSavingFont ? (
+                  <>
+                    <span className="loading loading-spinner loading-sm"></span>
+                    {t("applying")}
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-0.5" />
+                    {t("applyButton")}
+                  </>
+                )}
               </button>
             </div>
-          </div>
-        )}
+           ) : (
+             <div className="flex items-center space-x-3">
+               <div
+                 className="h-8 w-8 bg-current"
+                 style={{
+                   WebkitMask: "url(/logo.svg) no-repeat center",
+                   WebkitMaskSize: "contain",
+                   mask: "url(/logo.svg) no-repeat center",
+                   maskSize: "contain",
+                 }}
+                 aria-hidden="true"
+               />
+               {!isRestrictedPage && (
+                 <h3 className="text-lg font-bold text-base-content truncate" style={{maxWidth: '330px'}}>
+                   {t("stylesFor")}{" "}
+                   {state.currentTab?.url
+                     ? (() => {
+                         try {
+                           if (state.currentTab.url === "current-site") {
+                             return "current site";
+                           }
+                           if (state.currentTab.url === "restricted-url") {
+                             return "restricted page";
+                           }
+
+                           const url = new URL(state.currentTab.url);
+                           // Only remove 'www.' prefix, keep other subdomains
+                           const hostname = url.hostname.replace(/^www\./, "");
+                           return hostname;
+                         } catch {
+                           // For non-HTTP URLs, try to extract a meaningful name
+                           if (state.currentTab.url.startsWith("chrome://")) {
+                             return "Chrome page";
+                           }
+                           if (state.currentTab.url.startsWith("about:")) {
+                             return "Browser page";
+                           }
+                           if (
+                             state.currentTab.url.startsWith("chrome-extension://")
+                           ) {
+                             return "Extension page";
+                           }
+                           return "current site";
+                         }
+                       })()
+                     : "current site"}
+                 </h3>
+               )}
+             </div>
+           )}
+        </div>
       </div>
 
-      {/* Footer with Manage and Settings buttons */}
-      {state.currentPage !== "newFontStyle" && (
-        <div
-          className={`bg-base-200 border-t border-base-300 p-2 ${isDark ? "dark" : ""}`}
-        >
-          <div className="flex justify-between items-center">
-            <button
-              onClick={handleOpenManager}
-              className="btn btn-ghost btn-sm normal-case flex-1 justify-start mr-2"
-            >
-              <List className="w-4 h-4 mr-2" />
-              <span>{t("manageStyles")}</span>
-            </button>
+       {/* Main Content */}
+       <div className={`flex-1 p-2 overflow-y-auto ${isDark ? "dark" : ""}`}>
+         {renderContent()}
+       </div>
 
-            <button
-              onClick={handleOpenSettings}
-              className="btn btn-ghost btn-sm normal-case flex-1 justify-start"
-              title="Settings"
-            >
-              <Settings className="w-4 h-4" />
-              <span>{t("settings")}</span>
-            </button>
+      {/* Unified Footer */}
+      {state.currentPage !== "newFontStyle" && (
+        <div className="sticky bottom-0 bg-base-200 border-t border-base-300 p-2">
+          <div className="flex justify-between items-center gap-2">
+             <button
+               disabled
+               className="btn btn-primary btn-sm flex-1 justify-center normal-case text-xs whitespace-nowrap"
+             >
+               <Palette className="w-4 h-4 mr-0.5" />
+               <span>{t("colors_apply")}</span>
+             </button>
+
+              <button
+                onClick={handleOpenFontSelector}
+                disabled={isRestrictedPage}
+                className="btn btn-secondary btn-sm flex-1 justify-center normal-case text-xs whitespace-nowrap"
+              >
+                <TextSize className="w-4 h-4 mr-0.5" />
+                <span>{t("font_apply")}</span>
+              </button>
+
+             <button
+               onClick={handleOpenManager}
+               className="btn btn-accent btn-sm flex-1 justify-center normal-case text-xs whitespace-nowrap"
+             >
+               <ViewGrid className="w-4 h-4 mr-0.5" />
+               <span>{t("manageStyles")}</span>
+             </button>
           </div>
         </div>
       )}

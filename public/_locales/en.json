@@ -36,6 +36,14 @@
     "description": "Button text for closing a dialog or page"
   },
   "applyButton": {
+    "message": "Apply",
+    "description": "Button text for applying an action"
+  },
+  "applying": {
+    "message": "Applying...",
+    "description": "Loading text when applying an action"
+  },
+  "applyToSiteButton": {
     "message": "Apply to Site",
     "description": "Button text for applying styles to current site"
   },
@@ -127,9 +135,14 @@
     "message": "Install Date",
     "description": "Label for style save date"
   },
-  "font_selector_title": {
+  "manager_addUserCss": {
+    "message": "Add UserCSS File",
+    "description": "Button text to open Add UserCSS File dialog"
+  },
+
+  "font_apply": {
     "message": "Apply Font",
-    "description": "Title for the font selector dialog"
+    "description": "Button text to open Create Font Style menu"
   },
   "font_tabs_builtin": {
     "message": "Built-in Fonts",
@@ -219,17 +232,13 @@
     "message": "Failed to apply font",
     "description": "Generic error when font application fails"
   },
-  "font_applying": {
-    "message": "Applying...",
-    "description": "Loading text when applying font"
-  },
   "font_applied": {
     "message": "Font '$1' applied successfully",
     "description": "Success message when font is applied"
   },
-  "font_createNewStyle": {
-    "message": "New Font Style",
-    "description": "Text for the New Font Style creation button and dialog title"
+  "font_createFontStyle": {
+    "message": "Create Font Style",
+    "description": "Text for the Create Font Style creation button and dialog title"
   },
   "font_selectLabel": {
     "message": "Select Font",
@@ -242,6 +251,10 @@
   "font_applyButton": {
     "message": "Apply Font",
     "description": "Button text to apply selected font"
+  },
+  "colors_apply": {
+    "message": "Apply Colors",
+    "description": "Button text to open Create Color Style menu"
   },
   "ERR_STORAGE_QUOTA": {
     "message": "Storage capacity exceeded. Please remove some styles to free up space.",

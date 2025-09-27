@@ -13,6 +13,7 @@ import {
   PopupMessageType,
   SaveMessageType,
 } from "../../../hooks/useMessage";
+import { useI18n } from "../../../hooks/useI18n";
 import { VariableControls } from "../VariableControls";
 import {
   Trash,
@@ -52,6 +53,7 @@ const ManagerPage: React.FC = () => {
   const [isSavingFont, setIsSavingFont] = useState(false);
 
   const { sendMessage } = useMessage();
+  const { t } = useI18n();
 
   // Load UserCSS styles
   const loadStyles = useCallback(async () => {
@@ -518,14 +520,14 @@ const ManagerPage: React.FC = () => {
         <div className="flex gap-2">
           <button className="btn btn-primary" onClick={handleImportClick}>
             <TransitionRight className="w-4 h-4 mr-2" />
-            Add UserCSS File
+            {t("manager_addUserCss")}
           </button>
           <button
             className="btn btn-secondary"
             onClick={() => setShowFontModal(true)}
           >
             <TextSize className="w-4 h-4 mr-2" />
-            New Font Style
+            {t("font_createFontStyle")}
           </button>
         </div>
       </div>
@@ -595,9 +597,15 @@ const ManagerPage: React.FC = () => {
 
                   {/* Style Info */}
                   <div className="min-w-0 flex flex-col justify-center">
-                    <h3 className="font-semibold truncate" title={style.name}>
-                      {style.name} by {style.author}
-                    </h3>
+                    <div
+                      className="flex items-center gap-2"
+                      title={`${style.name} by ${style.author}`}
+                    >
+                      <h3 className="font-semibold truncate">{style.name}</h3>
+                      <span className="text-base-content truncate">
+                        by {style.author}
+                      </span>
+                    </div>
                     <p
                       className="text-sm text-base-content/70 truncate"
                       title={style.description}
@@ -670,85 +678,83 @@ const ManagerPage: React.FC = () => {
         </div>
       )}
 
-       {/* New Font Style Modal */}
-       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
-       <dialog
-         ref={fontDialogRef}
-         className="modal"
-         onClose={() => setShowFontModal(false)}
-         onClick={(e) => {
-           if (e.target === e.currentTarget) {
-             setShowFontModal(false);
-           }
-         }}
-       >
-         <div className="modal-box max-w-md">
-           <div className="flex items-center justify-between mb-4">
-             <div className="flex items-center space-x-3">
-               <button
-                 onClick={() => setShowFontModal(false)}
-                 className="btn btn-ghost btn-sm p-2"
-               >
-                 <ArrowLeft className="w-4 h-4" />
-               </button>
-               <h3 className="text-lg font-bold">Create Font Style</h3>
-             </div>
-             <button
-               onClick={async () => {
-                 if (!selectedFont) return;
+      {/* Create Font Style Modal */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+      <dialog
+        ref={fontDialogRef}
+        className="modal"
+        onClose={() => setShowFontModal(false)}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowFontModal(false);
+          }
+        }}
+      >
+        <div className="modal-box max-w-md">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowFontModal(false)}
+                className="btn btn-ghost btn-sm p-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <h3 className="text-lg font-bold">{t("font_createFontStyle")}</h3>
+            </div>
+            <button
+              onClick={async () => {
+                if (!selectedFont) return;
 
-                 setIsSavingFont(true);
-                 try {
-                   const result = await sendMessage(
-                     SaveMessageType.CREATE_FONT_STYLE,
-                     {
-                       domain: fontDomain || undefined,
-                       fontName: selectedFont,
-                     },
-                   );
+                setIsSavingFont(true);
+                try {
+                  const result = await sendMessage(
+                    SaveMessageType.CREATE_FONT_STYLE,
+                    {
+                      domain: fontDomain || undefined,
+                      fontName: selectedFont,
+                    },
+                  );
 
-                   if ("success" in result && result.success) {
-                     setShowFontModal(false);
-                     loadStyles(); // Refresh the styles list
-                   } else {
-                     const errorMsg =
-                       "error" in result && result.error
-                         ? result.error
-                         : "Failed to create font style";
-                     throw new Error(errorMsg);
-                   }
-                 } catch (error) {
-                   console.error("Failed to save font style:", error);
-                 } finally {
-                   setIsSavingFont(false);
-                 }
-               }}
-               disabled={!selectedFont || isSavingFont}
-               className="btn btn-primary btn-sm p-2"
-             >
-               {isSavingFont ? (
-                 <>
-                   <span className="loading loading-spinner loading-sm"></span>
-                   Applying...
-                 </>
-               ) : (
-                 <>
-                   <Check className="w-4 h-4 mr-0.5" />
-                   Apply
-                 </>
-               )}
-             </button>
-           </div>
+                  if ("success" in result && result.success) {
+                    setShowFontModal(false);
+                    loadStyles(); // Refresh the styles list
+                  } else {
+                    const errorMsg =
+                      "error" in result && result.error
+                        ? result.error
+                        : "Failed to create font style";
+                    throw new Error(errorMsg);
+                  }
+                } catch (error) {
+                  console.error("Failed to save font style:", error);
+                } finally {
+                  setIsSavingFont(false);
+                }
+              }}
+              disabled={!selectedFont || isSavingFont}
+              className="btn btn-primary btn-sm p-2"
+            >
+              {isSavingFont ? (
+                <>
+                  <span className="loading loading-spinner loading-sm"></span>
+                  {t("applying")}
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-0.5" />
+                  {t("applyButton")}
+                </>
+              )}
+            </button>
+          </div>
 
-           <NewFontStyle
-             domain={fontDomain}
-             selectedFont={selectedFont}
-             onDomainChange={setFontDomain}
-             onFontChange={setSelectedFont}
-             onClose={() => setShowFontModal(false)}
-           />
-
-
+          <NewFontStyle
+            domain={fontDomain}
+            selectedFont={selectedFont}
+            onDomainChange={setFontDomain}
+            onFontChange={setSelectedFont}
+            onClose={() => setShowFontModal(false)}
+          />
         </div>
       </dialog>
 
