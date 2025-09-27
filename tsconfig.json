@@ -5,7 +5,7 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "types": ["node", "react", "react-dom"],
+    "types": ["node", "react", "react-dom", "vitest/globals"],
     "moduleResolution": "bundler",
     "noEmit": true,
     "esModuleInterop": true,
