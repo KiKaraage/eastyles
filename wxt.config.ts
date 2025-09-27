@@ -20,6 +20,11 @@ export default defineConfig({
         id: "eastyles@kikaraage",
       },
     },
+    commands: {
+      "open-manager": {
+        "description": "Open style manager",
+      },
+    },
     options_ui: {
       page: "/manager.html",
     },
