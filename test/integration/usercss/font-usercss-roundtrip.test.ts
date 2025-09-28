@@ -267,7 +267,7 @@ describe('Font UserCSS Round-trip Integration', () => {
       // Should contain @font-face for built-in fonts
       expect(userCSS).toContain('@font-face');
       expect(userCSS).toContain("font-family: 'Inter'");
-      expect(userCSS).toContain('/assets/fonts/Inter.woff2');
+      expect(userCSS).toContain('/fonts/Inter.woff2');
 
       // Should contain CSS rules
       expect(userCSS).toContain('body {');

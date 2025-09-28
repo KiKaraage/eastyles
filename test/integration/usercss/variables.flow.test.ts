@@ -78,7 +78,11 @@ describe('Variable Change Flow Integration', () => {
       type: 'select',
       default: 'light',
       value: 'light',
-      options: ['light', 'dark', 'auto'],
+      options: [
+        { value: 'light', label: 'light' },
+        { value: 'dark', label: 'dark' },
+        { value: 'auto', label: 'auto' },
+      ],
     },
   };
 
