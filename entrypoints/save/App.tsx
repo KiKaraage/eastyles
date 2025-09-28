@@ -35,35 +35,68 @@ interface ParseResult {
 // Extract simplified domain name from regexp pattern
 const extractDomainFromRegexp = (pattern: string): string => {
   try {
-    // Look for https://hostname pattern
-    const httpsMatch = pattern.match(/https?:\/\/([^/?#]+)/);
-    if (httpsMatch) {
-      let hostname = httpsMatch[1];
+    // First, try to extract domain from common URL patterns
+    const urlPatterns = [
+      // https://domain.com or http://domain.com
+      /https?:\/\/([^/?#\\]+)/,
+      // Escaped protocols: https\\:\\/\\/domain\\.com
+      /https?\\\\:\\\\\/\\\\\/([^/?#\\]+)/,
+      // Domain with optional protocol indicators
+      /(?:https?\\?:)?\\?\/\\?\/?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
+    ];
 
-      // Remove regex special characters and groups
-      hostname = hostname.replace(/\([^)]*\)\*?\??/g, ''); // Remove (group)* or (group)?
-      hostname = hostname.replace(/\([^)]*\)/g, ''); // Remove any remaining (group)
-      hostname = hostname.replace(/[^\w.-]/g, ''); // Remove special regex chars
-      hostname = hostname.replace(/^\*?\./, ''); // Remove leading *. or .
+    for (const urlPattern of urlPatterns) {
+      const match = pattern.match(urlPattern);
+      if (match) {
+        let hostname = match[1];
 
-      // Extract the main domain (last two parts)
-      const parts = hostname.split('.').filter(p => p.length > 0);
-      if (parts.length >= 2) {
-        return parts.slice(-2).join('.');
+        // Clean up escaped characters
+        hostname = hostname.replace(/\\+/g, "");
+
+        // Remove regex groups and quantifiers
+        hostname = hostname.replace(/\([^)]*\)[*+?]?/g, "");
+        hostname = hostname.replace(/[[\]{}()*+?^$|\\]/g, "");
+        hostname = hostname.replace(/^\*?\.+/, "");
+
+        // Extract meaningful domain
+        const parts = hostname
+          .split(".")
+          .filter((p) => p.length > 0 && !/^[*+?]$/.test(p));
+        if (parts.length >= 2) {
+          return parts.slice(-2).join(".");
+        }
+        if (hostname.length > 0) {
+          return hostname;
+        }
       }
-      return hostname || 'regexp';
     }
 
-    // Fallback: try to extract domain-like pattern
-    const domainLike = pattern.match(/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/);
-    if (domainLike) {
-      return domainLike[0];
+    // Try to find any domain-like pattern in the regex
+    const domainPatterns = [
+      // Standard domain pattern
+      /([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})?)/,
+      // Escaped domain pattern
+      /([a-zA-Z0-9-]+\\\.?[a-zA-Z0-9-]+(?:\\\.?[a-zA-Z]{2,})?)/,
+    ];
+
+    for (const domainPattern of domainPatterns) {
+      const match = pattern.match(domainPattern);
+      if (match) {
+        const domain = match[1].replace(/\\+/g, "");
+        // Clean up and validate
+        if (domain.includes(".") && domain.length > 3) {
+          return domain;
+        }
+      }
     }
 
-    // If all else fails, return a truncated version
-    return pattern.length > 20 ? pattern.substring(0, 17) + '...' : pattern;
+    // If nothing found, return a meaningful truncated version
+    if (pattern.length > 25) {
+      return pattern.substring(0, 22) + "...";
+    }
+    return pattern || "regexp";
   } catch {
-    return pattern.length > 20 ? pattern.substring(0, 17) + '...' : pattern;
+    return pattern.length > 25 ? pattern.substring(0, 22) + "..." : pattern;
   }
 };
 
@@ -74,9 +107,10 @@ const formatDomainForDisplay = (
   metadataBlock?: string,
 ): string => {
   // Handle regexp-prefixed domains from inline parser
-  if (domain.startsWith('regexp:')) {
+  if (domain.startsWith("regexp:")) {
     const regexpPattern = domain.substring(7);
-    return extractDomainFromRegexp(regexpPattern);
+    const extracted = extractDomainFromRegexp(regexpPattern);
+    return `regexp: ${extracted}`;
   }
 
   // Check both CSS content and metadata block for domain rules
@@ -84,22 +118,56 @@ const formatDomainForDisplay = (
     ? `${metadataBlock}\n${cssContent}`
     : cssContent;
 
-  // Check if this domain came from a url-prefix rule by looking at the content
+  // Check if this domain came from a regexp rule
+  const regexpPatterns = [
+    new RegExp(
+      `regexp\\(["']?[^"']*${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^"']*["']?\\)`,
+      "i",
+    ),
+    new RegExp(
+      `regexp\\(["']?${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+      "i",
+    ),
+  ];
+
+  for (const pattern of regexpPatterns) {
+    if (pattern.test(fullContent)) {
+      // Try to extract the full regexp pattern for better display
+      const regexpMatch = fullContent.match(/regexp\(["']?([^"')]+)["']?\)/i);
+      if (regexpMatch) {
+        const fullPattern = regexpMatch[1];
+        const simplifiedDomain = extractDomainFromRegexp(fullPattern);
+        return `regexp: ${simplifiedDomain}`;
+      }
+      return `regexp: ${domain}`;
+    }
+  }
+
+  // Check if this domain came from a url-prefix rule
   const urlPrefixPattern = new RegExp(
-    `url-prefix\\(["']?https?://[^"']*${domain.replace(".", "\\.")}`,
+    `url-prefix\\(["']?https?://[^"']*${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
     "i",
   );
   if (urlPrefixPattern.test(fullContent)) {
-    return `start with ${domain}`;
+    return `starts with ${domain}`;
   }
 
   // Check if this domain came from a domain rule
   const domainPattern = new RegExp(
-    `domain\\(["']?${domain.replace(".", "\\.")}`,
+    `domain\\(["']?${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
     "i",
   );
   if (domainPattern.test(fullContent)) {
     return domain;
+  }
+
+  // Check for URL exact match
+  const urlPattern = new RegExp(
+    `url\\(["']?https?://[^"']*${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+    "i",
+  );
+  if (urlPattern.test(fullContent)) {
+    return `exact: ${domain}`;
   }
 
   // Default fallback
@@ -340,7 +408,12 @@ const SavePage: React.FC = () => {
             },
             css: parseResponse.css,
             metadataBlock: parseResponse.metadataBlock,
-            variables: (parseResponse as any).variables || {},
+            variables:
+              (
+                parseResponse as {
+                  variables?: Record<string, VariableDescriptor>;
+                }
+              ).variables || {},
             warnings: parseResponse.warnings || [],
             errors: parseResponse.errors || [],
           });

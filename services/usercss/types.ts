@@ -44,7 +44,7 @@ export interface VariableDescriptor {
   /** Maximum value (for numeric variables) */
   max?: number;
   /** Available options (for select variables) */
-  options?: string[];
+  options?: Array<{value: string, label: string}>;
   /** CSS snippets for each option (for USO EOT blocks) */
   optionCss?: Record<string, string>;
   /** Current value that may be modified by user */

@@ -12,6 +12,7 @@ import {
   VariableDescriptor,
 } from "./types";
 import { resolveVariables } from "./variables";
+import { extractDomains } from "./domains";
 
 /**
  * Supported preprocessor types
@@ -149,6 +150,51 @@ function extractHostname(url: string): string {
 }
 
 /**
+ * Extract domains from regexp patterns
+ */
+function extractDomainsFromRegexp(pattern: string): string[] {
+  const domains: string[] = [];
+
+  try {
+    // Remove protocol prefix
+    let domainPart = pattern.replace(/^https?:\/\//, "");
+
+    // Handle escaped characters in the pattern
+    domainPart = domainPart.replace(/\\./g, ".");
+
+    // Remove regexp quantifiers and groups that don't affect the domain
+    // This is a simplified approach - remove common patterns that don't affect domain extraction
+    domainPart = domainPart.replace(/\([^)]*\)\*/g, ""); // Remove optional groups like (gist\.)*
+    domainPart = domainPart.replace(/\([^)]*\)\?/g, ""); // Remove optional groups
+    domainPart = domainPart.replace(/\([^)]*\)/g, ""); // Remove other groups
+
+    // Split by common separators and extract domain-like parts
+    const parts = domainPart.split(/[/?#]/)[0]; // Take everything before path/query/fragment
+
+    // Look for domain patterns (word.word or word.word.word)
+    const domainRegex =
+      /\b([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)?)\b/g;
+    let match;
+    while ((match = domainRegex.exec(parts)) !== null) {
+      const potentialDomain = match[1];
+      // Basic validation - should have at least one dot and be reasonable length
+      if (
+        potentialDomain.length >= 4 &&
+        potentialDomain.length <= 253 &&
+        potentialDomain.includes(".")
+      ) {
+        domains.push(potentialDomain);
+      }
+    }
+  } catch (error) {
+    // If parsing fails, try fallback methods
+    console.warn("Failed to parse regexp pattern for domains:", pattern, error);
+  }
+
+  return domains;
+}
+
+/**
  * Helper function to process variable matches and create VariableDescriptor
  */
 function processVariableMatch(
@@ -159,7 +205,7 @@ function processVariableMatch(
 ): VariableDescriptor | null {
   let varType: VariableDescriptor["type"] = "unknown";
   if (type === "checkbox") {
-    varType = "select";
+    varType = "checkbox";
   } else if (type === "color") {
     varType = "color";
   } else if (type === "number") {
@@ -194,23 +240,32 @@ function processVariableMatch(
     }
   }
 
-  if (type === "checkbox") {
-    variable.options = ["0", "1"];
-    // For checkbox, default should be "0" or "1"
-    if (defaultValue && (defaultValue === "0" || defaultValue === "1")) {
-      variable.value = defaultValue;
-    } else {
-      variable.value = "0"; // Default to off
-    }
-  } else if ((type === "select" || type === "dropdown") && defaultValue) {
+  if ((type === "select" || type === "dropdown") && defaultValue) {
     // Check if this is a USO EOT block format
     if (defaultValue.includes("<<<EOT")) {
       const eotResult = parseEOTBlocks(defaultValue);
       if (eotResult) {
-        variable.options = eotResult.options;
+        variable.options = eotResult.options.map((opt) => ({
+          value: opt,
+          label: opt,
+        }));
         variable.optionCss = eotResult.optionCss;
         variable.default = eotResult.defaultValue;
         variable.value = eotResult.defaultValue;
+      }
+    } else if (defaultValue.startsWith("{")) {
+      try {
+        const optionsObj = JSON.parse(defaultValue);
+        variable.options = Object.entries(optionsObj).map(([key, val]) => {
+          const parts = key.split(":");
+          const label = parts[1] || parts[0];
+          return { value: val as string, label };
+        });
+        if (variable.options.length > 0) {
+          variable.value = variable.options[0].value;
+        }
+      } catch {
+        console.warn("Failed to parse select options:", defaultValue);
       }
     } else {
       // Parse select options from format like ["option1","option2","option3"]
@@ -218,12 +273,13 @@ function processVariableMatch(
         const optionsMatch = defaultValue.match(/^\[([^\]]*)\]$/);
         if (optionsMatch) {
           const optionsString = optionsMatch[1];
-          variable.options = optionsString
-            .split(",")
-            .map((opt) => opt.trim().replace(/^["']|["']$/g, ""));
+          variable.options = optionsString.split(",").map((opt) => {
+            const clean = opt.trim().replace(/^["']|["']$/g, "");
+            return { value: clean, label: clean };
+          });
           // Set the first option as the default value if it's an array
           if (variable.options.length > 0) {
-            variable.value = variable.options[0];
+            variable.value = variable.options[0].value;
           }
         }
       } catch {
@@ -246,7 +302,7 @@ function parseEOTBlocks(value: string): {
   // Regular expression to match EOT blocks
   // Format: [optionKey] "Display Label*" <<<EOT css content EOT;
   // Default can be marked with * in display label (like "Sky*")
-  const eotRegex = /([\w\-]+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+  const eotRegex = /([\w-]+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
 
   const options: string[] = [];
   const optionCss: Record<string, string> = {};
@@ -349,7 +405,10 @@ function parseVarDirective(value: string): VariableDescriptor | null {
               label,
               default: eotResult.defaultValue,
               value: eotResult.defaultValue,
-              options: eotResult.options,
+              options: eotResult.options.map((opt) => ({
+                value: opt,
+                label: opt,
+              })),
               optionCss: eotResult.optionCss,
             };
           }
@@ -454,7 +513,7 @@ export function parseUserCSS(
   let documentType: string;
   try {
     console.log("[parseUserCSS] About to check typeof document...");
-    documentType = typeof document;
+    documentType = typeof globalThis.document;
     console.log(
       "[parseUserCSS] typeof document check successful:",
       documentType,
@@ -670,6 +729,10 @@ export function parseUserCSS(
           /domain\(["']?([^"')]+)["']?\)/g,
         );
 
+        const regexpMatches = mozDocumentRules.match(
+          /regexp\(["']?([^"')]+)["']?\)/g,
+        );
+
         if (urlMatches) {
           urlMatches.forEach((match) => {
             const urlMatch = match.match(
@@ -700,40 +763,41 @@ export function parseUserCSS(
             }
           });
         }
+
+        if (regexpMatches) {
+          regexpMatches.forEach((match) => {
+            const regexpMatch = match.match(/regexp\(["']?([^"')]+)["']?\)/);
+            if (regexpMatch) {
+              // Parse the regexp pattern to extract domain
+              const extractedDomains = extractDomainsFromRegexp(regexpMatch[1]);
+              extractedDomains.forEach((domain) => {
+                if (!domains.includes(domain)) {
+                  domains.push(domain);
+                }
+              });
+            }
+          });
+        }
       }
     }
 
-    // Parse CSS content for @-moz-document rules
-    const mozDocumentCssMatch = css.match(/@-moz-document\s+([^}]+)\s*\{/);
-    if (mozDocumentCssMatch) {
-      const mozDocumentRule = mozDocumentCssMatch[1];
-
-      // Extract domains from CSS @-moz-document rules
-      const domainMatches = mozDocumentRule.match(
-        /domain\(["']?([^"')]+)["']?\)/g,
-      );
-      if (domainMatches) {
-        domainMatches.forEach((match) => {
-          const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
-          if (domainMatch) {
-            domains.push(domainMatch[1]);
+    // Parse CSS content for @-moz-document rules using the extractDomains utility
+    const extractedRules = extractDomains(css);
+    extractedRules.forEach((rule) => {
+      if (rule.kind === "domain") {
+        domains.push(rule.pattern);
+      } else if (rule.kind === "url-prefix") {
+        domains.push(extractHostname(rule.pattern));
+      } else if (rule.kind === "regexp") {
+        // Extract domains from regexp pattern
+        const extractedDomains = extractDomainsFromRegexp(rule.pattern);
+        extractedDomains.forEach((domain) => {
+          if (!domains.includes(domain)) {
+            domains.push(domain);
           }
         });
       }
-
-      // Extract url-prefix patterns from CSS @-moz-document rules
-      const urlPrefixMatches = mozDocumentRule.match(
-        /url-prefix\(["']?([^"')]+)["']?\)/g,
-      );
-      if (urlPrefixMatches) {
-        urlPrefixMatches.forEach((match) => {
-          const urlMatch = match.match(/url-prefix\(["']?([^"')]+)["']?\)/);
-          if (urlMatch) {
-            domains.push(extractHostname(urlMatch[1]));
-          }
-        });
-      }
-    }
+    });
 
     // Validate required fields
     if (!directives.name) {
@@ -897,9 +961,9 @@ export async function processUserCSS(
   // Check if we're in a context where DOM APIs are available
   let hasDom = false;
   try {
-    hasDom = typeof globalThis.window !== "undefined";
+    hasDom = typeof globalThis.document !== "undefined";
   } catch {
-    // If accessing window throws, we definitely don't have DOM access
+    // If accessing document throws, we definitely don't have DOM access
     hasDom = false;
   }
 

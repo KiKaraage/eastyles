@@ -645,6 +645,53 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       return match ? match[1] : url;
     };
 
+    // Extract domains from regexp patterns
+    const extractDomainsFromRegexp = (pattern: string): string[] => {
+      const domains: string[] = [];
+
+      try {
+        // Remove protocol prefix
+        let domainPart = pattern.replace(/^https?:\/\//, "");
+
+        // Handle escaped characters in the pattern
+        domainPart = domainPart.replace(/\\./g, ".");
+
+        // Remove regexp quantifiers and groups that don't affect the domain
+        // This is a simplified approach - remove common patterns that don't affect domain extraction
+        domainPart = domainPart.replace(/\([^)]*\)\*/g, ""); // Remove optional groups like (gist\.)*
+        domainPart = domainPart.replace(/\([^)]*\)\?/g, ""); // Remove optional groups
+        domainPart = domainPart.replace(/\([^)]*\)/g, ""); // Remove other groups
+
+        // Split by common separators and extract domain-like parts
+        const parts = domainPart.split(/[/?#]/)[0]; // Take everything before path/query/fragment
+
+        // Look for domain patterns (word.word or word.word.word)
+        const domainRegex =
+          /\b([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)?)\b/g;
+        let match;
+        while ((match = domainRegex.exec(parts)) !== null) {
+          const potentialDomain = match[1];
+          // Basic validation - should have at least one dot and be reasonable length
+          if (
+            potentialDomain.length >= 4 &&
+            potentialDomain.length <= 253 &&
+            potentialDomain.includes(".")
+          ) {
+            domains.push(potentialDomain);
+          }
+        }
+      } catch (error) {
+        // If parsing fails, try fallback methods
+        console.warn(
+          "Failed to parse regexp pattern for domains:",
+          pattern,
+          error,
+        );
+      }
+
+      return domains;
+    };
+
     // Create a simple ID hash from name and namespace
     const generateId = (name: string, namespace: string): string => {
       const input = `${namespace}:${name}`;
@@ -754,19 +801,55 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       }
 
       // Parse CSS content for @-moz-document rules
-      const mozDocumentCssMatch = css.match(/@-moz-document\\s+([^}]+)\\s*\\{/);
+      const mozDocumentCssMatch = css.match(/@-moz-document\s+([^}]+)\s*\{/);
       if (mozDocumentCssMatch) {
         const mozDocumentRule = mozDocumentCssMatch[1];
+        console.log(
+          "[parseUserCSSMinimal] Found mozDocumentRule:",
+          mozDocumentRule,
+        );
 
         // Extract domains from CSS @-moz-document rules
         const domainMatchesCss = mozDocumentRule.match(
-          /domain\\(["']?([^"')]+)["']?\\)/g,
+          /domain\(["']?([^"')]+)["']?\)/g,
         );
         if (domainMatchesCss) {
           domainMatchesCss.forEach((match) => {
-            const domainMatch = match.match(/domain\\(["']?([^"')]+)["']?\\)/);
+            const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
             if (domainMatch) {
               domains.push(domainMatch[1]);
+            }
+          });
+        }
+
+        // Extract domains from regexp() rules
+        const regexpMatches = mozDocumentRule.match(
+          /regexp\(["']?([^"']+)["']?\)/g,
+        );
+        if (regexpMatches) {
+          console.log(
+            "[parseUserCSSMinimal] Found regexpMatches:",
+            regexpMatches,
+          );
+          regexpMatches.forEach((match) => {
+            const regexpMatch = match.match(/regexp\(["']?([^"']+)["']?\)/);
+            if (regexpMatch) {
+              const pattern = regexpMatch[1];
+              console.log(
+                "[parseUserCSSMinimal] Extracting from pattern:",
+                pattern,
+              );
+              // Parse the regexp pattern to extract domain
+              const extractedDomains = extractDomainsFromRegexp(pattern);
+              console.log(
+                "[parseUserCSSMinimal] Extracted domains:",
+                extractedDomains,
+              );
+              extractedDomains.forEach((domain) => {
+                if (!domains.includes(domain)) {
+                  domains.push(domain);
+                }
+              });
             }
           });
         }
@@ -788,7 +871,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       // Helper function to parse USO EOT blocks (similar to processor.ts)
       const parseEOTBlocksMinimal = (value: string) => {
         // Regular expression to match EOT blocks in USO format
-        const eotRegex = /([\w\-]+)\s+"([^\"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+        const eotRegex = /([\w-]+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
 
         const options: string[] = [];
         const optionCss: Record<string, string> = {};
@@ -797,7 +880,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
 
         let match;
         while ((match = eotRegex.exec(value)) !== null) {
-          const [displayLabel, cssContent] = match;
+          const [, , displayLabel, cssContent] = match;
 
           // Check if this is the default option (marked with * in display label like "Sky*")
           const isDefault = displayLabel.includes("*");
@@ -822,7 +905,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       };
 
       // Extract variables from various directive formats (e.g., @var, @advanced, @path/type color name "label" default)
-      const variables: Record<string, any> = {};
+      const variables: Record<string, VariableDescriptor> = {};
 
       // Enhanced regex to find variable directives in various formats
       // This handles formats like:
@@ -832,7 +915,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       // @path/range name "label" [default, min, max, step, unit]
       // Using \s to match both spaces and tabs
       const directiveRegex =
-        /@[\w\/\.\-:]+\s+(range|color|text|select|number|dropdown)\s+([\w\-]+)\s+"([^"]+)"\s*([^\r\n]+)/g;
+        /@[\w/.:-]+\s+(range|color|text|select|number|dropdown|checkbox)\s+([\w-]+)\s+"([^"]+)"\s*([^\r\n]+)/g;
       let directiveMatch;
 
       while ((directiveMatch = directiveRegex.exec(metadataContent)) !== null) {
@@ -860,9 +943,33 @@ const handleParseUserCSS: MessageHandler = async (message) => {
           }
         }
 
-        let varDescriptor: any = {
-          name: `--${name}`,
-          type: type === "range" ? "number" : type, // Convert 'range' to 'number' type
+        // Map the regex-matched type to the enum
+        let mappedType: VariableDescriptor["type"];
+        switch (type) {
+          case "color":
+            mappedType = "color";
+            break;
+          case "range":
+          case "number":
+            mappedType = "number";
+            break;
+          case "text":
+            mappedType = "text";
+            break;
+          case "select":
+          case "dropdown":
+            mappedType = "select";
+            break;
+          case "checkbox":
+            mappedType = "checkbox";
+            break;
+          default:
+            mappedType = "unknown";
+        }
+
+        let varDescriptor: VariableDescriptor = {
+          name: name,
+          type: mappedType,
           label,
           default: defaultValue,
           value: defaultValue,
@@ -876,14 +983,16 @@ const handleParseUserCSS: MessageHandler = async (message) => {
             const rangeParts = rangeMatch[1].split(",").map((s) => s.trim());
             if (rangeParts.length >= 3) {
               varDescriptor.default = rangeParts[0];
-              varDescriptor.value = rangeParts[0];
               varDescriptor.min = parseFloat(rangeParts[1]);
               varDescriptor.max = parseFloat(rangeParts[2]);
             }
-            if (rangeParts.length >= 4) {
-              varDescriptor.step = parseFloat(rangeParts[3]);
-            }
           }
+        }
+
+        // Handle checkbox type - default should be "0" or "1"
+        if (type === "checkbox") {
+          varDescriptor.type = "checkbox";
+          varDescriptor.default = defaultValue === "1" ? "1" : "0";
         }
 
         // Handle dropdown types that have options in braces - check if the full metadata contains the braces
@@ -917,7 +1026,10 @@ const handleParseUserCSS: MessageHandler = async (message) => {
                 varDescriptor = {
                   ...varDescriptor,
                   type: "select",
-                  options: dropdownOptions.options,
+                  options: dropdownOptions.options.map((opt) => ({
+                    value: opt,
+                    label: opt,
+                  })),
                   default: dropdownOptions.defaultValue,
                   value: dropdownOptions.defaultValue,
                   optionCss: dropdownOptions.optionCss,
@@ -970,9 +1082,9 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       // Check if we're in a context where DOM APIs are available
       let hasDom = false;
       try {
-        hasDom = typeof globalThis.window !== "undefined";
+        hasDom = typeof globalThis.document !== "undefined";
       } catch {
-        // If accessing window throws, we definitely don't have DOM access
+        // If accessing document throws, we definitely don't have DOM access
         hasDom = false;
       }
 
@@ -1077,19 +1189,20 @@ const handleInstallStyle: MessageHandler = async (message) => {
       allDomains.length,
     );
 
-    // Parse CSS content for @-moz-document rules
+    // Extract original @-moz-document condition for display
+    let originalDomainCondition: string | undefined;
     const mozDocumentCssMatch = compiledCss.match(
       /@-moz-document\s+([^}]+)\s*\{/,
     );
     if (mozDocumentCssMatch) {
-      const mozDocumentRule = mozDocumentCssMatch[1];
+      originalDomainCondition = mozDocumentCssMatch[1].trim();
       console.log(
         "[handleInstallStyle] Found @-moz-document rule in CSS:",
-        mozDocumentRule,
+        originalDomainCondition,
       );
 
       // Extract domains from CSS @-moz-document rules
-      const domainMatches = mozDocumentRule.match(
+      const domainMatches = originalDomainCondition.match(
         /domain\(["']?([^"')]+)["']?\)/g,
       );
       if (domainMatches) {
@@ -1106,7 +1219,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
       }
 
       // Extract url-prefix patterns from CSS @-moz-document rules
-      const urlPrefixMatches = mozDocumentRule.match(
+      const urlPrefixMatches = originalDomainCondition.match(
         /url-prefix\(["']?([^"')]+)["']?\)/g,
       );
       if (urlPrefixMatches) {
@@ -1199,6 +1312,23 @@ const handleInstallStyle: MessageHandler = async (message) => {
             }
           });
         }
+
+        // Extract regexp patterns
+        const regexpMatches = conditionList.match(
+          /regexp\(["']?([^"')]+)["']?\)/g,
+        );
+        if (regexpMatches) {
+          regexpMatches.forEach((match) => {
+            const regexpMatch = match.match(/regexp\(["']?([^"')]+)["']?\)/);
+            if (regexpMatch) {
+              rules.push({
+                kind: "regexp",
+                pattern: regexpMatch[1],
+                include: true,
+              });
+            }
+          });
+        }
       }
 
       return rules;
@@ -1271,6 +1401,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
       author: meta.author || "",
       sourceUrl: meta.sourceUrl || "",
       domains: domainRules,
+      originalDomainCondition,
       compiledCss: compiledCss,
       variables: variablesRecord,
       originalDefaults: {},
@@ -1775,6 +1906,8 @@ const handleUpdateVariables: MessageHandler = async (message) => {
         payload: { styleId: string; variables: Record<string, string> };
       }
     ).payload;
+
+    console.log("Variables changed for style:", styleId, variables);
 
     // Update variables using the variable persistence service
     const { variablePersistenceService } = await import(

@@ -25,6 +25,12 @@ interface VariableControlProps {
   onChange: (value: string) => void;
 }
 
+// Helper function to check if a string is a valid color value (including alpha)
+const isValidColor = (color: string): boolean => {
+  // Must be a valid hex color: #rgb, #rrggbb, or #rrggbbaa
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color);
+};
+
 const VariableControl: React.FC<VariableControlProps> = ({
   variable,
   onChange,
@@ -32,11 +38,42 @@ const VariableControl: React.FC<VariableControlProps> = ({
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
-    onChange(e.target.value);
+    let value = e.target.value;
+
+    // For color inputs, validate the value
+    if (variable.type === "color" && e.target.type === "color") {
+      // Color input should always produce valid values, but let's ensure
+      if (!isValidColor(value)) {
+        console.warn(`Invalid color value from color input: ${value}`);
+        value = "#000000"; // Fallback
+      }
+    }
+
+    onChange(value);
   };
 
   // Use label if available, otherwise fall back to name
   const displayLabel = variable.label || variable.name.replace(/^--/, "");
+
+  // Get a valid color value for the color input, fallback to default
+  const getValidColorValue = (value: string): string => {
+    if (isValidColor(value)) {
+      // For 8-digit colors, strip alpha for input[type="color"]
+      if (value.length === 9) { // #rrggbbaa
+        return value.substring(0, 7);
+      }
+      return value;
+    }
+    // Try to extract valid color from malformed strings
+    if (value.startsWith('#') && value.length >= 7) {
+      const hexPart = value.substring(0, 7);
+      if (isValidColor(hexPart)) {
+        return hexPart;
+      }
+    }
+    // Fallback to default
+    return variable.default && isValidColor(variable.default) ? variable.default : "#000000";
+  };
 
   switch (variable.type) {
     case "color":
@@ -50,7 +87,7 @@ const VariableControl: React.FC<VariableControlProps> = ({
           <div className="flex items-center space-x-2">
             <input
               type="color"
-              value={variable.value}
+              value={getValidColorValue(variable.value)}
               onChange={handleChange}
               className="w-12 h-8 border border-base-300 rounded cursor-pointer"
               title={`Color picker for ${variable.name}`}
@@ -102,11 +139,15 @@ const VariableControl: React.FC<VariableControlProps> = ({
             className="select select-bordered select-sm"
             title={`Select option for ${variable.name}`}
           >
-            {variable.options?.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
+            {variable.options?.map((option) => {
+              const value = typeof option === 'string' ? option : option.value;
+              const label = typeof option === 'string' ? option : option.label;
+              return (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              );
+            })}
           </select>
         </div>
       );

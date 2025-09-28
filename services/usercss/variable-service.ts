@@ -40,7 +40,8 @@ export class VariablePersistenceService {
       );
 
       // Check if this is a preprocessed style and re-process with new variables
-      if (updatedStyle.source.includes("@preprocessor")) {
+      // Skip reprocessing in background context where DOM is not available
+      if (updatedStyle.source.includes("@preprocessor") && typeof globalThis.document !== "undefined") {
         const startTime = performance.now();
 
         try {

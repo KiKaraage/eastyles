@@ -141,7 +141,28 @@ const ManagerPage: React.FC = () => {
 
   // Serialize domains to CSS-like format for editing
   const serializeDomains = useCallback((domains: DomainRule[]): string => {
-    return domains
+    // Extract hostnames from url-prefix rules
+    const urlPrefixHosts = new Set<string>();
+    domains.forEach((d) => {
+      if (d.kind === "url-prefix") {
+        try {
+          const url = new URL(d.pattern);
+          urlPrefixHosts.add(url.hostname);
+        } catch {
+          // Ignore invalid URLs
+        }
+      }
+    });
+
+    // Filter out domain rules that are covered by url-prefix rules
+    const filteredDomains = domains.filter((d) => {
+      if (d.kind === "domain") {
+        return !urlPrefixHosts.has(d.pattern);
+      }
+      return true;
+    });
+
+    return filteredDomains
       .map((d) => {
         switch (d.kind) {
           case "domain":
@@ -161,11 +182,13 @@ const ManagerPage: React.FC = () => {
 
   // Parse CSS-like string to domains
   const parseDomains = useCallback((text: string): DomainRule[] => {
+    // Strip @-moz-document prefix if present
+    const cleanText = text.replace(/^@-moz-document\s+/, "").trim();
     const domains: DomainRule[] = [];
     // Split by comma, but handle quotes
     const regex = /([^,()]+)\(("([^"]*)")\)/g;
     let match;
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = regex.exec(cleanText)) !== null) {
       const kind = match[1].trim();
       const pattern = match[3];
       if (["url", "url-prefix", "domain", "regexp"].includes(kind)) {
@@ -192,7 +215,13 @@ const ManagerPage: React.FC = () => {
       setEditingDescription(style.description);
       setEditingAuthor(style.author);
       setEditingSourceUrl(style.sourceUrl);
-      setEditingDomains(serializeDomains(style.domains));
+      const domainText =
+        style.originalDomainCondition || serializeDomains(style.domains);
+      setEditingDomains(
+        domainText.startsWith("@-moz-document")
+          ? domainText
+          : `@-moz-document ${domainText}`,
+      );
       setHasUnsavedChanges(false);
       setShowEditModal(true);
     },
@@ -253,6 +282,9 @@ const ManagerPage: React.FC = () => {
           author: editingAuthor.trim() || editingStyle.author,
           sourceUrl: editingSourceUrl.trim() || editingStyle.sourceUrl,
           domains: updatedDomains,
+          originalDomainCondition: editingDomains
+            .replace(/^@-moz-document\s+/, "")
+            .trim(),
         });
         setShowEditModal(false);
         setEditingStyle(null);
@@ -428,7 +460,7 @@ const ManagerPage: React.FC = () => {
           cssFile
             .text()
             .then((cssContent) => {
-              const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
               sessionStorage.setItem(storageId, cssContent);
               const saveUrl = browser.runtime.getURL("/save.html");
               const filename = encodeURIComponent(cssFile.name);
@@ -473,8 +505,74 @@ const ManagerPage: React.FC = () => {
     };
   }, []);
 
+  // Extract meaningful domain from regexp pattern
+  const extractDomainFromRegexp = (pattern: string): string => {
+    try {
+      // Try to extract domain from common URL patterns
+      const urlPatterns = [
+        // https://domain.com or http://domain.com
+        /https?:\/\/([^/?#\\]+)/,
+        // Escaped protocols: https\\:\\/\\/domain\\.com
+        /https?\\\\:\\\\\/\\\\\/([^/?#\\]+)/,
+        // Domain with optional protocol indicators
+        /(?:https?\\?:)?\\?\/\\?\/?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
+      ];
+
+      for (const urlPattern of urlPatterns) {
+        const match = pattern.match(urlPattern);
+        if (match) {
+          let hostname = match[1];
+          // Clean up escaped characters
+          hostname = hostname.replace(/\\+/g, "");
+          // Remove regex groups and quantifiers
+          hostname = hostname.replace(/\([^)]*\)[*+?]?/g, "");
+          hostname = hostname.replace(/[[\]{}()*+?^$|\\]/g, "");
+          hostname = hostname.replace(/^\*?\.+/, "");
+
+          // Extract meaningful domain
+          const parts = hostname
+            .split(".")
+            .filter((p) => p.length > 0 && !/^[*+?]$/.test(p));
+          if (parts.length >= 2) {
+            return parts.slice(-2).join(".");
+          }
+          if (hostname.length > 0) {
+            return hostname;
+          }
+        }
+      }
+
+      // Try to find any domain-like pattern in the regex
+      const domainPatterns = [
+        // Standard domain pattern
+        /([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})?)/,
+        // Escaped domain pattern
+        /([a-zA-Z0-9-]+\\\.?[a-zA-Z0-9-]+(?:\\\.?[a-zA-Z]{2,})?)/,
+      ];
+
+      for (const domainPattern of domainPatterns) {
+        const match = pattern.match(domainPattern);
+        if (match) {
+          const domain = match[1].replace(/\\+/g, "");
+          // Clean up and validate
+          if (domain.includes(".") && domain.length > 3) {
+            return domain;
+          }
+        }
+      }
+
+      // If nothing found, return a meaningful truncated version
+      if (pattern.length > 20) {
+        return pattern.substring(0, 17) + "...";
+      }
+      return pattern || "regexp";
+    } catch {
+      return pattern.length > 20 ? pattern.substring(0, 17) + "..." : pattern;
+    }
+  };
+
   // Format domains for display
-  const formatDomains = (domains: UserCSSStyle["domains"]) => {
+  const formatDomainsWithTruncation = (domains: UserCSSStyle["domains"]) => {
     if (domains.length === 0) return "All sites";
     return domains
       .map((rule) => {
@@ -485,14 +583,47 @@ const ManagerPage: React.FC = () => {
             try {
               const url = new URL(rule.pattern);
               const domain = url.hostname;
-              return `start with ${domain}`;
+              return `starts with ${domain}`;
             } catch {
-              return `start with ${rule.pattern}`;
+              return `starts with ${rule.pattern}`;
             }
           case "domain":
             return rule.pattern;
-          case "regexp":
-            return `pattern: /${rule.pattern}/`;
+          case "regexp": {
+            // Extract meaningful domain from regexp pattern
+            const extractedDomain = extractDomainFromRegexp(rule.pattern);
+            return `regexp: ${extractedDomain}`;
+          }
+          default:
+            return rule.pattern;
+        }
+      })
+      .join(", ");
+  };
+
+  // Format domains for display with shortened regexp
+  const formatDomainsForDisplay = (domains: UserCSSStyle["domains"]) => {
+    if (domains.length === 0) return "All sites";
+    return domains
+      .map((rule) => {
+        switch (rule.kind) {
+          case "url":
+            return `exact: ${rule.pattern}`;
+          case "url-prefix":
+            try {
+              const url = new URL(rule.pattern);
+              const domain = url.hostname;
+              return `starts with ${domain}`;
+            } catch {
+              return `starts with ${rule.pattern}`;
+            }
+          case "domain":
+            return rule.pattern;
+          case "regexp": {
+            // Extract meaningful domain from regexp pattern
+            const extractedDomain = extractDomainFromRegexp(rule.pattern);
+            return `regexp: ${extractedDomain}`;
+          }
           default:
             return rule.pattern;
         }
@@ -614,9 +745,9 @@ const ManagerPage: React.FC = () => {
                     </p>
                     <p
                       className="text-xs text-base-content/50 truncate"
-                      title={formatDomains(style.domains)}
+                      title={formatDomainsWithTruncation(style.domains)}
                     >
-                      Domains: {formatDomains(style.domains)}
+                      Domains: {formatDomainsForDisplay(style.domains)}
                     </p>
                   </div>
 
@@ -866,8 +997,7 @@ const ManagerPage: React.FC = () => {
               <div>
                 <label className="label" htmlFor="style-domains">
                   <span className="label-text">
-                    Domains (CSS format: domain("example.com"),
-                    url-prefix("https://example.org"))
+                    Domains (CSS @-moz-document format)
                   </span>
                 </label>
                 <input
@@ -876,7 +1006,7 @@ const ManagerPage: React.FC = () => {
                   value={editingDomains}
                   onChange={(e) => setEditingDomains(e.target.value)}
                   className="input input-bordered w-full"
-                  placeholder='domain("example.com"), url-prefix("https://example.org")'
+                  placeholder='@-moz-document domain("example.com"), url-prefix("https://example.org")'
                 />
                 <div className="text-xs text-base-content/70 mt-1">
                   Separate multiple rules with commas

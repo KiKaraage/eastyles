@@ -104,7 +104,7 @@ function parseVariableString(
             const optionsString = parts[3].substring(8); // Remove 'options:' prefix
             variable.options = optionsString
               .split(",")
-              .map((opt) => opt.trim());
+              .map((opt) => ({ value: opt.trim(), label: opt.trim() }));
           } else {
             // It's a description or default, not options
             variable.default = parts[3];
@@ -117,7 +117,7 @@ function parseVariableString(
             const optionsString = parts[i].substring(8); // Remove 'options:' prefix
             variable.options = optionsString
               .split(",")
-              .map((opt) => opt.trim());
+              .map((opt) => ({ value: opt.trim(), label: opt.trim() }));
             break;
           }
         }
