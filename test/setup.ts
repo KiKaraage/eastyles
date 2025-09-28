@@ -214,6 +214,22 @@ beforeAll(() => {
           addListener: vi.fn(),
         },
       },
+      i18n: {
+        getMessage: vi
+          .fn()
+          .mockImplementation(
+            (key: string, substitutions?: string | string[]) => {
+              if (substitutions) {
+                if (Array.isArray(substitutions)) {
+                  return `Translated: ${key}: ${substitutions.join(", ")}`;
+                }
+                return `Translated: ${key}: ${substitutions}`;
+              }
+              return `Translated: ${key}`;
+            },
+          ),
+        getUILanguage: vi.fn().mockReturnValue("en-US"),
+      },
     },
   });
 
