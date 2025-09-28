@@ -311,6 +311,13 @@ export default defineBackground({
         }
       });
 
+      // Listen for command shortcuts
+      browser.commands.onCommand.addListener((command) => {
+        if (command === 'open-manager') {
+          browser.tabs.create({ url: browser.runtime.getURL('manager.html#styles') });
+        }
+      });
+
       // Handle service worker suspension (Manifest V3)
       if ("onSuspend" in browser.runtime) {
         browser.runtime.onSuspend.addListener(handleSuspension);
