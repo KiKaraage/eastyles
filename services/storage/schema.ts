@@ -63,6 +63,8 @@ export interface UserCSSStyle {
   sourceUrl: string;
   /** Domain matching rules */
   domains: DomainRule[];
+  /** Original @-moz-document condition string for display */
+  originalDomainCondition?: string;
   /** Compiled CSS ready for injection */
   compiledCss: string;
    /** User-configurable variables with their current values */

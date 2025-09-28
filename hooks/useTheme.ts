@@ -60,50 +60,35 @@ export function useTheme(): UseThemeReturn {
 
   // Apply theme to the document
   const applyTheme = useCallback((theme: "light" | "dark") => {
-    console.log("[useTheme] applyTheme called with theme:", theme);
     if (typeof document !== "undefined") {
       // DaisyUI automatically handles theme switching based on data-theme attribute
       const daisyTheme = theme === "light" ? "silk" : "sunset";
       document.documentElement.setAttribute("data-theme", daisyTheme);
-      console.log("[useTheme] Set data-theme attribute to:", daisyTheme);
 
       // Also set the class on the document element for DaisyUI
       document.documentElement.className = daisyTheme;
-      console.log("[useTheme] Set className to:", daisyTheme);
 
       // Update state
       setIsDark(theme === "dark");
       setIsLight(theme === "light");
       setEffectiveTheme(theme);
-      console.log(
-        "[useTheme] Updated state - isDark:",
-        theme === "dark",
-        "isLight:",
-        theme === "light",
-      );
 
       // Force a re-render by dispatching a custom event
       window.dispatchEvent(
         new CustomEvent("theme-changed", { detail: { theme } }),
       );
-      console.log("[useTheme] Dispatched theme-changed event");
-    } else {
-      console.log("[useTheme] document is not defined");
     }
   }, []);
 
   // Update theme based on mode and system preference
   const updateTheme = useCallback(
     (mode: ThemeMode) => {
-      console.log("[useTheme] updateTheme called with mode:", mode);
       setThemeModeState(mode);
 
       if (mode === "system") {
         const systemTheme = getSystemTheme();
-        console.log("[useTheme] System theme detected:", systemTheme);
         applyTheme(systemTheme);
       } else {
-        console.log("[useTheme] Applying manual theme:", mode);
         applyTheme(mode);
       }
     },
@@ -114,7 +99,6 @@ export function useTheme(): UseThemeReturn {
   const loadTheme = useCallback(async () => {
     try {
       const storedMode = await storageClient.getThemeMode();
-      console.log("[useTheme] loadTheme: retrieved stored mode", storedMode);
       updateTheme(storedMode);
     } catch (error) {
       console.warn("Failed to load theme from storage, using defaults:", error);
@@ -152,14 +136,8 @@ export function useTheme(): UseThemeReturn {
 
   // Theme update functions
   const setThemeModeHandler = async (mode: ThemeMode) => {
-    console.log("[useTheme] setThemeModeHandler: saving mode", mode);
     await saveTheme(mode);
-    console.log(
-      "[useTheme] setThemeModeHandler: calling updateTheme with mode",
-      mode,
-    );
     updateTheme(mode);
-    console.log("[useTheme] setThemeModeHandler: completed");
   };
 
   const setLightModeHandler = async () => {
@@ -184,14 +162,10 @@ export function useTheme(): UseThemeReturn {
       nextMode = "light";
     }
 
-    console.log(
-      "[useTheme] toggleTheme: switching from",
-      themeMode,
-      "to",
-      nextMode,
-    );
     await setThemeModeHandler(nextMode);
-    console.log("[useTheme] toggleTheme: completed, new mode is", nextMode);
+
+    const state = nextMode === "system" ? `system - ${getSystemTheme()}` : nextMode;
+    console.log(`[useTheme] Theme toggled to: ${state}`);
   };
 
   return {

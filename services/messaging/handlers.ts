@@ -7,7 +7,7 @@ import { browser } from "@wxt-dev/browser";
 import { ReceivedMessages, ErrorDetails } from "./types";
 import { storageClient } from "../storage/client";
 import { UserCSSStyle } from "../storage/schema";
-import { DomainRule } from "../usercss/types";
+import { DomainRule, VariableDescriptor } from "../usercss/types";
 
 /**
  * Helper function to keep service worker alive using browser.tabs API
@@ -495,7 +495,7 @@ const handleToggleStyle: MessageHandler = async (message) => {
   console.log("[handleToggleStyle] Processing message:", toggleMessage);
 
   try {
-    const { id, enabled } = toggleMessage.payload;
+    const { id, enabled, tabId } = toggleMessage.payload;
 
     // Update the style's enabled status in storage
     await storageClient.enableUserCSSStyle(id, enabled);
@@ -503,39 +503,84 @@ const handleToggleStyle: MessageHandler = async (message) => {
       `[handleToggleStyle] Style ${id} ${enabled ? "enabled" : "disabled"}`,
     );
 
-    // Notify all content scripts to update/remove the style
+    // Notify content scripts to update/remove the style
     // Get the updated style
     const updatedStyle = await storageClient.getUserCSSStyle(id);
     if (updatedStyle) {
-      // Broadcast style update to all tabs
+      // Send message to specific tab or all tabs
       try {
-        browser.tabs.query({}).then((tabs) => {
-          tabs.forEach((tab) => {
-            if (tab.id) {
-              browser.tabs
-                .sendMessage(tab.id, {
-                  type: enabled ? "styleUpdate" : "styleRemove",
-                  styleId: id,
-                  style: enabled ? updatedStyle : undefined,
-                })
-                .catch((error) => {
-                  // Silently ignore errors for tabs that don't have content scripts
-                  // This is normal for extension pages, about: pages, etc.
-                  const errorMessage =
-                    error instanceof Error ? error.message : String(error);
-                  if (
-                    !errorMessage.includes("Could not establish connection") &&
-                    !errorMessage.includes("Receiving end does not exist")
-                  ) {
-                    console.warn(
-                      `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
-                      error,
+        if (tabId) {
+          console.log(
+            `[handleToggleStyle] Sending ${enabled ? "styleUpdate" : "styleRemove"} for style ${id} to specific tab ${tabId}`,
+          );
+          browser.tabs
+            .sendMessage(tabId, {
+              type: enabled ? "styleUpdate" : "styleRemove",
+              styleId: id,
+              style: enabled ? updatedStyle : undefined,
+            })
+            .then(() => {
+              console.log(
+                `[handleToggleStyle] Successfully sent message to tab ${tabId}`,
+              );
+            })
+            .catch((error) => {
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              console.warn(
+                `[handleToggleStyle] Error notifying tab ${tabId}:`,
+                errorMessage,
+              );
+            });
+        } else {
+          console.log(
+            `[handleToggleStyle] Broadcasting ${enabled ? "styleUpdate" : "styleRemove"} for style ${id} to all tabs`,
+          );
+          browser.tabs.query({}).then((tabs) => {
+            console.log(
+              `[handleToggleStyle] Found ${tabs.length} tabs to notify`,
+            );
+            tabs.forEach((tab) => {
+              if (tab.id) {
+                console.log(
+                  `[handleToggleStyle] Sending message to tab ${tab.id} (${tab.url})`,
+                );
+                browser.tabs
+                  .sendMessage(tab.id, {
+                    type: enabled ? "styleUpdate" : "styleRemove",
+                    styleId: id,
+                    style: enabled ? updatedStyle : undefined,
+                  })
+                  .then(() => {
+                    console.log(
+                      `[handleToggleStyle] Successfully sent message to tab ${tab.id}`,
                     );
-                  }
-                });
-            }
+                  })
+                  .catch((error) => {
+                    // Silently ignore errors for tabs that don't have content scripts
+                    // This is normal for extension pages, about: pages, etc.
+                    const errorMessage =
+                      error instanceof Error ? error.message : String(error);
+                    if (
+                      !errorMessage.includes(
+                        "Could not establish connection",
+                      ) &&
+                      !errorMessage.includes("Receiving end does not exist")
+                    ) {
+                      console.warn(
+                        `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
+                        error,
+                      );
+                    } else {
+                      console.log(
+                        `[handleToggleStyle] Expected error for tab ${tab.id}: ${errorMessage}`,
+                      );
+                    }
+                  });
+              }
+            });
           });
-        });
+        }
       } catch (error) {
         console.warn(
           "[handleToggleStyle] Error notifying content scripts:",

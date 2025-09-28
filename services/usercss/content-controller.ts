@@ -615,6 +615,7 @@ export class UserCSSContentController implements ContentController {
       if (matches) {
         // Update or apply the style
         await this.applyStyle(style);
+        console.log("CSS reloaded for style:", styleId);
       } else {
         // Remove if it was previously applied
         if (this.appliedStyles.has(styleId)) {

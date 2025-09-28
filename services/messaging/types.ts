@@ -143,6 +143,7 @@ export type PopupMessages =
       payload: {
         id: string;
         enabled: boolean;
+        tabId?: number;
       };
     }
   | {
@@ -228,7 +229,7 @@ export type SaveMessages =
           default: string;
           min?: number;
           max?: number;
-          options?: string[];
+          options?: Array<{value: string, label: string}>;
         }>;
       };
     }

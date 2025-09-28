@@ -4,6 +4,18 @@ import { ErrorSource } from "../services/errors/service";
 import { UserCSSStyle } from "../services/storage/schema";
 import { storageClient } from "../services/storage/client";
 
+// Types for browser runtime API
+interface BrowserRuntime {
+  onMessage?: {
+    addListener: (callback: (message: ContentScriptMessage) => void) => void;
+  };
+}
+
+interface GlobalThis {
+  chrome?: { runtime?: BrowserRuntime };
+  browser?: { runtime?: BrowserRuntime };
+}
+
 // Types for content script messages
 type ContentScriptMessage =
   | {
@@ -67,75 +79,92 @@ export default defineContentScript({
         });
 
       // Set up message listener for style updates and variable changes
-      browser.runtime.onMessage.addListener((message: ContentScriptMessage) => {
-        console.log("[ContentScript] Received message:", message.type, message);
-        try {
-          if (
-            message.type === "styleUpdate" &&
-            message.styleId &&
-            message.style
-          ) {
-            console.log(
-              "[ContentScript] Processing styleUpdate for:",
-              message.styleId,
-            );
-            contentController.onStyleUpdate(message.styleId, message.style);
-          } else if (message.type === "styleRemove" && message.styleId) {
-            console.log(
-              "[ContentScript] Processing styleRemove for:",
-              message.styleId,
-            );
-            contentController.onStyleRemove(message.styleId);
-          } else if (
-            message.type === "injectFont" &&
-            message.fontName &&
-            message.css
-          ) {
-            console.log(
-              "[ContentScript] Processing injectFont for:",
-              message.fontName,
-            );
-            injectFontDirectly(message.fontName, message.css);
-          } else if (message.type === "VARIABLES_UPDATED" && message.payload) {
-            const { styleId, variables } = message.payload;
-            contentController.onVariablesUpdate(styleId, variables);
-          } else if (
-            message.type === "STYLE_REAPPLY_REQUEST" &&
-            message.payload
-          ) {
-            const { styleId } = message.payload;
-            // Fetch updated style and reapply
-            storageClient
-              .getUserCSSStyle(styleId)
-              .then((updatedStyle) => {
-                if (updatedStyle) {
-                  console.log(
-                    "[ContentScript] Reapplying updated style:",
-                    styleId,
-                  );
-                  contentController.onStyleUpdate(styleId, updatedStyle);
-                }
-              })
-              .catch((error) =>
-                console.error(
-                  "[ContentScript] Failed to reapply style:",
-                  error,
-                ),
+      console.log("[ContentScript] Setting up message listener");
+      const runtime =
+        (globalThis as GlobalThis).chrome?.runtime ||
+        (globalThis as GlobalThis).browser?.runtime;
+      if (runtime?.onMessage?.addListener) {
+        runtime.onMessage.addListener((message: ContentScriptMessage) => {
+          console.log(
+            "[ContentScript] Received message:",
+            message.type,
+            message,
+          );
+          try {
+            if (
+              message.type === "styleUpdate" &&
+              message.styleId &&
+              message.style
+            ) {
+              console.log(
+                "[ContentScript] Processing styleUpdate for:",
+                message.styleId,
               );
-          } else {
-            console.log(
-              "[ContentScript] Ignoring unknown message type:",
-              message.type,
-            );
+              contentController.onStyleUpdate(message.styleId, message.style);
+            } else if (message.type === "styleRemove" && message.styleId) {
+              console.log(
+                "[ContentScript] Processing styleRemove for:",
+                message.styleId,
+              );
+              contentController.onStyleRemove(message.styleId);
+            } else if (
+              message.type === "injectFont" &&
+              message.fontName &&
+              message.css
+            ) {
+              console.log(
+                "[ContentScript] Processing injectFont for:",
+                message.fontName,
+              );
+              injectFontDirectly(message.fontName, message.css);
+            } else if (
+              message.type === "VARIABLES_UPDATED" &&
+              message.payload
+            ) {
+              const { styleId, variables } = message.payload;
+              contentController.onVariablesUpdate(styleId, variables);
+            } else if (
+              message.type === "STYLE_REAPPLY_REQUEST" &&
+              message.payload
+            ) {
+              const { styleId } = message.payload;
+              // Fetch updated style and reapply
+              storageClient
+                .getUserCSSStyle(styleId)
+                .then((updatedStyle) => {
+                  if (updatedStyle) {
+                    console.log(
+                      "[ContentScript] Reapplying updated style:",
+                      styleId,
+                    );
+                    contentController.onStyleUpdate(styleId, updatedStyle);
+                  }
+                })
+                .catch((error) =>
+                  console.error(
+                    "[ContentScript] Failed to reapply style:",
+                    error,
+                  ),
+                );
+            } else {
+              console.log(
+                "[ContentScript] Ignoring unknown message type:",
+                message.type,
+              );
+            }
+          } catch (error) {
+            console.error("[ContentScript] Failed to handle message:", error);
+            logger.error?.(ErrorSource.CONTENT, "Failed to handle message", {
+              error: error instanceof Error ? error.message : String(error),
+              messageType: message.type,
+            });
           }
-        } catch (error) {
-          console.error("[ContentScript] Failed to handle message:", error);
-          logger.error?.(ErrorSource.CONTENT, "Failed to handle message", {
-            error: error instanceof Error ? error.message : String(error),
-            messageType: message.type,
-          });
-        }
-      });
+        });
+      } else {
+        console.error(
+          "[ContentScript] No runtime API available for message listening",
+        );
+      }
     } catch (error) {
       logger.error?.(
         ErrorSource.CONTENT,

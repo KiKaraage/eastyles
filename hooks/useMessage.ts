@@ -59,6 +59,7 @@ export interface PopupMessagePayloads {
   [PopupMessageType.TOGGLE_STYLE]: {
     id: string;
     enabled: boolean;
+    tabId?: number;
   };
   [PopupMessageType.THEME_CHANGED]: {
     theme: "light" | "dark";
@@ -97,7 +98,7 @@ export interface SaveMessagePayloads {
       default: string;
       min?: number;
       max?: number;
-      options?: string[];
+      options?: Array<{value: string, label: string}>;
     }>;
   };
   [SaveMessageType.INJECT_FONT]: {
@@ -509,7 +510,7 @@ export function useSaveActions() {
         default: string;
         min?: number;
         max?: number;
-        options?: string[];
+      options?: Array<{value: string, label: string}>;
       }>,
     ) => {
       console.log("[useSaveActions] installStyle called, style:", meta.name);
