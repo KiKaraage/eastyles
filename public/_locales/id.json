@@ -36,6 +36,14 @@
     "description": "Button text for closing a dialog or page"
   },
   "applyButton": {
+    "message": "Terapkan",
+    "description": "Button text for applying an action"
+  },
+  "applying": {
+    "message": "Menerapkan...",
+    "description": "Loading text when applying an action"
+  },
+  "applyToSiteButton": {
     "message": "Terapkan ke Situs",
     "description": "Button text for applying styles to current site"
   },
@@ -127,9 +135,13 @@
     "message": "Tanggal Pemasangan",
     "description": "Label for style save date"
   },
-  "font_selector_title": {
+  "manager_addUserCss": {
+    "message": "Tambahkan UserCSS",
+    "description": "Button text to open Add UserCSS File dialog"
+  },
+  "font_apply": {
     "message": "Terapkan Font",
-    "description": "Title for the font selector dialog"
+    "description": "Button text to open Create Font Style menu"
   },
   "font_tabs_builtin": {
     "message": "Font Bawaan",
@@ -219,17 +231,13 @@
     "message": "Gagal menerapkan font",
     "description": "Generic error when font application fails"
   },
-  "font_applying": {
-    "message": "Menerapkan...",
-    "description": "Loading text when applying font"
-  },
   "font_applied": {
     "message": "Font '$1' berhasil diterapkan",
     "description": "Success message when font is applied"
   },
-  "font_createNewStyle": {
-    "message": "Gaya Font Baru",
-    "description": "Text for the New Font Style creation button and dialog title"
+  "font_createFontStyle": {
+    "message": "Buat Gaya Font",
+    "description": "Text for the Create Font Style creation button and dialog title"
   },
   "font_selectLabel": {
     "message": "Pilih Font",
@@ -242,6 +250,10 @@
   "font_applyButton": {
     "message": "Terapkan Font",
     "description": "Button text to apply selected font"
+  },
+  "colors_apply": {
+    "message": "Terapkan Warna",
+    "description": "Button text to open Create Color Style menu"
   },
   "ERR_STORAGE_QUOTA": {
     "message": "Kapasitas penyimpanan terlampaui. Silakan hapus beberapa gaya untuk membebaskan ruang.",
