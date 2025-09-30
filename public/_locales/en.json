@@ -240,6 +240,10 @@
     "message": "Create Font Style",
     "description": "Text for the Create Font Style creation button and dialog title"
   },
+  "font_editStyle": {
+    "message": "Edit Font Style",
+    "description": "Text for the Edit Font Style dialog title"
+  },
   "font_selectLabel": {
     "message": "Select Font",
     "description": "Label for the font selection dropdown"

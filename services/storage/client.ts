@@ -290,11 +290,6 @@ export class EastylesStorageClient implements StorageClient {
 
       const styles = await this.getStyles();
 
-      // Check for duplicate names
-      if (styles.some((s) => s.name === newStyle.name)) {
-        throw new Error(`Style with name "${newStyle.name}" already exists`);
-      }
-
       styles.push(newStyle);
       await stylesStorage.setValue(styles);
 
@@ -619,11 +614,6 @@ export class EastylesStorageClient implements StorageClient {
       }
 
       const styles = await this.getUserCSSStyles();
-
-      // Check for duplicate names
-      if (styles.some((s) => s.name === newStyle.name)) {
-        throw new Error(`UserCSS style with name "${newStyle.name}" already exists`);
-      }
 
       styles.push(newStyle);
       await userCSSStylesStorage.setValue(styles);

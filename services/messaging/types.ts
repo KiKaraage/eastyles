@@ -54,6 +54,11 @@ export interface SaveMessageResponses {
     error?: string;
     styleId?: string;
   };
+  UPDATE_FONT_STYLE: {
+    success: boolean;
+    error?: string;
+    styleId?: string;
+  };
 }
 
 // Response types for content script messages
@@ -240,13 +245,21 @@ export type SaveMessages =
         css: string;
       };
     }
-  | {
-      type: "CREATE_FONT_STYLE";
-      payload: {
-        domain?: string;
-        fontName: string;
-      };
-    };
+   | {
+       type: "CREATE_FONT_STYLE";
+       payload: {
+         domain?: string;
+         fontName: string;
+       };
+     }
+   | {
+       type: "UPDATE_FONT_STYLE";
+       payload: {
+         styleId: string;
+         domain?: string;
+         fontName: string;
+       };
+     };
 
 /**
  * Messages sent from the content script to the background script.

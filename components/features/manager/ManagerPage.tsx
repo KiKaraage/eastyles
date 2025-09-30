@@ -51,6 +51,13 @@ const ManagerPage: React.FC = () => {
   const [fontDomain, setFontDomain] = useState("");
   const [selectedFont, setSelectedFont] = useState("");
   const [isSavingFont, setIsSavingFont] = useState(false);
+  const [editingFontStyle, setEditingFontStyle] = useState<UserCSSStyle | null>(null);
+  const [originalFontDomain, setOriginalFontDomain] = useState("");
+  const [originalSelectedFont, setOriginalSelectedFont] = useState("");
+
+  // Check if there are unsaved changes in font editing
+  const hasFontChanges = Boolean(editingFontStyle) &&
+    (fontDomain !== originalFontDomain || selectedFont !== originalSelectedFont);
 
   const { sendMessage } = useMessage();
   const { t } = useI18n();
@@ -631,6 +638,20 @@ const ManagerPage: React.FC = () => {
       .join(", ");
   };
 
+  // Helper function to format style names with badges for font styles
+  const formatStyleName = (name: string) => {
+    if (name.startsWith("[FONT] ")) {
+      const fontName = name.substring(7).trim(); // Remove "[FONT] " prefix and trim
+      return (
+        <div className="flex items-center gap-1">
+          <div className="badge badge-secondary badge-xs">FONT</div>
+          <span>{fontName}</span>
+        </div>
+      );
+    }
+    return name;
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -728,27 +749,21 @@ const ManagerPage: React.FC = () => {
 
                   {/* Style Info */}
                   <div className="min-w-0 flex flex-col justify-center">
-                    <div
-                      className="flex items-center gap-2"
-                      title={`${style.name} by ${style.author}`}
-                    >
-                      <h3 className="font-semibold truncate">{style.name}</h3>
-                      <span className="text-base-content truncate">
-                        by {style.author}
-                      </span>
-                    </div>
-                    <p
-                      className="text-sm text-base-content/70 truncate"
-                      title={style.description}
-                    >
-                      {style.description}
-                    </p>
-                    <p
-                      className="text-xs text-base-content/50 truncate"
-                      title={formatDomainsWithTruncation(style.domains)}
-                    >
-                      Domains: {formatDomainsForDisplay(style.domains)}
-                    </p>
+                     <div title={`${style.name} by ${style.author}`}>
+                       <h3 className="font-semibold truncate">{formatStyleName(style.name)}</h3>
+                     </div>
+                     <p
+                       className="text-sm text-base-content/70 truncate"
+                       title={style.description}
+                     >
+                       {style.description}
+                     </p>
+                     <p
+                       className="text-xs text-base-content/50 truncate"
+                       title={`by ${style.author} | ${formatDomainsWithTruncation(style.domains)}`}
+                     >
+                       by {style.author} | {formatDomainsForDisplay(style.domains)}
+                     </p>
                   </div>
 
                   {/* Action Buttons */}
@@ -772,7 +787,24 @@ const ManagerPage: React.FC = () => {
                     {/* Edit Style Button */}
                     <button
                       className="btn btn-ghost btn-sm"
-                      onClick={() => handleEditStyle(style)}
+                      onClick={() => {
+                        if (style.name.startsWith("[FONT] ")) {
+                          // Handle font style editing
+                          const fontName = style.name.substring(7).trim();
+                          setSelectedFont(fontName);
+                          setOriginalSelectedFont(fontName);
+                          // Extract domain from the first domain rule if it exists
+                          const domainFromStyle = style.domains.length > 0 && style.domains[0].kind === "domain"
+                            ? style.domains[0].pattern
+                            : "";
+                          setFontDomain(domainFromStyle);
+                          setOriginalFontDomain(domainFromStyle);
+                          setEditingFontStyle(style);
+                          setShowFontModal(true);
+                        } else {
+                          handleEditStyle(style);
+                        }
+                      }}
                       title="Edit style"
                     >
                       <Edit className="w-4 h-4" />
@@ -824,45 +856,65 @@ const ManagerPage: React.FC = () => {
         <div className="modal-box max-w-md">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setShowFontModal(false)}
-                className="btn btn-ghost btn-sm p-2"
-              >
+               <button
+                 onClick={() => {
+                   setShowFontModal(false);
+                   setEditingFontStyle(null);
+                   setFontDomain("");
+                   setSelectedFont("");
+                 }}
+                 className="btn btn-ghost btn-sm p-2"
+               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-              <h3 className="text-lg font-bold">{t("font_createFontStyle")}</h3>
+              <h3 className="text-lg font-bold">
+                {editingFontStyle ? t("font_editStyle") : t("font_createFontStyle")}
+              </h3>
             </div>
-            <button
-              onClick={async () => {
-                if (!selectedFont) return;
+             <button
+               onClick={async () => {
+                 if (!selectedFont) return;
 
-                setIsSavingFont(true);
-                try {
-                  const result = await sendMessage(
-                    SaveMessageType.CREATE_FONT_STYLE,
-                    {
-                      domain: fontDomain || undefined,
-                      fontName: selectedFont,
-                    },
-                  );
+                 setIsSavingFont(true);
+                 try {
+                   const messageType = editingFontStyle
+                     ? SaveMessageType.UPDATE_FONT_STYLE
+                     : SaveMessageType.CREATE_FONT_STYLE;
+                   const payload = editingFontStyle
+                     ? {
+                         styleId: editingFontStyle.id,
+                         domain: fontDomain || undefined,
+                         fontName: selectedFont,
+                       }
+                     : {
+                         domain: fontDomain || undefined,
+                         fontName: selectedFont,
+                       };
 
-                  if ("success" in result && result.success) {
-                    setShowFontModal(false);
-                    loadStyles(); // Refresh the styles list
-                  } else {
-                    const errorMsg =
-                      "error" in result && result.error
-                        ? result.error
-                        : "Failed to create font style";
-                    throw new Error(errorMsg);
-                  }
-                } catch (error) {
-                  console.error("Failed to save font style:", error);
-                } finally {
-                  setIsSavingFont(false);
-                }
-              }}
-              disabled={!selectedFont || isSavingFont}
+                   const result = await sendMessage(messageType, payload);
+
+                   if ("success" in result && result.success) {
+                     setShowFontModal(false);
+                     setEditingFontStyle(null);
+                     setFontDomain("");
+                     setSelectedFont("");
+                     setOriginalFontDomain("");
+                     setOriginalSelectedFont("");
+                     loadStyles(); // Refresh the styles list
+                   } else {
+                     const errorMsg =
+                       "error" in result && result.error
+                         ? result.error
+                         : `Failed to ${editingFontStyle ? "update" : "create"} font style`;
+                     throw new Error(errorMsg);
+                   }
+                 } catch (error) {
+                   console.error(`Failed to ${editingFontStyle ? "update" : "save"} font style:`, error);
+                 } finally {
+                   setIsSavingFont(false);
+                 }
+               }}
+               disabled={!selectedFont || isSavingFont || (editingFontStyle ? !hasFontChanges : false)}
               className="btn btn-primary btn-sm p-2"
             >
               {isSavingFont ? (
@@ -884,7 +936,14 @@ const ManagerPage: React.FC = () => {
             selectedFont={selectedFont}
             onDomainChange={setFontDomain}
             onFontChange={setSelectedFont}
-            onClose={() => setShowFontModal(false)}
+            onClose={() => {
+           setShowFontModal(false);
+           setEditingFontStyle(null);
+           setFontDomain("");
+           setSelectedFont("");
+           setOriginalFontDomain("");
+           setOriginalSelectedFont("");
+         }}
           />
         </div>
       </dialog>

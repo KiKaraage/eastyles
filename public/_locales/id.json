@@ -239,6 +239,10 @@
     "message": "Buat Gaya Font",
     "description": "Text for the Create Font Style creation button and dialog title"
   },
+  "font_editStyle": {
+    "message": "Ubah Gaya Font",
+    "description": "Text for the Edit Font Style dialog title"
+  },
   "font_selectLabel": {
     "message": "Pilih Font",
     "description": "Label for the font selection dropdown"

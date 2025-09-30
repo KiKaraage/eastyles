@@ -1712,9 +1712,7 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(" ")
       : "";
-    const name = domain
-      ? `${fontName} in ${titleDomain}`
-      : `Eastyles Font: ${fontName}`;
+    const name = `[FONT] ${fontName}`;
     const matchRule = domain ? `@match *://${domain}/*` : "";
 
     const userCSS = `/* ==UserStyle==
@@ -1815,6 +1813,344 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
       errorMessage,
     );
     console.error("[handleInstallStyle] Error details:", error);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
+ * Handle updating an existing font style
+ */
+const handleUpdateFontStyle: MessageHandler = async (message) => {
+  try {
+    const { styleId, domain, fontName } = (
+      message as unknown as {
+        payload: { styleId: string; domain?: string; fontName: string };
+      }
+    ).payload;
+
+    console.log(
+      "[handleUpdateFontStyle] Updating font style:",
+      styleId,
+      "with font:",
+      fontName,
+      "for domain:",
+      domain,
+    );
+
+    // Validate inputs
+    if (!styleId || typeof styleId !== "string" || styleId.trim().length === 0) {
+      throw new Error("Style ID is required");
+    }
+
+    if (
+      !fontName ||
+      typeof fontName !== "string" ||
+      fontName.trim().length === 0
+    ) {
+      throw new Error("Font name is required and cannot be empty");
+    }
+
+    // Validate domain if provided
+    if (domain && typeof domain === "string") {
+      // Basic domain validation - should contain at least one dot and no spaces
+      const trimmedDomain = domain.trim();
+      if (trimmedDomain.length === 0) {
+        throw new Error("Domain cannot be empty");
+      }
+      if (trimmedDomain.includes(" ")) {
+        throw new Error("Domain cannot contain spaces");
+      }
+      if (!trimmedDomain.includes(".")) {
+        throw new Error(
+          "Domain must contain at least one dot (e.g., example.com)",
+        );
+      }
+      // Additional validation for common domain patterns
+      const domainRegex =
+        /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+      if (!domainRegex.test(trimmedDomain)) {
+        throw new Error("Invalid domain format");
+      }
+    }
+
+    // Create inline normalizePattern function to avoid window/URL issues in background script
+    const normalizePattern = (pattern: string): string => {
+      try {
+        // Remove leading/trailing whitespace
+        let normalized = pattern.trim();
+
+        // If it's a full URL, extract just the hostname using simple string manipulation
+        if (normalized.includes("://")) {
+          // Simple hostname extraction without URL constructor
+          const protocolIndex = normalized.indexOf("://");
+          const afterProtocol = normalized.slice(protocolIndex + 3);
+          const pathIndex = afterProtocol.indexOf("/");
+          const hostname =
+            pathIndex >= 0 ? afterProtocol.slice(0, pathIndex) : afterProtocol;
+          return hostname;
+        }
+
+        // Remove trailing slashes
+        normalized = normalized.replace(/\/+$/, "");
+
+        return normalized;
+      } catch {
+        // If parsing fails, return as-is (but still trim and remove trailing slashes)
+        return pattern.trim().replace(/\/+$/, "");
+      }
+    };
+
+    // Validate that the font exists (inline check)
+    const builtInFonts = [
+      {
+        name: "Inter",
+        file: "Inter.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "JetBrains Mono",
+        file: "JetBrains Mono.woff2",
+        category: "monospace",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Parkinsans",
+        file: "Parkinsans.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Atkinson Hyperlegible",
+        file: "Atkinson Hyperlegible.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Crimson Pro",
+        file: "Crimson Pro.woff2",
+        category: "serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Faculty Glyphic",
+        file: "Faculty Glyphic.woff2",
+        category: "display",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Fraunces",
+        file: "Fraunces.woff2",
+        category: "serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Henny Penny",
+        file: "Henny Penny.woff2",
+        category: "handwriting",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Jost",
+        file: "Jost.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Kode Mono",
+        file: "Kode Mono.woff2",
+        category: "monospace",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Outfit",
+        file: "Outfit.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Parkinsans",
+        file: "Parkinsans.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Playwrite IN",
+        file: "Playwrite IN.woff2",
+        category: "handwriting",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "SUSE",
+        file: "SUSE.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+      {
+        name: "Unbounded",
+        file: "Unbounded.woff2",
+        category: "sans-serif",
+        weight: "400",
+        style: "normal",
+      },
+    ];
+    const fontExists = builtInFonts.some((font) => font.name === fontName);
+    if (!fontExists) {
+      throw new Error(
+        `Font "${fontName}" is not available. Please select a font from the available options.`,
+      );
+    }
+
+    // Get font data
+    const font = builtInFonts.find((f) => f.name === fontName);
+    if (!font) {
+      throw new Error(`Font "${fontName}" not found`);
+    }
+
+    // Get existing style to preserve other properties
+    const existingStyle = await storageClient.getUserCSSStyle(styleId);
+    if (!existingStyle) {
+      throw new Error(`Style with ID "${styleId}" not found`);
+    }
+
+    // Generate UserCSS for the font (inline generation)
+    const fontPath = `/fonts/${font.file}`;
+    const absoluteFontPath = browser?.runtime?.getURL
+      ? browser.runtime.getURL(fontPath)
+      : fontPath;
+
+    const fontFaceRule = `
+  @font-face {
+    font-family: '${fontName}';
+    src: url('${absoluteFontPath}') format('woff2');
+    font-weight: ${font.weight};
+    font-style: ${font.style};
+    font-display: swap;
+  }`;
+
+    const fontFamilyRule = `
+   * {
+     font-family: '${fontName}', sans-serif !important;
+   }`;
+
+    // Process domain for title
+    const titleDomain = domain
+      ? domain
+          .replace(/\.(com|org|net|edu)$/, "")
+          .replace(/\./g, " ")
+          .split(" ")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" ")
+      : "";
+    const name = `[FONT] ${fontName}`;
+    const matchRule = domain ? `@match *://${domain}/*` : "";
+
+    const userCSS = `/* ==UserStyle==
+  @name ${name}
+  @namespace github.com/KiKaraage/Eastyles
+  @version 1.0.0
+  @description Apply ${fontName} font to ${domain || "all sites"}
+  @author Eastyles
+  ${matchRule}
+  ==/UserStyle== */
+
+  ${fontFaceRule}
+  ${fontFamilyRule}`;
+
+    // Create domain rules directly
+    const domainRules: DomainRule[] = domain
+      ? [
+          {
+            kind: "domain" as const,
+            pattern: normalizePattern(domain),
+            include: true,
+          },
+        ]
+      : [];
+
+    // Update the existing style
+    const updatedStyle = {
+      ...existingStyle,
+      name,
+      description: `Apply ${fontName} font to ${domain || "all sites"}`,
+      domains: domainRules,
+      originalDomainCondition: domain ? `domain("${normalizePattern(domain)}")` : undefined,
+      css: userCSS,
+      variables: {}, // Font styles don't have variables
+    };
+
+    await storageClient.updateUserCSSStyle(styleId, updatedStyle);
+
+    console.log(
+      "[handleUpdateFontStyle] Font style updated successfully:",
+      styleId,
+    );
+
+    // Notify all content scripts to update the font style
+    try {
+      browser.tabs.query({}).then((tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.id) {
+            browser.tabs
+              .sendMessage(tab.id, {
+                type: "styleUpdate",
+                styleId: styleId,
+                style: updatedStyle,
+              })
+              .catch((error) => {
+                // Silently ignore errors for tabs that don't have content scripts
+                // This is normal for extension pages, about: pages, etc.
+                const errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                if (
+                  !errorMessage.includes("Could not establish connection") &&
+                  !errorMessage.includes("Receiving end does not exist")
+                ) {
+                  console.warn(
+                    `[handleUpdateFontStyle] Unexpected error notifying tab ${tab.id}:`,
+                    error,
+                  );
+                }
+              });
+          }
+        });
+      });
+    } catch (error) {
+      console.warn(
+        "[handleUpdateFontStyle] Error notifying content scripts:",
+        error,
+      );
+    }
+
+    return {
+      success: true,
+      styleId,
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error(
+      "[handleUpdateFontStyle] Failed to update font style:",
+      errorMessage,
+    );
+    console.error("[handleUpdateFontStyle] Error details:", error);
     return {
       success: false,
       error: errorMessage,
@@ -2154,6 +2490,7 @@ const handlerRegistry: HandlerRegistry = {
   INSTALL_STYLE: withErrorHandling(handleInstallStyle),
   INJECT_FONT: withErrorHandling(handleInjectFont),
   CREATE_FONT_STYLE: withErrorHandling(handleCreateFontStyle),
+  UPDATE_FONT_STYLE: withErrorHandling(handleUpdateFontStyle),
   UPDATE_VARIABLES: withErrorHandling(handleUpdateVariables),
   QUERY_STYLES_FOR_URL: withErrorHandling(handleQueryStylesForUrl), // Full version with inline domain matching
   FETCH_ASSETS: withErrorHandling(handleFetchAssets),

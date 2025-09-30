@@ -34,6 +34,7 @@ export enum SaveMessageType {
   INSTALL_STYLE = "INSTALL_STYLE",
   INJECT_FONT = "INJECT_FONT",
   CREATE_FONT_STYLE = "CREATE_FONT_STYLE",
+  UPDATE_FONT_STYLE = "UPDATE_FONT_STYLE",
 }
 
 /**
@@ -106,6 +107,11 @@ export interface SaveMessagePayloads {
     css: string;
   };
   [SaveMessageType.CREATE_FONT_STYLE]: {
+    domain?: string;
+    fontName: string;
+  };
+  [SaveMessageType.UPDATE_FONT_STYLE]: {
+    styleId: string;
     domain?: string;
     fontName: string;
   };

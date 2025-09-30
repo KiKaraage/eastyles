@@ -85,9 +85,9 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
               key={font.name}
               type="button"
               onClick={() => onFontChange(font.name)}
-              className={`card bg-base-100 border-0 hover:bg-base-200 transition-colors ${
-                selectedFont === font.name ? "bg-secondary" : ""
-              }`}
+               className={`card bg-base-100 border-0 transition-colors ${
+                 selectedFont === font.name ? "bg-secondary" : "hover:bg-base-200"
+               }`}
             >
               <div className="card-body pt-3 pb-2 px-2 text-center">
                 <div

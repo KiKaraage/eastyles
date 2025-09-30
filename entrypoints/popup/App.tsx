@@ -8,6 +8,7 @@ import {
   Check,
   Palette,
   ViewGrid,
+  Edit,
 } from "iconoir-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useI18n } from "../../hooks/useI18n";
@@ -224,6 +225,11 @@ const App = () => {
 
   const handleCloseFontSelector = () => {
     setState((prev) => ({ ...prev, currentPage: "main" }));
+    setEditingFontStyleId(null);
+    setFontDomain("");
+    setSelectedFont("");
+    setOriginalFontDomain("");
+    setOriginalSelectedFont("");
   };
 
   const handleSaveFontStyle = async () => {
@@ -231,14 +237,25 @@ const App = () => {
 
     setIsSavingFont(true);
     try {
-      const result = await sendMessage(SaveMessageType.CREATE_FONT_STYLE, {
-        domain: fontDomain || undefined,
-        fontName: selectedFont,
-      });
+      const messageType = editingFontStyleId
+        ? SaveMessageType.UPDATE_FONT_STYLE
+        : SaveMessageType.CREATE_FONT_STYLE;
+      const payload = editingFontStyleId
+        ? {
+            styleId: editingFontStyleId,
+            domain: fontDomain || undefined,
+            fontName: selectedFont,
+          }
+        : {
+            domain: fontDomain || undefined,
+            fontName: selectedFont,
+          };
+
+      const result = await sendMessage(messageType, payload);
 
       if ("success" in result && result.success) {
         setState((prev) => ({ ...prev, currentPage: "main" }));
-        // Close popup after successful creation
+        // Close popup after successful creation/update
         setTimeout(() => {
           window.close();
         }, 1000);
@@ -246,13 +263,16 @@ const App = () => {
         const errorMsg =
           "error" in result && result.error
             ? result.error
-            : "Failed to create font style";
+            : `Failed to ${editingFontStyleId ? "update" : "create"} font style`;
         throw new Error(errorMsg);
       }
     } catch (error) {
-      console.error("Failed to save font style:", error);
+      console.error(`Failed to ${editingFontStyleId ? "update" : "save"} font style:`, error);
     } finally {
       setIsSavingFont(false);
+      setEditingFontStyleId(null);
+      setOriginalFontDomain("");
+      setOriginalSelectedFont("");
     }
   };
 
@@ -277,6 +297,13 @@ const App = () => {
   const [fontDomain, setFontDomain] = useState("");
   const [selectedFont, setSelectedFont] = useState("");
   const [isSavingFont, setIsSavingFont] = useState(false);
+  const [editingFontStyleId, setEditingFontStyleId] = useState<string | null>(null);
+  const [originalFontDomain, setOriginalFontDomain] = useState("");
+  const [originalSelectedFont, setOriginalSelectedFont] = useState("");
+
+  // Check if there are unsaved changes in font editing
+  const hasFontChanges = Boolean(editingFontStyleId) &&
+    (fontDomain !== originalFontDomain || selectedFont !== originalSelectedFont);
 
   // Check if current page is restricted (browser/extension pages)
   const isRestrictedPage = Boolean(state.currentTab?.url &&
@@ -291,6 +318,20 @@ const App = () => {
       setFontDomain(getCurrentDomain());
     }
   }, [state.currentTab, state.currentPage, getCurrentDomain]);
+
+  // Helper function to format style names with badges for font styles
+  const formatStyleName = (name: string) => {
+    if (name.startsWith("[FONT] ")) {
+      const fontName = name.substring(7).trim(); // Remove "[FONT] " prefix and trim
+      return (
+        <div className="flex items-center gap-1">
+          <div className="badge badge-secondary badge-xs">FONT</div>
+          <span>{fontName}</span>
+        </div>
+      );
+    }
+    return name;
+  };
 
   const handleToggleStyle = async (styleId: string, enabled: boolean) => {
     try {
@@ -416,29 +457,50 @@ const App = () => {
               <div className="space-y-2">
                 {state.availableStyles.map((style) => (
                   <div key={style.id} className="space-y-2">
-                    <div className="flex items-center justify-between p-3 bg-base-200 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <h5 className="text-sm font-medium text-base-content truncate">
-                          {style.name}
-                        </h5>
-                        <p className="text-xs text-base-content/70 truncate">
-                          {style.description}
-                        </p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {/* Settings button for styles with variables - only for enabled styles */}
-                        {Object.keys(style.variables).length > 0 &&
-                          style.enabled && (
-                            <button
-                              onClick={() =>
-                                handleToggleVariableExpansion(style.id)
-                              }
-                              className={`btn btn-ghost btn-sm ${state.expandedStyleId === style.id ? "btn-active" : ""}`}
-                              title="Configure variables"
-                            >
-                              <Settings className="w-4 h-4" />
-                            </button>
-                          )}
+                     <div className="flex items-center justify-between p-3 bg-base-200 rounded-lg">
+                       <div className="flex-1 min-w-0">
+                         <h5 className="text-sm font-medium text-base-content truncate">
+                           {formatStyleName(style.name)}
+                         </h5>
+                         <p className="text-xs text-base-content/70 truncate">
+                           {style.description}
+                         </p>
+                       </div>
+                       <div className="flex items-center space-x-2">
+                         {/* Edit button for font styles */}
+                         {style.name.startsWith("[FONT] ") && (
+                           <button
+                             onClick={() => {
+                               const fontName = style.name.substring(7).trim();
+                               setSelectedFont(fontName);
+                               setOriginalSelectedFont(fontName);
+                               // Extract domain from the first domain rule if it exists
+                               const domainFromStyle = style.domains.length > 0 && style.domains[0].kind === "domain"
+                                 ? style.domains[0].pattern
+                                 : "";
+                               setFontDomain(domainFromStyle);
+                               setOriginalFontDomain(domainFromStyle);
+                               setEditingFontStyleId(style.id);
+                               setState(prev => ({ ...prev, currentPage: "newFontStyle" }));
+                             }}
+                             className="btn btn-ghost btn-sm"
+                             title="Edit font style"
+                           >
+                             <Edit className="w-4 h-4" />
+                           </button>
+                         )}
+                         {/* Settings button for styles with variables */}
+                         {Object.keys(style.variables).length > 0 && (
+                             <button
+                               onClick={() =>
+                                 handleToggleVariableExpansion(style.id)
+                               }
+                               className={`btn btn-ghost btn-sm ${state.expandedStyleId === style.id ? "btn-active" : ""}`}
+                               title="Configure variables"
+                             >
+                               <Settings className="w-4 h-4" />
+                             </button>
+                           )}
                         <input
                           type="checkbox"
                           className="toggle toggle-primary"
@@ -453,10 +515,9 @@ const App = () => {
                       </div>
                     </div>
 
-                    {/* Variable Controls */}
-                    {state.expandedStyleId === style.id &&
-                      Object.keys(style.variables).length > 0 &&
-                      style.enabled && (
+                     {/* Variable Controls */}
+                     {state.expandedStyleId === style.id &&
+                       Object.keys(style.variables).length > 0 && (
                         <div className="ml-4 p-3 bg-base-100 border border-base-300 rounded-lg">
                           <VariableControls
                             variables={Object.values(style.variables)}
@@ -524,13 +585,13 @@ const App = () => {
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </button>
-                 <h3 className="text-lg font-bold text-base-content">
-                   {t("font_createFontStyle")}
-                 </h3>
+                  <h3 className="text-lg font-bold text-base-content">
+                    {editingFontStyleId ? t("font_editStyle") : t("font_createFontStyle")}
+                  </h3>
               </div>
               <button
                 onClick={handleSaveFontStyle}
-                disabled={!selectedFont || isSavingFont}
+                 disabled={!selectedFont || isSavingFont || (editingFontStyleId ? !hasFontChanges : false)}
                 className="btn btn-primary btn-sm p-2"
               >
                 {isSavingFont ? (

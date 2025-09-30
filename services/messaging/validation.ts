@@ -87,6 +87,7 @@ function isApplyMessage(type: string): boolean {
     "INSTALL_STYLE",
     "INJECT_FONT",
     "CREATE_FONT_STYLE",
+    "UPDATE_FONT_STYLE",
   ].includes(type);
 }
 
@@ -252,21 +253,37 @@ function validateApplyMessage(message: unknown, type: string): boolean {
         );
       }
       return false;
-    case "CREATE_FONT_STYLE":
-      if (message && typeof message === "object" && "payload" in message) {
-        const payload = (message as { payload: unknown }).payload;
-        return (
-          payload !== null &&
-          typeof payload === "object" &&
-          "fontName" in payload &&
-          typeof (payload as { fontName?: unknown }).fontName === "string" &&
-          (payload as { fontName: string }).fontName.length > 0 &&
-          (!("domain" in payload) || typeof (payload as { domain?: unknown }).domain === "string")
-        );
-      }
-      return false;
-    default:
-      return false;
+     case "CREATE_FONT_STYLE":
+       if (message && typeof message === "object" && "payload" in message) {
+         const payload = (message as { payload: unknown }).payload;
+         return (
+           payload !== null &&
+           typeof payload === "object" &&
+           "fontName" in payload &&
+           typeof (payload as { fontName?: unknown }).fontName === "string" &&
+           (payload as { fontName: string }).fontName.length > 0 &&
+           (!("domain" in payload) || typeof (payload as { domain?: unknown }).domain === "string")
+         );
+       }
+       return false;
+     case "UPDATE_FONT_STYLE":
+       if (message && typeof message === "object" && "payload" in message) {
+         const payload = (message as { payload: unknown }).payload;
+         return (
+           payload !== null &&
+           typeof payload === "object" &&
+           "styleId" in payload &&
+           typeof (payload as { styleId?: unknown }).styleId === "string" &&
+           (payload as { styleId: string }).styleId.length > 0 &&
+           "fontName" in payload &&
+           typeof (payload as { fontName?: unknown }).fontName === "string" &&
+           (payload as { fontName: string }).fontName.length > 0 &&
+           (!("domain" in payload) || typeof (payload as { domain?: unknown }).domain === "string")
+         );
+       }
+       return false;
+     default:
+       return false;
   }
 }
 
