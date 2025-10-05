@@ -352,28 +352,31 @@ describe('Variable Change Flow Integration', () => {
       });
     });
 
-    it('should handle storage watcher callbacks', async () => {
-      // Setup: Add style to storage
-      await storageClient.addUserCSSStyle(mockStyle);
+     it('should handle storage watcher callbacks', async () => {
+       // Setup: Add style to storage
+       await storageClient.addUserCSSStyle(mockStyle);
 
-      // Setup: Watch for variable changes
-      const watcherCallback = vi.fn();
-      const unsubscribe = variablePersistenceService.watchVariableChanges(watcherCallback);
+       // Setup: Mock storage update
+       vi.mocked(storageClient.updateUserCSSStyleVariables).mockResolvedValue(mockStyle);
 
-      // Action: Update variables
-      await variablePersistenceService.updateVariables(mockStyleId, {
-        '--accent-color': '#ff00ff',
-      });
+       // Setup: Watch for variable changes
+       const watcherCallback = vi.fn();
+       const unsubscribe = variablePersistenceService.watchVariableChanges(watcherCallback);
 
-      // Verify: Watcher callback was called
-      expect(watcherCallback).toHaveBeenCalledWith({
-        styleId: mockStyleId,
-        variables: { '--accent-color': '#ff00ff' },
-      });
+       // Action: Update variables
+       await variablePersistenceService.updateVariables(mockStyleId, {
+         '--accent-color': '#ff00ff',
+       });
 
-      // Cleanup
-      unsubscribe();
-    });
+       // Verify: Watcher callback was called
+       expect(watcherCallback).toHaveBeenCalledWith({
+         styleId: mockStyleId,
+         variables: { '--accent-color': '#ff00ff' },
+       });
+
+       // Cleanup
+       unsubscribe();
+     });
 
     it('should handle errors gracefully', async () => {
       // Setup: Mock storage to throw error
@@ -421,30 +424,33 @@ describe('Variable Change Flow Integration', () => {
       );
     });
 
-    it('should integrate with CSS injection for live updates', async () => {
-      // Setup: Add style to storage
-      await storageClient.addUserCSSStyle(mockStyle);
+     it('should integrate with CSS injection for live updates', async () => {
+       // Setup: Add style to storage
+       await storageClient.addUserCSSStyle(mockStyle);
 
-      // Action: Update variables
-      await variablePersistenceService.updateVariables(mockStyleId, {
-        '--accent-color': '#ffff00',
-      });
+       // Setup: Mock storage update
+       vi.mocked(storageClient.updateUserCSSStyleVariables).mockResolvedValue(mockStyle);
 
-      // Verify: Message was broadcast (which would trigger content script update)
-      expect(messageBus.broadcast).toHaveBeenCalledWith({
-        type: 'VARIABLES_UPDATED',
-        payload: {
-          styleId: mockStyleId,
-          variables: { '--accent-color': '#ffff00' },
-          timestamp: expect.any(Number),
-        },
-      });
+       // Action: Update variables
+       await variablePersistenceService.updateVariables(mockStyleId, {
+         '--accent-color': '#ffff00',
+       });
 
-      // In real scenario, the content script would:
-      // 1. Receive the VARIABLES_UPDATED message
-      // 2. Call contentController.onVariablesUpdate()
-      // 3. Which would re-inject the CSS with new variable values
-      // 4. Resulting in live visual updates without page refresh
-    });
+       // Verify: Message was broadcast (which would trigger content script update)
+       expect(messageBus.broadcast).toHaveBeenCalledWith({
+         type: 'VARIABLES_UPDATED',
+         payload: {
+           styleId: mockStyleId,
+           variables: { '--accent-color': '#ffff00' },
+           timestamp: expect.any(Number),
+         },
+       });
+
+       // In real scenario, the content script would:
+       // 1. Receive the VARIABLES_UPDATED message
+       // 2. Call contentController.onVariablesUpdate()
+       // 3. Which would re-inject the CSS with new variable values
+       // 4. Resulting in live visual updates without page refresh
+     });
   });
 });

@@ -96,7 +96,11 @@ describe('Variable Service Reset Functionality', () => {
           type: 'select',
           default: 'light',    // Current default (different from original)
           value: 'auto',       // Current user value
-          options: ['light', 'dark', 'auto'],
+          options: [
+            { value: 'light', label: 'light' },
+            { value: 'dark', label: 'dark' },
+            { value: 'auto', label: 'auto' },
+          ],
         },
       };
 

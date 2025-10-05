@@ -246,7 +246,7 @@ describe('FontUserCSSManager', () => {
 
 @font-face {
   font-family: 'Inter';
-  src: url('/assets/fonts/Inter.woff2') format('woff2');
+  src: url('/fonts/Inter.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;

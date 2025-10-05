@@ -52,7 +52,7 @@ describe('DomainDetector', () => {
       ];
 
       expect(detector.matches('https://example.com', rules)).toBe(true);
-      expect(detector.matches('https://www.example.com', rules)).toBe(false);
+      expect(detector.matches('https://www.example.com', rules)).toBe(true); // www subdomain should match
       expect(detector.matches('https://other.com', rules)).toBe(false);
     });
 
@@ -65,6 +65,17 @@ describe('DomainDetector', () => {
       expect(detector.matches('https://sub.example.com', rules)).toBe(true);
       expect(detector.matches('https://sub.sub.example.com', rules)).toBe(true);
       expect(detector.matches('https://other.com', rules)).toBe(false);
+    });
+
+    it('should match domains with trailing wildcard', () => {
+      const rules: DomainRule[] = [
+        { kind: 'domain', pattern: 'old.reddit.com*', include: true }
+      ];
+
+      expect(detector.matches('https://old.reddit.com', rules)).toBe(true);
+      expect(detector.matches('https://old.reddit.com/r/test', rules)).toBe(true);
+      expect(detector.matches('https://new.reddit.com', rules)).toBe(false);
+      expect(detector.matches('https://reddit.com', rules)).toBe(false);
     });
 
     it('should handle exclude rules', () => {

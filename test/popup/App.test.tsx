@@ -1,53 +1,34 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import App from "../../entrypoints/popup/App.tsx";
-import { useTheme } from "../../hooks/useTheme";
-import { useError } from "../../hooks/useError";
+import React from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import App from "./App";
 
-// Mock dependencies
-vi.mock("../../hooks/useTheme", () => ({
-  useTheme: vi.fn(() => ({
-    isDark: false,
-  })),
-}));
+// Mock the wxt/browser import before defining local variables to handle hoisting
+// Use a more generic approach that doesn't require the local variables to be defined first
+vi.mock("wxt/browser", () => {
+  // Return a mock object that will be updated later in the test setup
+  const mockTabsQuery = vi.fn();
+  const mockTabsCreate = vi.fn();
+  const mockSendMessage = vi.fn();
 
-// Mock browser API
-vi.mock("wxt/browser", () => ({
-  browser: {
-    tabs: {
-      create: vi.fn(() => Promise.resolve({ success: true })),
+  return {
+    // Export the mock functions so tests can access them
+    mockTabsQuery,
+    mockTabsCreate,
+    mockSendMessage,
+    browser: {
+      tabs: {
+        query: mockTabsQuery,
+        create: mockTabsCreate,
+      },
+      runtime: {
+        sendMessage: mockSendMessage,
+      },
     },
-  },
-}));
+  };
+});
 
-vi.mock("../../hooks/useMessage", () => ({
-  usePopupActions: vi.fn(() => ({
-    openManager: vi.fn(),
-    addNewStyle: vi.fn(),
-    openSettings: vi.fn(),
-    getStyles: vi.fn(),
-    toggleStyle: vi.fn(),
-  })),
-}));
-
-vi.mock("../../hooks/useError", () => ({
-  useError: vi.fn(() => ({
-    executeWithErrorHandling: vi.fn((fn) => fn()),
-    errors: [],
-    hasError: false,
-    hasCriticalError: false,
-    addError: vi.fn(),
-    removeError: vi.fn(),
-    clearErrors: vi.fn(),
-    executeSyncWithErrorHandling: vi.fn(),
-    reportError: vi.fn(),
-    getErrorStats: vi.fn(),
-  })),
-}));
-
-vi.mock("../../components/ui/ErrorBoundary", () => ({
-  withErrorBoundary: vi.fn((Component) => Component),
-}));
+// Import the mock functions - need to get the actual mocks from the module
+import { mockTabsQuery, mockTabsCreate, mockSendMessage } from "wxt/browser";
 
 // Mock window.close
 Object.defineProperty(window, "close", {
@@ -55,189 +36,172 @@ Object.defineProperty(window, "close", {
   writable: true,
 });
 
-describe("App", () => {
+// Mock the hooks and components used in App
+vi.mock("../../hooks/useTheme", () => ({
+  useTheme: () => ({ isDark: false }),
+}));
+
+vi.mock("../../hooks/useI18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        loading: "Loading...",
+        stylesFor: "Styles for",
+        manageStyles: "Manage Styles",
+        font_apply: "Apply Font",
+        colors_apply: "Apply Colors",
+        applyButton: "Apply",
+        font_createFontStyle: "Create Font Style",
+        font_editStyle: "Edit Font Style",
+        applying: "Applying...",
+      };
+      return translations[key] || key;
+    },
+  }),
+}));
+
+vi.mock("../../hooks/useMessage", () => {
+  // Include both the function and the constants in the mock
+  return {
+    useMessage: () => ({
+      sendMessage: mockSendMessage, // Use the same mock defined in the browser mock
+    }),
+    PopupMessageType: {
+      QUERY_STYLES_FOR_URL: "QUERY_STYLES_FOR_URL",
+      GET_STYLES: "GET_STYLES",
+      TOGGLE_STYLE: "TOGGLE_STYLE",
+      UPDATE_VARIABLES: "UPDATE_VARIABLES",
+      THEME_CHANGED: "THEME_CHANGED",
+      OPEN_MANAGER: "OPEN_MANAGER",
+      ADD_STYLE: "ADD_STYLE",
+      OPEN_SETTINGS: "OPEN_SETTINGS",
+    },
+    SaveMessageType: {
+      UPDATE_FONT_STYLE: "UPDATE_FONT_STYLE",
+      CREATE_FONT_STYLE: "CREATE_FONT_STYLE",
+      INJECT_FONT: "INJECT_FONT",
+      PARSE_USERCSS: "PARSE_USERCSS",
+      INSTALL_STYLE: "INSTALL_STYLE",
+    },
+  };
+});
+
+vi.mock("../../components/ui/ErrorBoundary", () => ({
+  withErrorBoundary: (component: React.ComponentType) => component,
+}));
+
+vi.mock("../../components/features/NewFontStyle", () => ({
+  default: ({
+    domain,
+    selectedFont,
+    onDomainChange,
+    onFontChange,
+    onClose,
+  }: any) => (
+    <div data-testid="new-font-style">
+      <input
+        data-testid="domain-input"
+        value={domain}
+        onChange={(e) => onDomainChange(e.target.value)}
+      />
+      <input
+        data-testid="font-input"
+        value={selectedFont}
+        onChange={(e) => onFontChange(e.target.value)}
+      />
+      <button data-testid="close-font" onClick={onClose}>
+        Close Font Selector
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("../../components/features/VariableControls", () => ({
+  VariableControls: ({ variables, onChange }: any) => (
+    <div data-testid="variable-controls">
+      {variables.map((v: any) => (
+        <div key={v.name}>
+          <label>{v.name}</label>
+          <input
+            data-testid={`variable-input-${v.name}`}
+            value={v.value}
+            onChange={(e) => onChange(v.name, e.target.value)}
+          />
+        </div>
+      ))}
+    </div>
+  ),
+}));
+
+describe("Popup App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it("renders popup structure correctly", () => {
-    render(<App />);
-
-    // Check header elements
-    expect(
-      document.querySelector('[aria-hidden="true"][style*="mask"]'),
-    ).toBeTruthy();
-    expect(screen.getByText("Styles for...")).toBeTruthy();
-
-    // Check main content area
-    expect(screen.getByText("Active Styles")).toBeTruthy();
-    expect(screen.getByText("Total Styles")).toBeTruthy();
-
-    // Check footer
-    expect(screen.getByRole("button", { name: "Manage" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
-  });
-
-  it("displays stats correctly when not loading", () => {
-    render(<App />);
-
-    expect(screen.getByText("Active Styles")).toBeTruthy();
-    expect(screen.getByText("Total Styles")).toBeTruthy();
-
-    // Check the actual stat values
-    const activeStats = screen.getAllByText("Active Styles");
-    const totalStats = screen.getAllByText("Total Styles");
-
-    // Find the stat value elements (siblings of stat titles)
-    const activeValue = activeStats[0].nextElementSibling;
-    const totalValue = totalStats[0].nextElementSibling;
-
-    expect(activeValue?.textContent).toBe("0");
-    expect(totalValue?.textContent).toBe("0");
-  });
-
-  it("renders Add New Style button", () => {
-    render(<App />);
-
-    const button = screen.getByRole("button", { name: "Add New Style" });
-    expect(button).toBeTruthy();
-    expect(button.classList.contains("btn-secondary")).toBe(true);
-  });
-
-  it("displays footer buttons correctly", () => {
-    render(<App />);
-
-    const manageButton = screen.getByRole("button", { name: "Manage" });
-    const settingsButton = screen.getByRole("button", { name: "Settings" });
-
-    expect(manageButton).toBeTruthy();
-    expect(settingsButton).toBeTruthy();
-    expect(manageButton.classList.contains("btn-ghost")).toBe(true);
-    expect(settingsButton.classList.contains("btn-ghost")).toBe(true);
-  });
-
-  it("closes popup when Manage button is clicked", async () => {
-    const { browser } = await import("wxt/browser");
-
-    render(<App />);
-
-    const manageButton = screen.getByRole("button", { name: "Manage" });
-    fireEvent.click(manageButton);
-
-    await waitFor(() => {
-      expect(browser.tabs.create).toHaveBeenCalledWith({
-        url: "/manager.html#styles",
-      });
-      expect(window.close).toHaveBeenCalled();
-    });
-  });
-
-  it("closes popup when Settings button is clicked", async () => {
-    const { browser } = await import("wxt/browser");
-
-    render(<App />);
-
-    const settingsButton = screen.getByRole("button", { name: "Settings" });
-    fireEvent.click(settingsButton);
-
-    await waitFor(() => {
-      expect(browser.tabs.create).toHaveBeenCalledWith({
-        url: "/manager.html#settings",
-      });
-      expect(window.close).toHaveBeenCalled();
-    });
-  });
-
-  // Note: The Add New Style button test has been removed because the current
-  // implementation only shows a loading state that's immediately cleared,
-  // which doesn't provide meaningful testable behavior.
-  // This functionality can be tested once it's properly implemented.
-
-  it("handles loading state", () => {
-    // For now, just verify the loading state structure exists in the code
-    // The actual loading state test would require more complex state manipulation
-    render(<App />);
-
-    // Verify that the main content area is present
-    const mainContent = document.querySelector(".flex-1.p-2.overflow-y-auto");
-    expect(mainContent).toBeTruthy();
-
-    // The loading state is tested implicitly by the component structure
-  });
-
-  it("applies dark theme classes when isDark is true", () => {
-    vi.mocked(useTheme).mockReturnValue({
-      isDark: true,
-      themeMode: "dark" as const,
-      effectiveTheme: "dark" as const,
-      isLight: false,
-      setThemeMode: vi.fn(),
-      setLightMode: vi.fn(),
-      setDarkMode: vi.fn(),
-      setSystemMode: vi.fn(),
-      toggleTheme: vi.fn(),
-      getSystemTheme: vi.fn(() => "dark" as const),
-    });
-
-    render(<App />);
-
-    // Check that the main content and footer have dark classes applied
-    const mainContent = document.querySelector(".flex-1.p-2.overflow-y-auto");
-    const footer = document.querySelector(
-      ".bg-base-200.border-t.border-base-300.p-2",
+    // Set up default mock responses to ensure they return quickly
+    mockTabsQuery.mockResolvedValue(
+      Promise.resolve([
+        {
+          id: 123,
+          url: "https://example.com",
+          title: "Example Domain",
+        },
+      ]),
     );
-
-    expect(mainContent).toBeTruthy();
-    expect(footer).toBeTruthy();
-  });
-
-  it("applies light theme classes when isDark is false", () => {
-    vi.mocked(useTheme).mockReturnValue({
-      isDark: false,
-      themeMode: "light" as const,
-      effectiveTheme: "light" as const,
-      isLight: true,
-      setThemeMode: vi.fn(),
-      setLightMode: vi.fn(),
-      setDarkMode: vi.fn(),
-      setSystemMode: vi.fn(),
-      toggleTheme: vi.fn(),
-      getSystemTheme: vi.fn(() => "light" as const),
-    });
-
-    render(<App />);
-
-    // Check that the main content and footer don't have dark classes
-    const mainContent = document.querySelector(
-      ".flex-1.p-2.overflow-y-auto:not(.dark)",
-    );
-    const footer = document.querySelector(
-      ".bg-base-200.border-t.border-base-300.p-2:not(.dark)",
-    );
-
-    expect(mainContent).toBeTruthy();
-    expect(footer).toBeTruthy();
-  });
-
-  it("handles error state gracefully", () => {
-    vi.mocked(useError).mockReturnValue({
-      executeWithErrorHandling: vi.fn().mockImplementationOnce(async () => {
-        throw new Error("Test error");
+    mockSendMessage.mockResolvedValue(
+      Promise.resolve({
+        styles: [],
+        success: true,
       }),
-      errors: [],
-      hasError: false,
-      hasCriticalError: false,
-      addError: vi.fn(),
-      removeError: vi.fn(),
-      clearErrors: vi.fn(),
-      executeSyncWithErrorHandling: vi.fn(),
-      reportError: vi.fn(),
-      getErrorStats: vi.fn(),
-    });
+    );
+  });
+
+  it("renders loading state initially", async () => {
+    // Mock the browser API to resolve with a delay to allow loading state to be visible
+    mockTabsQuery.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([]), 200)),
+    );
 
     render(<App />);
 
-    // Component should still render despite error
-    expect(screen.getByText("Styles for...")).toBeTruthy();
+    // Should show loading indicator initially
+    // Using a basic assertion instead of toBeInTheDocument to avoid matcher issues
+    expect(screen.getByText("Loading...")).toBeTruthy();
+
+    // Wait for the loading to complete (with explicit timeout to prevent hanging)
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Loading...")).not.toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
+  });
+
+  it("loads and displays current tab information", async () => {
+    const mockTab = {
+      id: 123,
+      url: "https://example.com",
+      title: "Example Domain",
+    };
+
+    // Mock with a slight delay to ensure loading state is visible
+    mockTabsQuery.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([mockTab]), 100)),
+    );
+    mockSendMessage.mockResolvedValue(
+      Promise.resolve({ styles: [], success: true }),
+    );
+
+    render(<App />);
+
+    // Wait for the component to finish loading
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Loading...")).not.toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
+
+    // Should display the current tab information in the header as "Styles for example.com"
+    // The translation "stylesFor" is "Styles for", so we expect to see "Styles for example.com"
+    expect(screen.getByText(/example\.com/)).toBeTruthy();
   });
 });

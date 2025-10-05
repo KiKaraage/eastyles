@@ -40,7 +40,7 @@ describe('FontUserCSSGenerator', () => {
       expect(result.meta.assets).toHaveLength(1);
       expect(result.meta.assets?.[0]).toEqual({
         type: 'font',
-        url: '/assets/fonts/Inter.woff2',
+        url: '/fonts/Inter.woff2',
         format: 'woff2'
       });
 
@@ -163,7 +163,7 @@ describe('FontUserCSSGenerator', () => {
 
 @font-face {
   font-family: 'Inter';
-  src: url('/assets/fonts/Inter.woff2') format('woff2');
+  src: url('/fonts/Inter.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;

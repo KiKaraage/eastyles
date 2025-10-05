@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  detectPreprocessor,
-  PreprocessorDetection,
-} from "../../../services/usercss/preprocessor";
+import { detectPreprocessor } from "../../../services/usercss/preprocessor";
 
 describe("detectPreprocessor", () => {
   describe("explicit metadata tag", () => {

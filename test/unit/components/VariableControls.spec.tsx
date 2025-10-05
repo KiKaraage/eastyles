@@ -41,7 +41,7 @@ describe('VariableControls', () => {
       render(<VariableControls variables={variables} onChange={mockOnChange} />);
 
       expect(screen.getByText('Variable Configuration')).toBeTruthy();
-      expect(screen.getByDisplayValue('#ff0000')).toBeTruthy();
+      expect(screen.getByTitle('Color picker for --color')).toBeTruthy();
     });
   });
 
@@ -50,7 +50,7 @@ describe('VariableControls', () => {
       const variables = [createVariable({ name: '--accent-color', type: 'color', value: '#ff0000' })];
       render(<VariableControls variables={variables} onChange={mockOnChange} />);
 
-      const colorInput = screen.getByDisplayValue('#ff0000');
+      const colorInput = screen.getByTitle('Color picker for --accent-color');
       expect(colorInput.getAttribute('type')).toBe('color');
       expect(screen.getByText('accent-color')).toBeTruthy();
     });
@@ -59,7 +59,7 @@ describe('VariableControls', () => {
       const variables = [createVariable({ name: '--color', type: 'color', value: '#ff0000' })];
       render(<VariableControls variables={variables} onChange={mockOnChange} />);
 
-      const colorInput = screen.getByDisplayValue('#ff0000');
+      const colorInput = screen.getByTitle('Color picker for --color');
       fireEvent.change(colorInput, { target: { value: '#00ff00' } });
 
       expect(mockOnChange).toHaveBeenCalledWith('--color', '#00ff00');
@@ -154,7 +154,11 @@ describe('VariableControls', () => {
         name: '--theme',
         type: 'select',
         value: 'dark',
-        options: ['light', 'dark', 'auto']
+        options: [
+          { value: 'light', label: 'light' },
+          { value: 'dark', label: 'dark' },
+          { value: 'auto', label: 'auto' },
+        ]
       })];
       render(<VariableControls variables={variables} onChange={mockOnChange} />);
 
@@ -173,7 +177,10 @@ describe('VariableControls', () => {
         name: '--mode',
         type: 'select',
         value: 'light',
-        options: ['light', 'dark']
+        options: [
+          { value: 'light', label: 'light' },
+          { value: 'dark', label: 'dark' },
+        ]
       })];
       render(<VariableControls variables={variables} onChange={mockOnChange} />);
 
@@ -218,11 +225,14 @@ describe('VariableControls', () => {
         createVariable({ name: '--color', type: 'color', value: '#ff0000' }),
         createVariable({ name: '--size', type: 'number', value: '16' }),
         createVariable({ name: '--text', type: 'text', value: 'hello' }),
-        createVariable({ name: '--theme', type: 'select', value: 'dark', options: ['light', 'dark'] })
+        createVariable({ name: '--theme', type: 'select', value: 'dark', options: [
+          { value: 'light', label: 'light' },
+          { value: 'dark', label: 'dark' },
+        ] })
       ];
       render(<VariableControls variables={variables} onChange={mockOnChange} />);
 
-      expect(screen.getByDisplayValue('#ff0000')).toBeTruthy();
+      expect(screen.getByTitle('Color picker for --color')).toBeTruthy();
       expect(screen.getByDisplayValue('16')).toBeTruthy();
       expect(screen.getByDisplayValue('hello')).toBeTruthy();
       expect(screen.getByDisplayValue('dark')).toBeTruthy();
@@ -259,10 +269,10 @@ describe('VariableControls', () => {
       const variables = [createVariable({ name: '--test', type: 'color', value: '#000000' })];
       render(<VariableControls variables={variables} onChange={mockOnChange} />);
 
-      const colorInput = screen.getByDisplayValue('#000000');
+      const colorInput = screen.getByTitle('Color value for --test');
       expect(colorInput.className).toContain('input');
       expect(colorInput.className).toContain('input-bordered');
-      expect(colorInput.className).toContain('input-sm');
+      expect(colorInput.className).toContain('input-xs');
     });
   });
 

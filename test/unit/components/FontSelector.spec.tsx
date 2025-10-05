@@ -84,10 +84,10 @@ describe('FontSelector', () => {
   it('should render font selector with built-in fonts tab active by default', () => {
     render(<FontSelector {...mockProps} />);
 
-    expect(screen.getByRole('heading', { name: 'font.selector.title' })).toBeTruthy();
-    expect(screen.getByText('font.tabs.builtin')).toBeTruthy();
-    expect(screen.getByText('font.tabs.custom')).toBeTruthy();
-    expect(screen.getByText('font.builtin.description')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'font_selector_title' })).toBeTruthy();
+    expect(screen.getByText('font_tabs_builtin')).toBeTruthy();
+    expect(screen.getByText('font_tabs_custom')).toBeTruthy();
+    expect(screen.getByText('font_builtin_description')).toBeTruthy();
   });
 
   it('should display built-in fonts in categorized grid', () => {
@@ -117,25 +117,25 @@ describe('FontSelector', () => {
     render(<FontSelector {...mockProps} />);
 
     // Initially on built-in tab
-    expect(screen.getByText('font.builtin.description')).toBeTruthy();
+    expect(screen.getByText('font_builtin_description')).toBeTruthy();
 
     // Switch to custom tab
-    fireEvent.click(screen.getByText('font.tabs.custom'));
-    expect(screen.getByText('font.custom.description')).toBeTruthy();
+    fireEvent.click(screen.getByText('font_tabs_custom'));
+    expect(screen.getByText('font_custom_description')).toBeTruthy();
 
     // Switch back to built-in tab
-    fireEvent.click(screen.getByText('font.tabs.builtin'));
-    expect(screen.getByText('font.builtin.description')).toBeTruthy();
+    fireEvent.click(screen.getByText('font_tabs_builtin'));
+    expect(screen.getByText('font_builtin_description')).toBeTruthy();
   });
 
   it('should handle custom font input and validation', async () => {
     render(<FontSelector {...mockProps} />);
 
     // Switch to custom tab
-    fireEvent.click(screen.getByText('font.tabs.custom'));
+    fireEvent.click(screen.getByText('font_tabs_custom'));
 
-    const input = screen.getByPlaceholderText('font.custom.placeholder');
-    const checkButton = screen.getByText('font.custom.checkButton');
+    const input = screen.getByPlaceholderText('font_custom_placeholder');
+    const checkButton = screen.getByText('font_custom_checkButton');
 
     // Test empty input validation - button should remain disabled
     fireEvent.click(checkButton);
@@ -163,11 +163,11 @@ describe('FontSelector', () => {
     render(<FontSelector {...mockProps} />);
 
     // Switch to custom tab and check font
-    fireEvent.click(screen.getByText('font.tabs.custom'));
-    fireEvent.change(screen.getByPlaceholderText('font.custom.placeholder'), {
+    fireEvent.click(screen.getByText('font_tabs_custom'));
+    fireEvent.change(screen.getByPlaceholderText('font_custom_placeholder'), {
       target: { value: 'Arial' }
     });
-    fireEvent.click(screen.getByText('font.custom.checkButton'));
+    fireEvent.click(screen.getByText('font_custom_checkButton'));
 
     await waitFor(() => {
       // Look for the preview section by class name instead of text
@@ -189,14 +189,14 @@ describe('FontSelector', () => {
     render(<FontSelector {...mockProps} />);
 
     // Switch to custom tab and check font
-    fireEvent.click(screen.getByText('font.tabs.custom'));
-    fireEvent.change(screen.getByPlaceholderText('font.custom.placeholder'), {
+    fireEvent.click(screen.getByText('font_tabs_custom'));
+    fireEvent.change(screen.getByPlaceholderText('font_custom_placeholder'), {
       target: { value: 'NonExistentFont' }
     });
-    fireEvent.click(screen.getByText('font.custom.checkButton'));
+    fireEvent.click(screen.getByText('font_custom_checkButton'));
 
     await waitFor(() => {
-      expect(screen.getByText('font.custom.notAvailable')).toBeTruthy();
+      expect(screen.getByText('font_custom_notAvailable')).toBeTruthy();
     });
   });
 
@@ -206,14 +206,14 @@ describe('FontSelector', () => {
     render(<FontSelector {...mockProps} />);
 
     // Switch to custom tab and check font
-    fireEvent.click(screen.getByText('font.tabs.custom'));
-    fireEvent.change(screen.getByPlaceholderText('font.custom.placeholder'), {
+    fireEvent.click(screen.getByText('font_tabs_custom'));
+    fireEvent.change(screen.getByPlaceholderText('font_custom_placeholder'), {
       target: { value: 'Arial' }
     });
-    fireEvent.click(screen.getByText('font.custom.checkButton'));
+    fireEvent.click(screen.getByText('font_custom_checkButton'));
 
     await waitFor(() => {
-      expect(screen.getByText('font.error.checkFailed')).toBeTruthy();
+      expect(screen.getByText('font_error_checkFailed')).toBeTruthy();
     });
   });
 
