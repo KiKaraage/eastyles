@@ -268,78 +268,91 @@ function processVariableMatch(
         console.warn("Failed to parse select options:", defaultValue);
       }
     } else {
-      // Parse select options from format like ["option1","option2","option3"]
-      try {
-        const optionsMatch = defaultValue.match(/^\[([^\]]*)\]$/);
-        if (optionsMatch) {
-          const optionsString = optionsMatch[1];
-          variable.options = optionsString.split(",").map((opt) => {
-            const clean = opt.trim().replace(/^["']|["']$/g, "");
-            return { value: clean, label: clean };
-          });
-          // Set the first option as the default value if it's an array
-          if (variable.options.length > 0) {
-            variable.value = variable.options[0].value;
-          }
-        }
-      } catch {
-        console.warn("Failed to parse select options:", defaultValue);
-      }
+       // Parse select options from format like ["option1","option2","option3"]
+       try {
+         const optionsMatch = defaultValue.match(/^\[([^\]]*)\]$/);
+         if (optionsMatch) {
+           const optionsString = optionsMatch[1];
+           const options = optionsString.split(",").map((opt) => {
+             const clean = opt.trim().replace(/^["']|["']$/g, "");
+             const parts = clean.split(':');
+             const value = clean;
+             const label = parts[1] ? parts[1].replace(/\*$/, '') : clean.replace(/\*$/, '');
+             return { value, label };
+           });
+           variable.options = options;
+           // Find default option (one with * in value)
+           const defaultOption = options.find(opt => opt.value.includes('*'));
+           if (defaultOption) {
+             variable.default = defaultOption.label;
+             variable.value = defaultOption.value;
+           } else if (options.length > 0) {
+             variable.default = options[0].label;
+             variable.value = options[0].value;
+           }
+         }
+       } catch {
+         console.warn("Failed to parse select options:", defaultValue);
+       }
     }
   }
 
   return variable;
 }
 
-/**
- * Parses USO EOT blocks to extract dropdown options and CSS snippets
- */
-function parseEOTBlocks(value: string): {
-  options: string[];
-  optionCss: Record<string, string>;
-  defaultValue: string;
-} | null {
-  // Regular expression to match EOT blocks
-  // Format: [optionKey] "Display Label*" <<<EOT css content EOT;
-  // Default can be marked with * in display label (like "Sky*")
-  const eotRegex = /([\w-]+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+  /**
+  * Parses USO EOT blocks to extract dropdown options and CSS snippets
+  */
+  function parseEOTBlocks(value: string): {
+    options: string[];
+    optionCss: Record<string, string>;
+    defaultValue: string;
+  } | null {
+    // Regular expression to match EOT blocks
+    // Format: [optionKey] "Display Label*" <<<EOT css content EOT;
+    // or tab-separated: optionKey<TAB>Display Label* <<<EOT css content EOT;
+    // Default can be marked with * in optionKey or display label
+    const eotRegex = /([\w*-]+)\s+([^<<<]+?)\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
 
-  const options: string[] = [];
-  const optionCss: Record<string, string> = {};
-  let defaultValue = "";
-  let hasDefault = false;
+    const options: string[] = [];
+    const optionCss: Record<string, string> = {};
+    let defaultValue = "";
+    let hasDefault = false;
 
-  // Use a separate regex instance to avoid potential state issues in JS engines
-  const regexInstance = new RegExp(eotRegex.source, eotRegex.flags);
-  let match: RegExpExecArray | null;
-  while ((match = regexInstance.exec(value)) !== null) {
-    // Create a local copy to avoid potential hoisting issues
-    const currentMatch = [...match] as RegExpExecArray;
-    const [displayLabel, cssContent] = currentMatch;
+    // Use a separate regex instance to avoid potential state issues in JS engines
+    const regexInstance = new RegExp(eotRegex.source, eotRegex.flags);
+    let match: RegExpExecArray | null;
+    while ((match = regexInstance.exec(value)) !== null) {
+      // Create a local copy to avoid potential hoisting issues
+      const currentMatch = [...match] as RegExpExecArray;
+      const [ , optionKey, displayLabel, cssContent] = currentMatch;
 
-    // Check if this is the default option (marked with * in display label)
-    const isDefault = displayLabel.includes("*");
-    const cleanDisplayLabel = displayLabel.replace(/\*$/, "");
+      // Trim and clean the display label
+      const trimmedLabel = displayLabel.trim();
+      // Remove surrounding quotes if present
+      const unquotedLabel = trimmedLabel.replace(/^"(.*)"$/, '$1');
+      const isDefault = optionKey.includes("*") || unquotedLabel.includes("*");
+      const cleanDisplayLabel = unquotedLabel.replace(/\*$/, "");
 
-    options.push(cleanDisplayLabel);
-    // Preserve indentation but remove leading/trailing whitespace
-    optionCss[cleanDisplayLabel] = cssContent
-      .replace(/^\s*\n/, "")
-      .replace(/\n\s*$/, "");
+      options.push(cleanDisplayLabel);
+      // Preserve indentation but remove leading/trailing whitespace
+      optionCss[cleanDisplayLabel] = cssContent
+        .replace(/^\s*\n/, "")
+        .replace(/\n\s*$/, "");
 
-    if (isDefault && !hasDefault) {
-      defaultValue = cleanDisplayLabel;
-      hasDefault = true;
+      if (isDefault && !hasDefault) {
+        defaultValue = cleanDisplayLabel;
+        hasDefault = true;
+      }
     }
-  }
 
-  // If no default was found, use the first option's label as default
-  if (!hasDefault && options.length > 0) {
-    defaultValue = options[0];
-  }
+    // If no default was found, use the first option's label as default
+    if (!hasDefault && options.length > 0) {
+      defaultValue = options[0];
+    }
 
-  return options.length > 0 ? { options, optionCss, defaultValue } : null;
-}
+    return options.length > 0 ? { options, optionCss, defaultValue } : null;
+  }
 
 /**
  * Parses a @var directive value into a VariableDescriptor

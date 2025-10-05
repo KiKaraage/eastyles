@@ -5,6 +5,7 @@
  */
 
 import { browser } from "@wxt-dev/browser";
+import { storage } from "@wxt-dev/storage";
 import { ReceivedMessages, SentMessages, ErrorDetails } from "./types";
 import {
   isValidReceivedMessage,
