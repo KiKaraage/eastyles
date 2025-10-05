@@ -1,8 +1,48 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { render } from "../test-utils";
-import ApplyPage from "../../entrypoints/apply/App";
-import { useApplyActions } from "../../hooks/useMessage";
+import ApplyPage from "../../entrypoints/save/App";
+import { useSaveActions } from "../../hooks/useMessage";
+
+// Mock useI18n hook
+vi.mock("../../hooks/useI18n", () => ({
+  useI18n: vi.fn(() => ({
+    t: vi.fn((key: string) => {
+      const translations: Record<string, string> = {
+        loadingUserCss: "Loading UserCSS...",
+        failedToLoadUserCss: "Failed to load UserCSS",
+        saveUserCss: "Save UserCSS",
+        previewAndInstall: "Preview and install UserCSS styles",
+        styleInformation: "Style Information",
+        targetDomains: "Target Domains",
+        noSpecificDomains: "No specific domains detected",
+        codePreview: "Code Preview",
+        codePreviewDescription:
+          "Shows the complete UserCSS content including metadata block with variables and CSS rules.",
+        installationError: "Installation Error",
+        addingToEastyles: "Add to Eastyles",
+        installing: "Installing...",
+        cancelButton: "Cancel",
+      };
+      return translations[key] || key;
+    }),
+    hasMessage: vi.fn().mockReturnValue(true),
+    getCurrentLocale: vi.fn().mockReturnValue("en"),
+    getAvailableLocales: vi.fn().mockReturnValue(["en", "id"]),
+  })),
+}));
+
+// Mock browser API
+vi.mock("@wxt-dev/browser", () => ({
+  browser: {
+    storage: {
+      local: {
+        get: vi.fn().mockResolvedValue({}),
+        remove: vi.fn().mockResolvedValue(undefined),
+      },
+    },
+  },
+}));
 
 // Mock modules before any imports
 vi.mock("codemirror", () => {
@@ -45,9 +85,9 @@ vi.mock("@codemirror/lang-css", () => ({
   css: () => [],
 }));
 
-// Mock useApplyActions hook
+// Mock useSaveActions hook
 vi.mock("../../hooks/useMessage", () => ({
-  useApplyActions: vi.fn(),
+  useSaveActions: vi.fn(),
 }));
 
 describe("ApplyPage Component", () => {
@@ -57,7 +97,7 @@ describe("ApplyPage Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    (useApplyActions as ReturnType<typeof vi.fn>).mockReturnValue({
+    (useSaveActions as ReturnType<typeof vi.fn>).mockReturnValue({
       parseUserCSS: mockParseUserCSS,
       installStyle: mockInstallStyle,
     });
@@ -120,9 +160,11 @@ describe("ApplyPage Component", () => {
     expect(container).toBeTruthy();
 
     // Try to find the loading element within the container
-    const loadingElement = container.querySelector(".text-xl");
-    expect(loadingElement).toBeTruthy();
-    expect(loadingElement?.textContent).toContain("Loading UserCSS");
+    await waitFor(() => {
+      const loadingElement = container.querySelector(".text-xl");
+      expect(loadingElement).toBeTruthy();
+      expect(loadingElement?.textContent).toContain("Loading UserCSS...");
+    });
   });
 
   it("renders preview and metadata on successful parse", async () => {
@@ -147,7 +189,9 @@ describe("ApplyPage Component", () => {
     const { container } = render(<ApplyPage />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Apply UserCSS");
+      const installButton = container.querySelector(".btn-primary");
+      expect(installButton).toBeTruthy();
+      expect(installButton?.textContent).toContain("Add to Eastyles");
     });
 
     expect(container.textContent).toContain("Test Style");
@@ -156,8 +200,6 @@ describe("ApplyPage Component", () => {
     expect(container.textContent).toContain("1.0.0");
     expect(container.textContent).toContain("example.com");
     expect(container.textContent).toContain("test.com");
-    expect(container.textContent).toContain("Add to Eastyles");
-    expect(container.textContent).toContain("Cancel");
   });
 
   it("shows error state when parse fails", async () => {
@@ -172,7 +214,7 @@ describe("ApplyPage Component", () => {
       expect(container.textContent).toContain("Invalid UserCSS format");
     });
 
-    expect(container.textContent).not.toContain("Apply UserCSS");
+    expect(container.textContent).not.toContain("Add to Eastyles");
   });
 
   it("displays warnings when present", async () => {
@@ -262,7 +304,9 @@ describe("ApplyPage Component", () => {
     const { container } = render(<ApplyPage />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Add to Eastyles");
+      const installButton = container.querySelector(".btn-primary");
+      expect(installButton).toBeTruthy();
+      expect(installButton?.textContent).toContain("Add to Eastyles");
     });
 
     const installButton = container.querySelector(".btn-primary");
@@ -303,7 +347,9 @@ describe("ApplyPage Component", () => {
     const { container } = render(<ApplyPage />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Add to Eastyles");
+      const installButton = container.querySelector(".btn-primary");
+      expect(installButton).toBeTruthy();
+      expect(installButton?.textContent).toContain("Add to Eastyles");
     });
 
     const installButton = container.querySelector(".btn-primary");
@@ -336,10 +382,12 @@ describe("ApplyPage Component", () => {
     const { container } = render(<ApplyPage />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Cancel");
+      const cancelButton = container.querySelectorAll(".btn-ghost")[1]; // Second btn-ghost is the cancel button
+      expect(cancelButton).toBeTruthy();
+      expect(cancelButton?.textContent?.trim()).toContain("Cancel");
     });
 
-    const cancelButton = container.querySelector(".btn-ghost");
+    const cancelButton = container.querySelectorAll(".btn-ghost")[1];
     fireEvent.click(cancelButton!);
 
     expect(window.history.back).toHaveBeenCalled();
@@ -373,7 +421,8 @@ describe("ApplyPage Component", () => {
     const { container } = render(<ApplyPage />);
 
     await waitFor(() => {
-      const cancelButton = container.querySelector(".btn");
+      const cancelButton = container.querySelectorAll(".btn-ghost")[1]; // Second btn-ghost is the cancel button
+      expect(cancelButton).toBeTruthy();
       expect(cancelButton?.classList.contains("btn-disabled")).toBe(true);
       expect(cancelButton?.classList.contains("opacity-50")).toBe(true);
     });
@@ -439,12 +488,10 @@ describe("ApplyPage Component", () => {
 
     render(<ApplyPage />);
 
-    await waitFor(() => {
-      expect(mockParseUserCSS).toHaveBeenCalledWith(
-        expect.stringContaining("==UserStyle=="),
-        undefined,
-      );
-    });
+    expect(mockParseUserCSS).toHaveBeenCalledWith(
+      expect.stringContaining("/* ==UserStyle=="),
+      "https://example.com/style.user.css",
+    );
   });
 
   it("handles parsing exceptions", async () => {
@@ -480,7 +527,9 @@ describe("ApplyPage Component", () => {
     const { container } = render(<ApplyPage />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Add to Eastyles");
+      const installButton = container.querySelector(".btn-primary");
+      expect(installButton).toBeTruthy();
+      expect(installButton?.textContent).toContain("Add to Eastyles");
     });
 
     const installButton = container.querySelector(".btn-primary");
@@ -494,6 +543,8 @@ describe("ApplyPage Component", () => {
   it("closes window after successful install when no referrer", async () => {
     Object.defineProperty(document, "referrer", {
       value: "",
+      writable: true,
+      configurable: true,
     });
 
     const mockParseResult = {
@@ -518,21 +569,28 @@ describe("ApplyPage Component", () => {
       styleId: "test-id",
     });
 
+    const originalClose = window.close;
+    const closeSpy = vi.fn();
+    window.close = closeSpy;
+
     const { container } = render(<ApplyPage />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Add to Eastyles");
+      const installButton = container.querySelector(".btn-primary");
+      expect(installButton).toBeTruthy();
+      fireEvent.click(installButton!);
     });
 
-    const installButton = container.querySelector(".btn-primary");
-    fireEvent.click(installButton!);
+    await waitFor(() => {
+      expect(mockInstallStyle).toHaveBeenCalledTimes(1);
+    });
 
-    // Wait for the setTimeout to execute (1000ms delay in component)
-    await waitFor(
-      () => {
-        expect(window.close).toHaveBeenCalled();
-      },
-      { timeout: 2000 },
-    );
-  });
+    // Wait for the setTimeout to execute
+    await new Promise((resolve) => setTimeout(resolve, 2100));
+
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+
+    window.close = originalClose;
+    vi.restoreAllMocks();
+  }, 10000);
 });

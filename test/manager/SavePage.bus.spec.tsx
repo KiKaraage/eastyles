@@ -14,10 +14,10 @@ vi.mock("../../hooks/useMessage", () => ({
     isConnected: false,
     pendingMessages: 0,
   })),
-  useApplyActions: vi.fn(() => ({
+  useSaveActions: vi.fn(() => ({
     parseUserCSS: async (text: string, sourceUrl?: string) => {
       console.log(
-        "[useApplyActions] parseUserCSS called, text length:",
+        "[useSaveActions] parseUserCSS called, text length:",
         text.length,
       );
       return mockSendMessage("PARSE_USERCSS", { text, sourceUrl });
@@ -39,10 +39,10 @@ vi.mock("../../hooks/useMessage", () => ({
         default: string;
         min?: number;
         max?: number;
-        options?: string[];
+        options?: Array<{value: string, label: string}>;
       }>,
     ) => {
-      console.log("[useApplyActions] installStyle called, style:", meta.name);
+      console.log("[useSaveActions] installStyle called, style:", meta.name);
       return mockSendMessage("INSTALL_STYLE", {
         meta,
         compiledCss,
@@ -53,7 +53,7 @@ vi.mock("../../hooks/useMessage", () => ({
 }));
 
 // Import the mocked hook
-import { useApplyActions } from "../../hooks/useMessage";
+import { useSaveActions } from "../../hooks/useMessage";
 
 describe("ApplyPage Message Bus Communication", () => {
   beforeEach(() => {
@@ -84,7 +84,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(mockResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const cssText = "/* ==UserStyle== */\nbody { color: red; }";
       const sourceUrl = "https://example.com/test.css";
@@ -121,7 +121,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(mockResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const cssText = "/* ==UserStyle== */\nbody { color: red; }";
 
@@ -143,7 +143,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(errorResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       let response;
       await act(async () => {
@@ -172,7 +172,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(warningResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       let response;
       await act(async () => {
@@ -201,7 +201,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(errorResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       let response;
       await act(async () => {
@@ -221,7 +221,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(mockResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const meta = {
         name: "Test Style",
@@ -268,7 +268,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(mockResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const meta = {
         name: "Simple Style",
@@ -287,7 +287,7 @@ describe("ApplyPage Message Bus Communication", () => {
         default: string;
         min?: number;
         max?: number;
-        options?: string[];
+        options?: Array<{value: string, label: string}>;
       }> = [];
 
       await act(async () => {
@@ -309,7 +309,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(errorResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const meta = {
         name: "Large Style",
@@ -341,7 +341,7 @@ describe("ApplyPage Message Bus Communication", () => {
 
       mockSendMessage.mockResolvedValue(mockResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const meta = {
         name: "Variable Style",
@@ -372,7 +372,11 @@ describe("ApplyPage Message Bus Communication", () => {
           name: "--font-family",
           type: "select",
           default: "Arial",
-          options: ["Arial", "Helvetica", "Times"],
+          options: [
+            { value: "Arial", label: "Arial" },
+            { value: "Helvetica", label: "Helvetica" },
+            { value: "Times", label: "Times" },
+          ],
         },
       ];
 
@@ -393,7 +397,7 @@ describe("ApplyPage Message Bus Communication", () => {
       const networkError = new Error("Network timeout");
       mockSendMessage.mockRejectedValue(networkError);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       await expect(async () => {
         await act(async () => {
@@ -406,7 +410,7 @@ describe("ApplyPage Message Bus Communication", () => {
       const storageError = new Error("Storage unavailable");
       mockSendMessage.mockRejectedValue(storageError);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const meta = {
         name: "Test Style",
@@ -464,7 +468,7 @@ describe("ApplyPage Message Bus Communication", () => {
         .mockResolvedValueOnce(firstResponse)
         .mockResolvedValueOnce(secondResponse);
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       let firstResult, secondResult;
 
@@ -502,14 +506,14 @@ describe("ApplyPage Message Bus Communication", () => {
         errors: [],
       });
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       await act(async () => {
         await result.current.parseUserCSS("test css content");
       });
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[useApplyActions] parseUserCSS called, text length:",
+        "[useSaveActions] parseUserCSS called, text length:",
         16,
       );
 
@@ -524,7 +528,7 @@ describe("ApplyPage Message Bus Communication", () => {
         styleId: "test-id",
       });
 
-      const { result } = renderHook(() => useApplyActions());
+      const { result } = renderHook(() => useSaveActions());
 
       const meta = {
         name: "Logged Style",
@@ -541,7 +545,7 @@ describe("ApplyPage Message Bus Communication", () => {
       });
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[useApplyActions] installStyle called, style:",
+        "[useSaveActions] installStyle called, style:",
         "Logged Style",
       );
 
