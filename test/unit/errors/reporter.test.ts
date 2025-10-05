@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
 import {
   ErrorReporter,
@@ -162,8 +161,6 @@ describe("ErrorReporter", () => {
     });
 
     test("should limit context entries", () => {
-      const error = new StorageError("Test error");
-
       // Report the same error multiple times with different contexts
       for (let i = 0; i < 15; i++) {
         const errorInstance = new StorageError(

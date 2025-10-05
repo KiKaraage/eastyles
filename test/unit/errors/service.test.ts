@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
 
 // Unmock the service to test the actual implementation
@@ -7,7 +6,6 @@ vi.unmock("@services/errors/service");
 import {
   ErrorService,
   errorService,
-  ExtensionError,
   StorageError,
   StorageQuotaExceededError,
   StorageInvalidDataError,
@@ -324,7 +322,7 @@ describe("ExtensionError Classes", () => {
       const error = new StorageQuotaExceededError({ used: 100, limit: 100 });
 
       expect(error).toBeInstanceOf(StorageError);
-      expect(error.message).toContain("Storage quota exceeded");
+      expect(error.message).toBe("ERR_STORAGE_QUOTA");
       expect(error.severity).toBe(ErrorSeverity.NOTIFY);
       expect(error.context).toMatchObject({ used: 100, limit: 100 });
     });
@@ -335,7 +333,7 @@ describe("ExtensionError Classes", () => {
       });
 
       expect(error).toBeInstanceOf(StorageError);
-      expect(error.message).toBe("Invalid storage data: Invalid JSON");
+      expect(error.message).toBe("ERR_STORAGE_INVALID_DATA");
       expect(error.context).toMatchObject({ data: "bad" });
     });
   });
@@ -347,9 +345,7 @@ describe("ExtensionError Classes", () => {
       });
 
       expect(error).toBeInstanceOf(MessageError);
-      expect(error.message).toBe(
-        "Message timeout after 3 attempts: TEST_MESSAGE",
-      );
+      expect(error.message).toBe("ERR_MESSAGE_TIMEOUT");
       expect(error.context).toMatchObject({
         messageType: "TEST_MESSAGE",
         attempts: 3,
@@ -363,7 +359,7 @@ describe("ExtensionError Classes", () => {
       });
 
       expect(error).toBeInstanceOf(MessageError);
-      expect(error.message).toBe("Invalid message: Missing required field");
+      expect(error.message).toBe("ERR_MESSAGE_INVALID");
       expect(error.context).toMatchObject({ field: "type" });
     });
   });
@@ -371,22 +367,22 @@ describe("ExtensionError Classes", () => {
   describe("Import/Export Errors", () => {
     test("should create InvalidFileFormatError with both formats", () => {
       const error = new InvalidFileFormatError("json", "xml", {
-        file: "test.xml",
+        filename: "test.json",
       });
 
       expect(error).toBeInstanceOf(ImportExportError);
-      expect(error.message).toBe("Invalid file format: expected json, got xml");
+      expect(error.message).toBe("ERR_FILE_FORMAT_INVALID");
       expect(error.context).toMatchObject({
         expectedFormat: "json",
         actualFormat: "xml",
-        file: "test.xml",
+        filename: "test.json",
       });
     });
 
     test("should create InvalidFileFormatError with expected format only", () => {
       const error = new InvalidFileFormatError("json");
 
-      expect(error.message).toBe("Invalid file format: expected json");
+      expect(error.message).toBe("ERR_FILE_FORMAT_INVALID");
       expect(error.context).toMatchObject({
         expectedFormat: "json",
         actualFormat: undefined,
@@ -399,7 +395,7 @@ describe("ExtensionError Classes", () => {
       });
 
       expect(error).toBeInstanceOf(ImportExportError);
-      expect(error.message).toBe("Data corrupted: Missing checksum");
+      expect(error.message).toBe("ERR_DATA_CORRUPTED");
       expect(error.context).toMatchObject({ checksum: null });
     });
   });
@@ -412,9 +408,7 @@ describe("ExtensionError Classes", () => {
       });
 
       expect(error).toBeInstanceOf(RuntimeError);
-      expect(error.message).toBe(
-        "Browser API error in tabs.query: Permission denied",
-      );
+      expect(error.message).toBe("ERR_BROWSER_API");
       expect(error.context).toMatchObject({
         api: "tabs",
         operation: "query",
@@ -428,9 +422,7 @@ describe("ExtensionError Classes", () => {
         key: "test",
       });
 
-      expect(error.message).toBe(
-        "Browser API error in storage.set: Unknown error",
-      );
+      expect(error.message).toBe("ERR_BROWSER_API");
       expect(error.context).toMatchObject({
         api: "storage",
         operation: "set",
@@ -443,7 +435,7 @@ describe("ExtensionError Classes", () => {
       const error = new PermissionDeniedError("activeTab", { requested: true });
 
       expect(error).toBeInstanceOf(RuntimeError);
-      expect(error.message).toBe("Permission denied: activeTab");
+      expect(error.message).toBe("ERR_PERMISSION_DENIED");
       expect(error.severity).toBe(ErrorSeverity.FATAL);
       expect(error.context).toMatchObject({
         permission: "activeTab",
