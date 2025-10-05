@@ -311,5 +311,61 @@
   "ERR_FONT_LOAD": {
     "message": "Failed to load font: $1",
     "description": "Error message for font loading failures with font name"
+  },
+  "noUserCssContentOrUrl": {
+    "message": "No UserCSS content or URL provided",
+    "description": "Error message when no UserCSS content or URL is provided"
+  },
+  "loadingUserCss": {
+    "message": "Loading UserCSS...",
+    "description": "Loading message while UserCSS is being loaded"
+  },
+  "failedToLoadUserCss": {
+    "message": "Failed to load UserCSS",
+    "description": "Error message when UserCSS fails to load"
+  },
+  "installSuccess": {
+    "message": "Style '$1' installed successfully",
+    "description": "Success message when a style is installed successfully"
+  },
+  "saveUserCss": {
+    "message": "Save UserCSS",
+    "description": "Page title for Save UserCSS page"
+  },
+  "previewAndInstall": {
+    "message": "Preview and install UserCSS styles",
+    "description": "Description for Save UserCSS page"
+  },
+  "styleInformation": {
+    "message": "Style Information",
+    "description": "Section title for style information"
+  },
+  "targetDomains": {
+    "message": "Target Domains",
+    "description": "Label for target domains"
+  },
+  "noSpecificDomains": {
+    "message": "No specific domains detected",
+    "description": "Message when no domains are detected"
+  },
+  "codePreview": {
+    "message": "Code Preview",
+    "description": "Section title for code preview"
+  },
+  "codePreviewDescription": {
+    "message": "Shows the complete UserCSS content including metadata block with variables and CSS rules.",
+    "description": "Description for code preview section"
+  },
+  "installationError": {
+    "message": "Installation Error",
+    "description": "Title for installation error"
+  },
+  "addingToEastyles": {
+    "message": "Add to Eastyles",
+    "description": "Button text for adding style to Eastyles"
+  },
+  "installing": {
+    "message": "Installing...",
+    "description": "Loading text when installing style"
   }
 }
