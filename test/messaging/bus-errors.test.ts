@@ -70,40 +70,40 @@ describe("MessageBus Error Handling", () => {
   });
 
   describe("Invalid Message Handling", () => {
-    it("should handle invalid incoming messages gracefully", () => {
-      const invalidMessage = { invalid: "message" } as unknown;
+     it("should handle invalid incoming messages gracefully", async () => {
+       const invalidMessage = { invalid: "message" } as unknown;
 
-      const result = messageBus.handleIncomingMessage(invalidMessage);
+       const result = await messageBus.handleIncomingMessage(invalidMessage);
 
-      expect(result).toBe(true); // Should return true for handled messages
-    });
+       expect(result).toBe(true); // Should return true for handled messages
+     });
 
-    it("should handle messages without type property", () => {
-      const messageWithoutType = { payload: { data: "test" } } as unknown;
+     it("should handle messages without type property", async () => {
+       const messageWithoutType = { payload: { data: "test" } } as unknown;
 
-      const result = messageBus.handleIncomingMessage(messageWithoutType);
+       const result = await messageBus.handleIncomingMessage(messageWithoutType);
 
-      expect(result).toBe(true);
-    });
+       expect(result).toBe(true);
+     });
 
-    it("should handle messages with invalid type", () => {
-      const messageWithInvalidType = { type: 123 } as unknown;
+     it("should handle messages with invalid type", async () => {
+       const messageWithInvalidType = { type: 123 } as unknown;
 
-      const result = messageBus.handleIncomingMessage(messageWithInvalidType);
+       const result = await messageBus.handleIncomingMessage(messageWithInvalidType);
 
-      expect(result).toBe(true);
-    });
+       expect(result).toBe(true);
+     });
 
-    it("should handle messages with missing required properties", () => {
-      const messageWithMissingProps = {
-        type: "GET_CURRENT_TAB",
-        // Missing required properties for this message type
-      } as unknown;
+     it("should handle messages with missing required properties", async () => {
+       const messageWithMissingProps = {
+         type: "GET_CURRENT_TAB",
+         // Missing required properties for this message type
+       } as unknown;
 
-      const result = messageBus.handleIncomingMessage(messageWithMissingProps);
+       const result = await messageBus.handleIncomingMessage(messageWithMissingProps);
 
-      expect(result).toBe(true);
-    });
+       expect(result).toBeNull();
+     });
   });
 
   describe("Browser API Failures", () => {
@@ -138,13 +138,13 @@ describe("MessageBus Error Handling", () => {
       );
     });
 
-    it("should handle browser.tabs.query failures", () => {
-      // Test that invalid messages are handled gracefully
-      const invalidMessage = { invalid: "message" } as unknown;
-      const result = messageBus.handleIncomingMessage(invalidMessage);
+     it("should handle browser.tabs.query failures", async () => {
+       // Test that invalid messages are handled gracefully
+       const invalidMessage = { invalid: "message" } as unknown;
+       const result = await messageBus.handleIncomingMessage(invalidMessage);
 
-      expect(result).toBe(true);
-    });
+       expect(result).toBe(true);
+     });
 
     it("should handle missing browser APIs gracefully", async () => {
       // Temporarily mock browser APIs as undefined

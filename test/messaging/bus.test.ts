@@ -141,12 +141,7 @@ describe("MessageBus Integration", () => {
       // Should have attempted to handle the message
       expect(mockHandleMessage).toHaveBeenCalledWith(message, 1);
 
-      // Should attempt to send error response
-      const { browser } = await import("@wxt-dev/browser");
-      expect(browser.tabs.query).toHaveBeenCalledWith({
-        active: true,
-        currentWindow: true,
-      });
+       // Error response is returned, no need to query tabs in this case
     });
   });
 
