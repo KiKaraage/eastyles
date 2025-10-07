@@ -530,9 +530,16 @@ const App = () => {
                     {/* Variable Controls */}
                     {state.expandedStyleId === style.id &&
                       Object.keys(style.variables).length > 0 && (
-                        <div className="ml-4 p-3 bg-base-100 border border-base-300 rounded-lg">
+                        <div className="px-2 py-2">
                           <VariableControls
-                            variables={Object.values(style.variables)}
+                            showTitle={false}
+                            variables={Object.values(style.variables).map((v) => {
+                              const boolLike =
+                                v.type !== 'checkbox' &&
+                                ((v.options && v.options.length === 2 && v.options.every((o) => ['0','1','true','false'].includes((typeof o === 'string' ? o : o.value).toString().toLowerCase()))) ||
+                                  ['0','1','true','false'].includes((v.value || v.default || '').toString().toLowerCase()));
+                              return boolLike ? { ...v, type: 'checkbox' as const } : v;
+                            })}
                             onChange={(variableName, value) =>
                               handleVariableChange(
                                 style.id,
