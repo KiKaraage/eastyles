@@ -15,6 +15,8 @@ interface VariableControlsProps {
   onChange: (name: string, value: string) => void;
   /** Optional CSS class for the container */
   className?: string;
+  /** Show the built-in title */
+  showTitle?: boolean;
 }
 
 /**
@@ -52,12 +54,17 @@ const VariableControl: React.FC<VariableControlProps> = ({
     onChange(value);
   };
 
-  // Use label if available, otherwise fall back to name
-  const displayLabel = variable.label || variable.name.replace(/^--/, "");
+  // Use label if available, otherwise fall back to a humanized name
+  const humanize = (s: string) => s.replace(/^--/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+  const displayLabel = (variable as any).label || humanize(variable.name);
 
   // Get a valid color value for the color input, fallback to default
   const getValidColorValue = (value: string): string => {
     if (isValidColor(value)) {
+      // Expand 3-digit hex to 6-digit
+      if (value.length === 4) { // #rgb
+        return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+      }
       // For 8-digit colors, strip alpha for input[type="color"]
       if (value.length === 9) { // #rrggbbaa
         return value.substring(0, 7);
@@ -79,92 +86,109 @@ const VariableControl: React.FC<VariableControlProps> = ({
     case "color":
       return (
         <div className="form-control">
-          <label className="label">
-            <span className="label-text">
+          <label className="label cursor-pointer items-start justify-between w-full">
+            <span className="label-text flex-1 pr-4 break-words">
               {displayLabel}
             </span>
-          </label>
-          <div className="flex items-center space-x-2">
             <input
               type="color"
               value={getValidColorValue(variable.value)}
               onChange={handleChange}
-              className="w-12 h-8 border border-base-300 rounded cursor-pointer"
-              title={`Color picker for ${variable.name}`}
+              className="w-10 h-10 border-2 border-base-300 rounded-lg cursor-pointer flex-shrink-0 overflow-hidden"
+              style={{
+                padding: '0.25rem',
+                borderRadius: '0.5rem',
+                appearance: 'none',
+              }}
+              title={`${displayLabel}: ${variable.value}`}
             />
-            <input
-              type="text"
-              value={variable.value}
-              onChange={handleChange}
-              className="input input-bordered input-xs flex-1"
-              placeholder="#000000"
-              title={`Color value for ${variable.name}`}
-            />
-          </div>
+          </label>
         </div>
       );
 
     case "number":
       return (
-        <div className="form-control">
-          <label className="label">
-            <span className="label-text">
-              {displayLabel}
-            </span>
-          </label>
+        <fieldset className="fieldset">
+          <legend className="fieldset-legend">{displayLabel}</legend>
           <input
             type="number"
             value={variable.value}
             onChange={handleChange}
             min={variable.min}
             max={variable.max}
-            className="input input-bordered input-sm"
+            className="input input-bordered input-sm w-full"
             placeholder={variable.default}
-            title={`Number input for ${variable.name}${variable.min !== undefined ? ` (min: ${variable.min})` : ""}${variable.max !== undefined ? ` (max: ${variable.max})` : ""}`}
+            title={`${displayLabel}${variable.min !== undefined ? ` (min: ${variable.min})` : ""}${variable.max !== undefined ? ` (max: ${variable.max})` : ""}`}
           />
-        </div>
+        </fieldset>
       );
 
-    case "select":
+    case "select": {
+      const options = variable.options || [];
+      const optionsAreLong = options.length > 5 || options.some((o) => (typeof o === 'string' ? o : o.label)?.length > 14);
+      if (optionsAreLong) {
+        return (
+          <fieldset className="fieldset">
+            <legend className="fieldset-legend">{displayLabel}</legend>
+            <select
+              value={variable.value}
+              onChange={handleChange}
+              className="select select-bordered select-sm w-full"
+              title={`${displayLabel}`}
+            >
+              {options.map((option) => {
+                const value = typeof option === 'string' ? option : option.value;
+                const label = typeof option === 'string' ? option : option.label;
+                return (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </fieldset>
+        );
+      }
       return (
         <div className="form-control">
-          <label className="label">
-            <span className="label-text">
+          <label className="label cursor-pointer items-center justify-between w-full">
+            <span className="label-text flex-1 pr-4 break-words">
               {displayLabel}
             </span>
+            <select
+              value={variable.value}
+              onChange={handleChange}
+              className="select select-bordered select-sm w-32 flex-shrink-0"
+              title={`${displayLabel}`}
+            >
+              {options.map((option) => {
+                const value = typeof option === 'string' ? option : option.value;
+                const label = typeof option === 'string' ? option : option.label;
+                return (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
           </label>
-          <select
-            value={variable.value}
-            onChange={handleChange}
-            className="select select-bordered select-sm"
-            title={`Select option for ${variable.name}`}
-          >
-            {variable.options?.map((option) => {
-              const value = typeof option === 'string' ? option : option.value;
-              const label = typeof option === 'string' ? option : option.label;
-              return (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              );
-            })}
-          </select>
         </div>
       );
+    }
 
     case "checkbox":
       return (
         <div className="form-control">
-          <label className="label cursor-pointer justify-start">
-            <span className="label-text">
+          <label className="label cursor-pointer items-center justify-between w-full">
+            <span className="label-text flex-1 pr-4 break-words">
               {displayLabel}
             </span>
             <input
               type="checkbox"
               checked={variable.value === "1" || variable.value === "true"}
               onChange={(e) => onChange(e.target.checked ? "1" : "0")}
-              className="checkbox checkbox-primary ml-2"
-              title={`Checkbox for ${variable.name}`}
+              className="toggle toggle-primary flex-shrink-0"
+              title={`${displayLabel}`}
             />
           </label>
         </div>
@@ -173,21 +197,17 @@ const VariableControl: React.FC<VariableControlProps> = ({
     case "text":
     default:
       return (
-        <div className="form-control">
-          <label className="label">
-            <span className="label-text">
-              {displayLabel}
-            </span>
-          </label>
+        <fieldset className="fieldset">
+          <legend className="fieldset-legend">{displayLabel}</legend>
           <input
             type="text"
             value={variable.value}
             onChange={handleChange}
-            className="input input-bordered input-sm"
+            className="input input-bordered input-sm w-full"
             placeholder={variable.default}
-            title={`Text input for ${variable.name}`}
+            title={`${displayLabel}`}
           />
-        </div>
+        </fieldset>
       );
   }
 };
@@ -199,6 +219,7 @@ export const VariableControls: React.FC<VariableControlsProps> = ({
   variables = [],
   onChange,
   className = "",
+  showTitle = true,
 }) => {
   if (!variables || variables.length === 0) {
     return (
@@ -210,8 +231,8 @@ export const VariableControls: React.FC<VariableControlsProps> = ({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      <h3 className="text-lg font-semibold">Variable Configuration</h3>
-      <div className="grid gap-4 md:grid-cols-2">
+      {showTitle && <h3 className="text-lg font-semibold">Variable Configuration</h3>}
+      <div className="grid grid-cols-1 gap-3">
         {variables.map((variable) => (
           <VariableControl
             key={variable.name}

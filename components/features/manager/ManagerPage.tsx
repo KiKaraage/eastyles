@@ -835,20 +835,31 @@ const ManagerPage: React.FC = () => {
                   Object.keys(style.variables).length > 0 &&
                   style.enabled && (
                     <div className="mt-4 pt-4 border-t border-base-300">
-                      <h4 className="font-medium mb-3">Configure Variables</h4>
                       <VariableControls
-                        variables={Object.values(style.variables)}
-                        onChange={(variableName, value) => {
-                          updateVariables(style.id, { [variableName]: value });
-                        }}
+                        showTitle={false}
+                        variables={Object.values(style.variables).map((v) => {
+                          const boolLike =
+                            v.type !== 'checkbox' &&
+                            ((v.options && v.options.length === 2 && v.options.every((o) => ['0','1','true','false'].includes((typeof o === 'string' ? o : o.value).toString().toLowerCase()))) ||
+                              ['0','1','true','false'].includes((v.value || v.default || '').toString().toLowerCase()));
+                          return boolLike ? { ...v, type: 'checkbox' as const } : v;
+                        })}
+                        onChange={(variableName, value) =>
+                          handleVariableChange(
+                            style.id,
+                            variableName,
+                            value,
+                          )
+                        }
                       />
                     </div>
                   )}
+
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
       {/* Create Font Style Modal */}
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}

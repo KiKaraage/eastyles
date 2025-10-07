@@ -24,7 +24,7 @@
     "description": "Button text for adding a new style"
   },
   "saveButton": {
-    "message": "Save Style",
+    "message": "Save",
     "description": "Button text for saving a style"
   },
   "cancelButton": {
@@ -62,6 +62,10 @@
   "loading": {
     "message": "Loading...",
     "description": "Loading indicator text"
+  },
+  "warning": {
+    "message": "Warning",
+    "description": "Generic warning message"
   },
   "error": {
     "message": "Error",
@@ -328,14 +332,6 @@
     "message": "Style '$1' installed successfully",
     "description": "Success message when a style is installed successfully"
   },
-  "saveUserCss": {
-    "message": "Save UserCSS",
-    "description": "Page title for Save UserCSS page"
-  },
-  "previewAndInstall": {
-    "message": "Preview and install UserCSS styles",
-    "description": "Description for Save UserCSS page"
-  },
   "styleInformation": {
     "message": "Style Information",
     "description": "Section title for style information"
@@ -360,9 +356,9 @@
     "message": "Installation Error",
     "description": "Title for installation error"
   },
-  "addingToEastyles": {
-    "message": "Add to Eastyles",
-    "description": "Button text for adding style to Eastyles"
+  "savingToEastyles": {
+    "message": "Save to Eastyles",
+    "description": "Button text for saving style to Eastyles"
   },
   "installing": {
     "message": "Installing...",
