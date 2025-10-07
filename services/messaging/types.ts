@@ -234,7 +234,7 @@ export type SaveMessages =
           default: string;
           min?: number;
           max?: number;
-          options?: Array<{value: string, label: string}>;
+          options?: Array<{ value: string; label: string }>;
         }>;
       };
     }
@@ -245,21 +245,21 @@ export type SaveMessages =
         css: string;
       };
     }
-   | {
-       type: "CREATE_FONT_STYLE";
-       payload: {
-         domain?: string;
-         fontName: string;
-       };
-     }
-   | {
-       type: "UPDATE_FONT_STYLE";
-       payload: {
-         styleId: string;
-         domain?: string;
-         fontName: string;
-       };
-     };
+  | {
+      type: "CREATE_FONT_STYLE";
+      payload: {
+        domain?: string;
+        fontName: string;
+      };
+    }
+  | {
+      type: "UPDATE_FONT_STYLE";
+      payload: {
+        styleId: string;
+        domain?: string;
+        fontName: string;
+      };
+    };
 
 /**
  * Messages sent from the content script to the background script.

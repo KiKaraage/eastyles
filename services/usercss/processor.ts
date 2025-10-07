@@ -894,6 +894,7 @@ export function parseUserCSS(
         directives.supportURL ||
         directives.updateURL ||
         "",
+      license: directives.license,
       domains,
       compiledCss: "", // Will be filled in by preprocessing step
       variables: variables || {},

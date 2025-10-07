@@ -20,6 +20,8 @@ export interface StyleMeta {
   author: string;
   /** URL where the style can be found or updated */
   sourceUrl: string;
+  /** License identifier for the style */
+  license?: string;
   /** List of domains this style should apply to */
   domains: string[];
   /** Compiled CSS ready for injection */

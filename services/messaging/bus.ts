@@ -12,7 +12,6 @@ import {
   createInvalidMessageError,
 } from "./validation";
 import { messageHandlerService } from "./handlers";
-import { storageClient } from "../storage/client";
 
 // Note: Storage functionality removed to avoid initialization issues
 
@@ -399,7 +398,10 @@ export class MessageBus {
 
     // Listen for browser events that might indicate connectivity changes
     // In service worker context, window is not available, so we skip online/offline event listeners
-    if (typeof window !== "undefined" && typeof window.addEventListener !== "undefined") {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.addEventListener !== "undefined"
+    ) {
       window.addEventListener("online", () => {
         this.isOnline = true;
         this.processOfflineMessages();
@@ -442,7 +444,7 @@ export class MessageBus {
     if (!storage) {
       return;
     }
-    
+
     try {
       const offlineMessage: OfflineMessage = {
         id: this.generateId(),
@@ -478,7 +480,7 @@ export class MessageBus {
     if (!storage) {
       return [];
     }
-    
+
     try {
       const messages = await storage.getItem("local:offlineMessages", {
         fallback: [] as OfflineMessage[],
@@ -582,7 +584,7 @@ export class MessageBus {
     if (!storage) {
       return;
     }
-    
+
     try {
       await storage.setItem("local:offlineMessages", []);
     } catch {

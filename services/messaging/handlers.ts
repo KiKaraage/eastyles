@@ -751,12 +751,14 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         /@homepageURL\s+([^\r\n]+)/,
       );
       const supportURLMatch = metadataContent.match(/@supportURL\s+([^\r\n]+)/);
+      const licenseMatch = metadataContent.match(/@license\s+([^\r\n]+)/);
 
       const name = nameMatch ? nameMatch[1].trim() : "";
       const namespace = namespaceMatch ? namespaceMatch[1].trim() : "";
       const version = versionMatch ? versionMatch[1].trim() : "";
       const description = descriptionMatch ? descriptionMatch[1].trim() : "";
       const author = authorMatch ? authorMatch[1].trim() : "";
+      const license = licenseMatch ? licenseMatch[1].trim() : undefined;
       const sourceUrl = homepageURLMatch
         ? homepageURLMatch[1].trim()
         : supportURLMatch
@@ -1049,6 +1051,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         version,
         description,
         author,
+        license,
         sourceUrl,
         domains,
       };
@@ -1378,6 +1381,9 @@ const handleInstallStyle: MessageHandler = async (message) => {
           case "select":
             mappedType = "select";
             break;
+          case "checkbox":
+            mappedType = "checkbox";
+            break;
         }
 
         variablesRecord[variable.name] = {
@@ -1703,15 +1709,6 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
      font-family: '${fontName}', sans-serif !important;
    }`;
 
-    // Process domain for title
-    const titleDomain = domain
-      ? domain
-          .replace(/\.(com|org|net|edu)$/, "")
-          .replace(/\./g, " ")
-          .split(" ")
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(" ")
-      : "";
     const name = `[FONT] ${fontName}`;
     const matchRule = domain ? `@match *://${domain}/*` : "";
 
@@ -1841,7 +1838,11 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
     );
 
     // Validate inputs
-    if (!styleId || typeof styleId !== "string" || styleId.trim().length === 0) {
+    if (
+      !styleId ||
+      typeof styleId !== "string" ||
+      styleId.trim().length === 0
+    ) {
       throw new Error("Style ID is required");
     }
 
@@ -2050,15 +2051,6 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
      font-family: '${fontName}', sans-serif !important;
    }`;
 
-    // Process domain for title
-    const titleDomain = domain
-      ? domain
-          .replace(/\.(com|org|net|edu)$/, "")
-          .replace(/\./g, " ")
-          .split(" ")
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(" ")
-      : "";
     const name = `[FONT] ${fontName}`;
     const matchRule = domain ? `@match *://${domain}/*` : "";
 
@@ -2091,7 +2083,9 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
       name,
       description: `Apply ${fontName} font to ${domain || "all sites"}`,
       domains: domainRules,
-      originalDomainCondition: domain ? `domain("${normalizePattern(domain)}")` : undefined,
+      originalDomainCondition: domain
+        ? `domain("${normalizePattern(domain)}")`
+        : undefined,
       css: userCSS,
       variables: {}, // Font styles don't have variables
     };

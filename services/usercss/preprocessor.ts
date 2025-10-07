@@ -291,6 +291,15 @@ export class PreprocessorEngine {
           ) {
             throw new Error("Stylus preprocessor requires DOM access");
           }
+          // Check for stylus module initialization errors
+          if (
+            errorMessage.includes("can't access lexical declaration") ||
+            errorMessage.includes("before initialization")
+          ) {
+            throw new Error(
+              "Stylus preprocessor module has initialization errors - this may be a compatibility issue with the current stylus version",
+            );
+          }
           throw importError;
         }
       } catch (error) {
@@ -365,7 +374,7 @@ export class PreprocessorEngine {
       };
 
       // Check if this is a module import error or compilation error
-      if (err.message && err.message.includes("Module not found")) {
+      if (err.message?.includes("Module not found")) {
         return {
           css: "",
           warnings: [],
@@ -440,13 +449,25 @@ export class PreprocessorEngine {
     } catch (error: unknown) {
       const errorMessage = (error as Error).message;
       // Handle background context error
-      if (
-        errorMessage &&
-        errorMessage.includes("cannot run in background context")
-      ) {
+      if (errorMessage?.includes("cannot run in background context")) {
         return {
           css: text,
           warnings: ["Stylus preprocessor not available in background context"],
+          errors: [],
+        };
+      }
+      // Handle stylus module initialization errors
+      if (
+        errorMessage &&
+        (errorMessage.includes("can't access lexical declaration") ||
+          errorMessage.includes("before initialization") ||
+          errorMessage.includes("module has initialization errors"))
+      ) {
+        return {
+          css: text,
+          warnings: [
+            "Stylus preprocessor module failed to initialize, using original CSS. This may be a compatibility issue with the current stylus version.",
+          ],
           errors: [],
         };
       }
@@ -483,7 +504,9 @@ export class PreprocessorEngine {
     if (!hasDom && engine !== "uso" && engine !== "none") {
       return {
         css: text,
-        warnings: [`Preprocessor ${engine} requires DOM access, skipping preprocessing`],
+        warnings: [
+          `Preprocessor ${engine} requires DOM access, skipping preprocessing`,
+        ],
         errors: [],
       };
     }
@@ -506,7 +529,9 @@ export class PreprocessorEngine {
           } else {
             result = {
               css: text,
-              warnings: ["Less preprocessor not available in background context"],
+              warnings: [
+                "Less preprocessor not available in background context",
+              ],
               errors: [],
             };
           }
@@ -518,7 +543,9 @@ export class PreprocessorEngine {
           } else {
             result = {
               css: text,
-              warnings: ["Stylus preprocessor not available in background context"],
+              warnings: [
+                "Stylus preprocessor not available in background context",
+              ],
               errors: [],
             };
           }
