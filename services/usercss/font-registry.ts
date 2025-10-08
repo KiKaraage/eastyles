@@ -10,7 +10,7 @@ import { browser } from "wxt/browser";
 export interface BuiltInFont {
   name: string;
   file: string;
-  category: "sans-serif" | "serif" | "monospace" | "display" | "handwriting";
+  category: "sans" | "serif" | "techno" | "playful" | "custom";
   weight: string;
   style: "normal" | "italic";
   description?: string;
@@ -35,28 +35,52 @@ export interface FontApplication {
  */
 const BUILT_IN_FONTS: BuiltInFont[] = [
   {
-    name: "Inter",
-    file: "Inter.woff2",
-    category: "sans-serif",
+    name: "Alan Sans",
+    file: "Alan Sans.woff2",
+    category: "sans",
     weight: "400",
     style: "normal",
     description: "Clean, modern sans-serif font",
   },
   {
-    name: "JetBrains Mono",
-    file: "JetBrains Mono.woff2",
-    category: "monospace",
+    name: "Atkinson Hyperlegible Mono",
+    file: "Atkinson Hyperlegible Mono.woff2",
+    category: "techno",
     weight: "400",
     style: "normal",
-    description: "Popular coding font",
+    description: "Highly readable monospace font for accessibility",
   },
   {
-    name: "Atkinson Hyperlegible",
-    file: "Atkinson Hyperlegible.woff2",
-    category: "sans-serif",
+    name: "Atkinson Hyperlegible Next",
+    file: "Atkinson Hyperlegible Next.woff2",
+    category: "sans",
     weight: "400",
     style: "normal",
     description: "Highly readable font for accessibility",
+  },
+  {
+    name: "Cairo",
+    file: "Cairo.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Contemporary sans-serif with Arabic support",
+  },
+  {
+    name: "Chivo",
+    file: "Chivo.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Humanist sans-serif with distinctive character",
+  },
+  {
+    name: "Cormorant Garamond",
+    file: "Cormorant Garamond.woff2",
+    category: "serif",
+    weight: "400",
+    style: "normal",
+    description: "Elegant serif font inspired by Garamond",
   },
   {
     name: "Crimson Pro",
@@ -67,44 +91,12 @@ const BUILT_IN_FONTS: BuiltInFont[] = [
     description: "Elegant serif font for reading",
   },
   {
-    name: "Outfit",
-    file: "Outfit.woff2",
-    category: "sans-serif",
+    name: "Faculty Glyphic",
+    file: "Faculty Glyphic.woff2",
+    category: "serif",
     weight: "400",
     style: "normal",
-    description: "Modern geometric sans-serif",
-  },
-  {
-    name: "Jost",
-    file: "Jost.woff2",
-    category: "sans-serif",
-    weight: "400",
-    style: "normal",
-    description: "Clean, contemporary sans-serif",
-  },
-  {
-    name: "Parkinsans",
-    file: "Parkinsans.woff2",
-    category: "sans-serif",
-    weight: "400",
-    style: "normal",
-    description: "Friendly, approachable sans-serif",
-  },
-  {
-    name: "SUSE",
-    file: "SUSE.woff2",
-    category: "sans-serif",
-    weight: "400",
-    style: "normal",
-    description: "Professional corporate font",
-  },
-  {
-    name: "Unbounded",
-    file: "Unbounded.woff2",
-    category: "display",
-    weight: "400",
-    style: "normal",
-    description: "Bold, attention-grabbing display font",
+    description: "Decorative display font",
   },
   {
     name: "Fraunces",
@@ -115,44 +107,140 @@ const BUILT_IN_FONTS: BuiltInFont[] = [
     description: "Soft, warm serif font",
   },
   {
-    name: "Faculty Glyphic",
-    file: "Faculty Glyphic.woff2",
-    category: "display",
+    name: "Grandstander",
+    file: "Grandstander.woff2",
+    category: "playful",
     weight: "400",
     style: "normal",
-    description: "Decorative display font",
+    description: "Bold, playful display font",
+  },
+  {
+    name: "Handjet",
+    file: "Handjet.woff2",
+    category: "techno",
+    weight: "400",
+    style: "normal",
+    description: "Handwritten-style monospace font",
   },
   {
     name: "Henny Penny",
     file: "Henny Penny.woff2",
-    category: "display",
+    category: "playful",
     weight: "400",
     style: "normal",
     description: "Playful, handwritten-style font",
   },
   {
+    name: "Instrument Sans",
+    file: "Instrument Sans.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Geometric sans-serif with technical feel",
+  },
+  {
+    name: "JetBrains Mono",
+    file: "JetBrains Mono.woff2",
+    category: "techno",
+    weight: "400",
+    style: "normal",
+    description: "Popular coding font",
+  },
+  {
+    name: "Jost",
+    file: "Jost.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Clean, contemporary sans-serif",
+  },
+  {
     name: "Kode Mono",
     file: "Kode Mono.woff2",
-    category: "monospace",
+    category: "techno",
     weight: "400",
     style: "normal",
     description: "Modern monospace font",
   },
   {
-    name: "Caveat",
-    file: "Caveat.woff2",
-    category: "handwriting",
+    name: "Merriweather",
+    file: "Merriweather.woff2",
+    category: "serif",
     weight: "400",
     style: "normal",
-    description: "Casual handwriting font",
+    description: "Classic serif font for reading",
+  },
+  {
+    name: "MuseoModerno",
+    file: "MuseoModerno.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Modern geometric sans-serif",
+  },
+  {
+    name: "OpenDyslexic",
+    file: "OpenDyslexic.woff2",
+    category: "playful",
+    weight: "400",
+    style: "normal",
+    description: "Font designed for dyslexia accessibility",
+  },
+  {
+    name: "Outfit",
+    file: "Outfit.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Modern geometric sans-serif",
+  },
+  {
+    name: "Parkinsans",
+    file: "Parkinsans.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Friendly, approachable sans-serif",
+  },
+  {
+    name: "Playpen Sans",
+    file: "Playpen Sans.woff2",
+    category: "playful",
+    weight: "400",
+    style: "normal",
+    description: "Playful handwriting font",
   },
   {
     name: "Playwrite IN",
     file: "Playwrite IN.woff2",
-    category: "handwriting",
+    category: "playful",
     weight: "400",
     style: "normal",
     description: "Educational handwriting font",
+  },
+  {
+    name: "Shantell Sans",
+    file: "Shantell Sans.woff2",
+    category: "playful",
+    weight: "400",
+    style: "normal",
+    description: "Warm, handwritten sans-serif",
+  },
+  {
+    name: "SUSE",
+    file: "SUSE.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Professional corporate font",
+  },
+  {
+    name: "Unbounded",
+    file: "Unbounded.woff2",
+    category: "sans",
+    weight: "400",
+    style: "normal",
+    description: "Bold, attention-grabbing display font",
   },
 ];
 
@@ -196,7 +284,7 @@ export class FontRegistryService {
     try {
       hasDocument = typeof globalThis.document !== 'undefined';
       hasWindow = typeof globalThis.window !== 'undefined';
-    } catch (e) {
+    } catch {
       console.debug(
         "Font detection: DOM not available (likely background context), returning false",
       );
@@ -281,21 +369,21 @@ export class FontRegistryService {
        // Wait a bit for font to load
        await new Promise(resolve => setTimeout(resolve, 100));
 
-       // Measure width with the test font
-       ctx.font = `12px '${fontName}', monospace`;
-       const widthWithFont = ctx.measureText("Test").width;
+        // Measure width with the test font
+        ctx.font = `12px '${fontName}', monospace`;
+        const widthWithFont = ctx.measureText("The quick brown fox jumps over the lazy dog").width;
 
-        // Measure width with fallback font
-        ctx.font = "12px monospace";
-        const widthWithFallback = ctx.measureText("Test").width;
+         // Measure width with fallback font
+         ctx.font = "12px monospace";
+         const widthWithFallback = ctx.measureText("The quick brown fox jumps over the lazy dog").width;
 
-        if (globalThis.document.body && typeof globalThis.document.body.removeChild === 'function') {
-           globalThis.document.body.removeChild(testElement);
-         }
+         if (globalThis.document.body && typeof globalThis.document.body.removeChild === 'function') {
+            globalThis.document.body.removeChild(testElement);
+          }
 
-        // If widths are different, the font is likely available
-        const isAvailable = Math.abs(widthWithFont - widthWithFallback) > 0.5; // Increased threshold for better accuracy
-        console.debug(`Font detection result for "${fontName}": ${isAvailable} (widths: ${widthWithFont} vs ${widthWithFallback}, diff: ${Math.abs(widthWithFont - widthWithFallback)})`);
+         // If widths are different, the font is likely available
+         const isAvailable = Math.abs(widthWithFont - widthWithFallback) > 1.0; // Higher threshold
+         console.debug(`Font detection result for "${fontName}": ${isAvailable} (widths: ${widthWithFont.toFixed(2)} vs ${widthWithFallback.toFixed(2)}, diff: ${Math.abs(widthWithFont - widthWithFallback).toFixed(2)})`);
 
           // Additional check: try to detect if the font is actually loaded
           if (isAvailable) {
@@ -318,8 +406,8 @@ export class FontRegistryService {
      } catch (error) {
        console.warn(`Font availability check failed for "${fontName}":`, error);
        return false;
-     }
-   }
+    }
+  }
 
   /**
    * Add a custom font to the registry
@@ -418,7 +506,7 @@ export class FontRegistryService {
    * Get font categories for UI organization
    */
   getFontCategories(): BuiltInFont["category"][] {
-    return ["sans-serif", "serif", "monospace", "display", "handwriting"];
+    return ["sans", "serif", "techno", "playful", "custom"];
   }
 
    /**
