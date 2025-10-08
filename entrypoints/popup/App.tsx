@@ -49,6 +49,79 @@ const App = () => {
   // Message hook for communicating with background
   const { sendMessage } = useMessage();
 
+  // Load styles for current tab
+  const loadStyles = useCallback(async (currentTabUrl?: string) => {
+    try {
+      let availableStyles: UserCSSStyle[] = [];
+      const tabUrl = currentTabUrl || state.currentTab?.url || "current-site";
+
+      if (
+        tabUrl &&
+        tabUrl !== "current-site" &&
+        tabUrl !== "restricted-url"
+      ) {
+        // Query styles for specific URL through background script
+        console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
+        const response = await sendMessage(
+          PopupMessageType.QUERY_STYLES_FOR_URL,
+          { url: tabUrl },
+        );
+        console.log("[Popup] QUERY_STYLES_FOR_URL response:", response);
+        if (
+          response &&
+          typeof response === "object" &&
+          response.success &&
+          response.styles
+        ) {
+          availableStyles = response.styles as UserCSSStyle[];
+        } else {
+          console.warn(
+            "[Popup] QUERY_STYLES_FOR_URL failed, falling back to GET_STYLES",
+          );
+          // Fallback to all styles if domain query fails
+          const fallbackResponse = await sendMessage(
+            PopupMessageType.GET_STYLES,
+            {},
+          );
+          if (
+            fallbackResponse &&
+            typeof fallbackResponse === "object" &&
+            fallbackResponse.styles
+          ) {
+            availableStyles = fallbackResponse.styles as UserCSSStyle[];
+          }
+        }
+      } else {
+        // Fallback: get all styles if URL not available
+        console.log(
+          "[Popup] Using GET_STYLES fallback (no URL or current-site)",
+        );
+        const response = await sendMessage(
+          PopupMessageType.GET_STYLES,
+          {},
+        );
+        console.log("[Popup] GET_STYLES response:", response);
+        if (response && typeof response === "object" && response.styles) {
+          availableStyles = response.styles as UserCSSStyle[];
+        }
+      }
+
+      console.log(
+        "[Popup] Setting available styles:",
+        availableStyles.length,
+        "active:",
+        availableStyles.filter((style) => style.enabled).length,
+      );
+      setState((prev) => ({
+        ...prev,
+        availableStyles,
+        activeStyles: availableStyles.filter((style) => style.enabled),
+      }));
+    } catch (error) {
+      console.error("[Popup] Failed to get styles:", error);
+    }
+  }, [sendMessage, state.currentTab?.url]);
+
   // Load styles and current tab info on popup open
   useEffect(() => {
     console.log("[Popup] useEffect running, loading popup data...");
@@ -102,92 +175,8 @@ const App = () => {
             },
           }));
 
-          // Query for styles that match the current URL
-          console.log("[Popup] Attempting to get styles for URL:", tabUrl);
-          console.log("[Popup] tabUrl type:", typeof tabUrl);
-          console.log(
-            "[Popup] tabUrl === 'current-site':",
-            tabUrl === "current-site",
-          );
-          console.log(
-            "[Popup] Boolean check result:",
-            tabUrl && tabUrl !== "current-site",
-          );
-          try {
-            let availableStyles: UserCSSStyle[] = [];
-
-            if (
-              tabUrl &&
-              tabUrl !== "current-site" &&
-              tabUrl !== "restricted-url"
-            ) {
-              // Query styles for specific URL through background script
-              console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
-              const response = await sendMessage(
-                PopupMessageType.QUERY_STYLES_FOR_URL,
-                { url: tabUrl },
-              );
-              console.log("[Popup] QUERY_STYLES_FOR_URL response:", response);
-              console.log("[Popup] Response type:", typeof response);
-              console.log("[Popup] Response.success:", response?.success);
-              console.log(
-                "[Popup] Response.styles length:",
-                response?.styles?.length,
-              );
-              if (
-                response &&
-                typeof response === "object" &&
-                response.success &&
-                response.styles
-              ) {
-                availableStyles = response.styles as UserCSSStyle[];
-              } else {
-                console.warn(
-                  "[Popup] QUERY_STYLES_FOR_URL failed, falling back to GET_STYLES",
-                );
-                // Fallback to all styles if domain query fails
-                const fallbackResponse = await sendMessage(
-                  PopupMessageType.GET_STYLES,
-                  {},
-                );
-                if (
-                  fallbackResponse &&
-                  typeof fallbackResponse === "object" &&
-                  fallbackResponse.styles
-                ) {
-                  availableStyles = fallbackResponse.styles as UserCSSStyle[];
-                }
-              }
-            } else {
-              // Fallback: get all styles if URL not available
-              console.log(
-                "[Popup] Using GET_STYLES fallback (no URL or current-site)",
-              );
-              const response = await sendMessage(
-                PopupMessageType.GET_STYLES,
-                {},
-              );
-              console.log("[Popup] GET_STYLES response:", response);
-              console.log("[Popup] GET_STYLES response type:", typeof response);
-              if (response && typeof response === "object" && response.styles) {
-                availableStyles = response.styles as UserCSSStyle[];
-              }
-            }
-
-            console.log(
-              "[Popup] Setting available styles:",
-              availableStyles.length,
-              "active:",
-              availableStyles.filter((style) => style.enabled).length,
-            );
-            setState((prev) => ({
-              ...prev,
-              availableStyles,
-              activeStyles: availableStyles.filter((style) => style.enabled),
-            }));
-          } catch (error) {
-            console.error("[Popup] Failed to get styles:", error);
-          }
+          // Load styles for the current tab
+          await loadStyles(tabUrl);
         }
       } catch (error) {
         console.error("[Popup] Failed to load popup data:", error);
@@ -198,7 +187,7 @@ const App = () => {
     };
 
     loadPopupData();
-  }, [sendMessage]);
+  }, [sendMessage, loadStyles]);
 
   // Helper function to close popup
   // Using window.close() directly as it's supported in extension popups across browsers
@@ -252,6 +241,8 @@ const App = () => {
       const result = await sendMessage(messageType, payload);
 
       if ("success" in result && result.success) {
+        // Reload styles to reflect the changes
+        await loadStyles();
         setState((prev) => ({ ...prev, currentPage: "main" }));
       } else {
         const errorMsg =
@@ -603,7 +594,7 @@ const App = () => {
   return (
     <div className="bg-base-100 min-h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-base-200 p-4 border-b border-base-300">
+      <div className="bg-base-200 p-4 border-b border-base-300 fixed top-0 left-0 right-0 z-50">
         <div className="flex items-center justify-between">
           {state.currentPage === "newFontStyle" ? (
             <div className="flex items-center justify-between w-full">
@@ -704,7 +695,7 @@ const App = () => {
       </div>
 
       {/* Main Content */}
-      <div className={`flex-1 p-2 overflow-y-auto ${isDark ? "dark" : ""}`}>
+       <div className={`flex-1 p-2 pt-18 overflow-y-auto ${isDark ? "dark" : ""}`}>
         {renderContent()}
       </div>
 
