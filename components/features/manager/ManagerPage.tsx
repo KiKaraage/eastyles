@@ -150,6 +150,14 @@ const ManagerPage: React.FC = () => {
     [sendMessage],
   );
 
+  // Handle individual variable changes
+  const handleVariableChange = useCallback(
+    async (styleId: string, variableName: string, value: string) => {
+      await updateVariables(styleId, { [variableName]: value });
+    },
+    [updateVariables],
+  );
+
   // Serialize domains to CSS-like format for editing
   const serializeDomains = useCallback((domains: DomainRule[]): string => {
     // Extract hostnames from url-prefix rules
