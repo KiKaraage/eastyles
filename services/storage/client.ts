@@ -4,11 +4,13 @@
  */
 
 import { storage } from "@wxt-dev/storage";
-import {
+import type {
   SettingsStorage,
   UserStyle,
   UserCSSStyle,
   ExportData,
+} from "./schema";
+import {
   DEFAULT_SETTINGS,
   STORAGE_KEYS,
   validateSettings,
@@ -53,10 +55,16 @@ export interface StorageClient {
   addUserCSSStyle(
     style: Partial<UserCSSStyle> & Pick<UserCSSStyle, "name" | "source">,
   ): Promise<UserCSSStyle>;
-  updateUserCSSStyle(id: string, updates: Partial<UserCSSStyle>): Promise<UserCSSStyle>;
+  updateUserCSSStyle(
+    id: string,
+    updates: Partial<UserCSSStyle>,
+  ): Promise<UserCSSStyle>;
   removeUserCSSStyle(id: string): Promise<void>;
   enableUserCSSStyle(id: string, enabled: boolean): Promise<void>;
-  updateUserCSSStyleVariables(id: string, variables: Record<string, unknown>): Promise<UserCSSStyle>;
+  updateUserCSSStyleVariables(
+    id: string,
+    variables: Record<string, unknown>,
+  ): Promise<UserCSSStyle>;
 
   // Batch operations
   getMultipleStyles(ids: string[]): Promise<UserStyle[]>;
@@ -100,10 +108,13 @@ const stylesStorage = storage.defineItem<UserStyle[]>(STORAGE_KEYS.STYLES, {
   version: 1,
 });
 
-const userCSSStylesStorage = storage.defineItem<UserCSSStyle[]>(STORAGE_KEYS.USERCSS_STYLES, {
-  fallback: [],
-  version: 1,
-});
+const userCSSStylesStorage = storage.defineItem<UserCSSStyle[]>(
+  STORAGE_KEYS.USERCSS_STYLES,
+  {
+    fallback: [],
+    version: 1,
+  },
+);
 
 /**
  * Storage client implementation
@@ -417,7 +428,13 @@ export class EastylesStorageClient implements StorageClient {
         exportVersion: "1.0.0",
       };
 
-      this.debug("Exported data:", exportData.styles.length, "legacy styles,", exportData.userCSSStyles.length, "UserCSS styles");
+      this.debug(
+        "Exported data:",
+        exportData.styles.length,
+        "legacy styles,",
+        exportData.userCSSStyles.length,
+        "UserCSS styles",
+      );
       return exportData;
     } catch (error) {
       this.debugError("Failed to export data:", error);
@@ -444,7 +461,13 @@ export class EastylesStorageClient implements StorageClient {
           stylesStorage.setValue(data.styles),
           userCSSStylesStorage.setValue(data.userCSSStyles),
         ]);
-        this.debug("Imported data (overwrite):", data.styles.length, "legacy styles,", data.userCSSStyles.length, "UserCSS styles");
+        this.debug(
+          "Imported data (overwrite):",
+          data.styles.length,
+          "legacy styles,",
+          data.userCSSStyles.length,
+          "UserCSS styles",
+        );
       } else {
         // Merge mode: combine with existing data
         const [existingStyles, existingUserCSSStyles] = await Promise.all([
@@ -484,7 +507,13 @@ export class EastylesStorageClient implements StorageClient {
           stylesStorage.setValue(mergedStyles),
           userCSSStylesStorage.setValue(mergedUserCSSStyles),
         ]);
-        this.debug("Imported data (merge):", data.styles.length, "legacy styles,", data.userCSSStyles.length, "UserCSS styles");
+        this.debug(
+          "Imported data (merge):",
+          data.styles.length,
+          "legacy styles,",
+          data.userCSSStyles.length,
+          "UserCSS styles",
+        );
       }
 
       // Update debug mode if it changed
@@ -550,7 +579,11 @@ export class EastylesStorageClient implements StorageClient {
     try {
       this.debug("Setting up UserCSS styles watcher");
       return userCSSStylesStorage.watch((newValue, oldValue) => {
-        this.debug("UserCSS styles watcher callback triggered", newValue, oldValue);
+        this.debug(
+          "UserCSS styles watcher callback triggered",
+          newValue,
+          oldValue,
+        );
         callback(newValue, oldValue);
       });
     } catch (error) {
@@ -610,7 +643,9 @@ export class EastylesStorageClient implements StorageClient {
       const validation = validateUserCSSStyle(newStyle);
 
       if (!validation.isValid) {
-        throw new Error(`Invalid UserCSS style data: ${validation.errors.join(", ")}`);
+        throw new Error(
+          `Invalid UserCSS style data: ${validation.errors.join(", ")}`,
+        );
       }
 
       const styles = await this.getUserCSSStyles();
@@ -645,7 +680,9 @@ export class EastylesStorageClient implements StorageClient {
 
       const validation = validateUserCSSStyle(updatedStyle);
       if (!validation.isValid) {
-        throw new Error(`Invalid UserCSS style data: ${validation.errors.join(", ")}`);
+        throw new Error(
+          `Invalid UserCSS style data: ${validation.errors.join(", ")}`,
+        );
       }
 
       styles[styleIndex] = updatedStyle;
@@ -686,7 +723,10 @@ export class EastylesStorageClient implements StorageClient {
     }
   }
 
-  async updateUserCSSStyleVariables(id: string, variables: Record<string, unknown>): Promise<UserCSSStyle> {
+  async updateUserCSSStyleVariables(
+    id: string,
+    variables: Record<string, unknown>,
+  ): Promise<UserCSSStyle> {
     try {
       const style = await this.getUserCSSStyle(id);
       if (!style) {
@@ -723,25 +763,33 @@ export const storageClient = new EastylesStorageClient();
  */
 export const getSettings = () => storageClient.getSettings();
 export const updateSettings = (settings: Partial<SettingsStorage>) =>
-   storageClient.updateSettings(settings);
+  storageClient.updateSettings(settings);
 export const getThemeMode = () => storageClient.getThemeMode();
 export const setThemeMode = (mode: "light" | "dark" | "system") =>
-   storageClient.setThemeMode(mode);
+  storageClient.setThemeMode(mode);
 export const getDebugMode = () => storageClient.getDebugMode();
 export const setDebugMode = (enabled: boolean) =>
-   storageClient.setDebugMode(enabled);
+  storageClient.setDebugMode(enabled);
 
 // UserCSS convenience functions
 export const getUserCSSStyles = () => storageClient.getUserCSSStyles();
-export const getUserCSSStyle = (id: string) => storageClient.getUserCSSStyle(id);
-export const addUserCSSStyle = (style: Partial<UserCSSStyle> & Pick<UserCSSStyle, "name" | "source">) =>
-   storageClient.addUserCSSStyle(style);
-export const updateUserCSSStyle = (id: string, updates: Partial<UserCSSStyle>) =>
-   storageClient.updateUserCSSStyle(id, updates);
-export const removeUserCSSStyle = (id: string) => storageClient.removeUserCSSStyle(id);
+export const getUserCSSStyle = (id: string) =>
+  storageClient.getUserCSSStyle(id);
+export const addUserCSSStyle = (
+  style: Partial<UserCSSStyle> & Pick<UserCSSStyle, "name" | "source">,
+) => storageClient.addUserCSSStyle(style);
+export const updateUserCSSStyle = (
+  id: string,
+  updates: Partial<UserCSSStyle>,
+) => storageClient.updateUserCSSStyle(id, updates);
+export const removeUserCSSStyle = (id: string) =>
+  storageClient.removeUserCSSStyle(id);
 export const enableUserCSSStyle = (id: string, enabled: boolean) =>
-   storageClient.enableUserCSSStyle(id, enabled);
-export const updateUserCSSStyleVariables = (id: string, variables: Record<string, unknown>) =>
-   storageClient.updateUserCSSStyleVariables(id, variables);
-export const watchUserCSSStyles = (callback: (newStyles: UserCSSStyle[], oldStyles?: UserCSSStyle[]) => void) =>
-   storageClient.watchUserCSSStyles(callback);
+  storageClient.enableUserCSSStyle(id, enabled);
+export const updateUserCSSStyleVariables = (
+  id: string,
+  variables: Record<string, unknown>,
+) => storageClient.updateUserCSSStyleVariables(id, variables);
+export const watchUserCSSStyles = (
+  callback: (newStyles: UserCSSStyle[], oldStyles?: UserCSSStyle[]) => void,
+) => storageClient.watchUserCSSStyles(callback);

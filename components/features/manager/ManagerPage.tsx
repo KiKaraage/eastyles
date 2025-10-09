@@ -3,26 +3,26 @@
  * Displays a table of all installed UserCSS styles with management capabilities
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useId, useState } from "react";
 import { browser } from "@wxt-dev/browser";
 import { storageClient } from "../../../services/storage/client";
-import { UserCSSStyle } from "../../../services/storage/schema";
-import { DomainRule } from "../../../services/usercss/types";
+import type { UserCSSStyle } from "../../../services/storage/schema";
+import type { DomainRule } from "../../../services/usercss/types";
 import {
-  useMessage,
   PopupMessageType,
   SaveMessageType,
+  useMessage,
 } from "../../../hooks/useMessage";
 import { useI18n } from "../../../hooks/useI18n";
 import { VariableControls } from "../VariableControls";
 import {
-  Trash,
-  Edit,
-  Settings,
-  TransitionRight,
-  TextSize,
   ArrowLeft,
   Check,
+  Edit,
+  Settings,
+  TextSize,
+  TransitionRight,
+  Trash,
 } from "iconoir-react";
 import NewFontStyle from "../NewFontStyle";
 
@@ -46,6 +46,10 @@ const ManagerPage: React.FC = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const editDialogRef = React.useRef<HTMLDialogElement>(null);
   const fontDialogRef = React.useRef<HTMLDialogElement>(null);
+  const namespaceId = useId();
+  const descriptionId = useId();
+  const authorId = useId();
+  const sourceUrlId = useId();
 
   // Font style creation state
   const [fontDomain, setFontDomain] = useState("");
@@ -63,6 +67,9 @@ const ManagerPage: React.FC = () => {
     (fontDomain !== originalFontDomain ||
       selectedFont !== originalSelectedFont);
 
+  const styleNameId = React.useId();
+  const styleVersionId = React.useId();
+  const styleDomainsId = React.useId();
   const { sendMessage } = useMessage();
   const { t } = useI18n();
 
@@ -206,8 +213,10 @@ const ManagerPage: React.FC = () => {
     const domains: DomainRule[] = [];
     // Split by comma, but handle quotes
     const regex = /([^,()]+)\(("([^"]*)")\)/g;
-    let match;
-    while ((match = regex.exec(cleanText)) !== null) {
+    let match: RegExpExecArray | null;
+    while (true) {
+      match = regex.exec(cleanText);
+      if (match === null) break;
       const kind = match[1].trim();
       const pattern = match[3];
       if (["url", "url-prefix", "domain", "regexp"].includes(kind)) {
@@ -406,7 +415,7 @@ const ManagerPage: React.FC = () => {
           console.log("Read imported CSS file, length:", cssContent.length);
 
           // Store content in sessionStorage to avoid URL length limits
-          const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
           sessionStorage.setItem(storageId, cssContent);
 
           // Pass storage ID instead of content
@@ -436,7 +445,7 @@ const ManagerPage: React.FC = () => {
 
     const handleDragEnter = (e: DragEvent) => {
       e.preventDefault();
-      e.dataTransfer!.dropEffect = "copy"; // Show copy cursor
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; // Show copy cursor
       if (e.dataTransfer?.types.includes("Files")) {
         dragCounter++;
         if (dragCounter === 1) {
@@ -448,7 +457,9 @@ const ManagerPage: React.FC = () => {
 
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
-      e.dataTransfer!.dropEffect = "copy"; // Show copy cursor
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy"; // Show copy cursor
+      }
     };
 
     const handleDragLeave = (e: DragEvent) => {
@@ -582,11 +593,11 @@ const ManagerPage: React.FC = () => {
 
       // If nothing found, return a meaningful truncated version
       if (pattern.length > 20) {
-        return pattern.substring(0, 17) + "...";
+        return `${pattern.substring(0, 17)}...`;
       }
       return pattern || "regexp";
     } catch {
-      return pattern.length > 20 ? pattern.substring(0, 17) + "..." : pattern;
+      return pattern.length > 20 ? `${pattern.substring(0, 17)}...` : pattern;
     }
   };
 
@@ -682,12 +693,17 @@ const ManagerPage: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-primary" onClick={handleImportClick}>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={handleImportClick}
+          >
             <TransitionRight className="w-4 h-4 mr-2" />
             {t("manager_addUserCss")}
           </button>
           <button
             className="btn btn-secondary"
+            type="button"
             onClick={() => setShowFontModal(true)}
           >
             <TextSize className="w-4 h-4 mr-2" />
@@ -702,6 +718,7 @@ const ManagerPage: React.FC = () => {
           <span>{error}</span>
           <button
             className="btn btn-sm btn-ghost"
+            type="button"
             onClick={() => setError(null)}
           >
             ✕
@@ -787,6 +804,7 @@ const ManagerPage: React.FC = () => {
                     {Object.keys(style.variables).length > 0 &&
                       style.enabled && (
                         <button
+                          type="button"
                           className="btn btn-ghost btn-sm"
                           onClick={() =>
                             setExpandedStyleId(
@@ -801,6 +819,7 @@ const ManagerPage: React.FC = () => {
 
                     {/* Edit Style Button */}
                     <button
+                      type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => {
                         if (style.name.startsWith("[FONT] ")) {
@@ -829,6 +848,7 @@ const ManagerPage: React.FC = () => {
 
                     {/* Delete Button */}
                     <button
+                      type="button"
                       className="btn btn-ghost btn-sm text-error hover:bg-error hover:text-error-content"
                       onClick={() => deleteStyle(style.id, style.name)}
                       title="Delete style"
@@ -847,30 +867,39 @@ const ManagerPage: React.FC = () => {
                         showTitle={false}
                         variables={Object.values(style.variables).map((v) => {
                           const boolLike =
-                            v.type !== 'checkbox' &&
-                            ((v.options && v.options.length === 2 && v.options.every((o) => ['0','1','true','false'].includes((typeof o === 'string' ? o : o.value).toString().toLowerCase()))) ||
-                              ['0','1','true','false'].includes((v.value || v.default || '').toString().toLowerCase()));
-                          return boolLike ? { ...v, type: 'checkbox' as const } : v;
+                            v.type !== "checkbox" &&
+                            ((v.options &&
+                              v.options.length === 2 &&
+                              v.options.every((o) =>
+                                ["0", "1", "true", "false"].includes(
+                                  (typeof o === "string" ? o : o.value)
+                                    .toString()
+                                    .toLowerCase(),
+                                ),
+                              )) ||
+                              ["0", "1", "true", "false"].includes(
+                                (v.value || v.default || "")
+                                  .toString()
+                                  .toLowerCase(),
+                              ));
+                          return boolLike
+                            ? { ...v, type: "checkbox" as const }
+                            : v;
                         })}
                         onChange={(variableName, value) =>
-                          handleVariableChange(
-                            style.id,
-                            variableName,
-                            value,
-                          )
+                          handleVariableChange(style.id, variableName, value)
                         }
                       />
                     </div>
                   )}
-
-                </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Create Font Style Modal */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <dialog
         ref={fontDialogRef}
         className="modal"
@@ -880,11 +909,17 @@ const ManagerPage: React.FC = () => {
             setShowFontModal(false);
           }
         }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" || e.key === "Enter") {
+            setShowFontModal(false);
+          }
+        }}
       >
         <div className="modal-box max-w-md">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
               <button
+                type="button"
                 onClick={() => {
                   setShowFontModal(false);
                   setEditingFontStyle(null);
@@ -902,6 +937,7 @@ const ManagerPage: React.FC = () => {
               </h3>
             </div>
             <button
+              type="button"
               onClick={async () => {
                 if (!selectedFont) return;
 
@@ -1007,11 +1043,11 @@ const ManagerPage: React.FC = () => {
           >
             <div className="flex-1 overflow-y-auto space-y-4">
               <div>
-                <label className="label" htmlFor="style-name">
+                <label className="label" htmlFor={styleNameId}>
                   <span className="label-text">Style Name</span>
                 </label>
                 <input
-                  id="style-name"
+                  id={styleNameId}
                   type="text"
                   value={editingName}
                   onChange={(e) => setEditingName(e.target.value)}
@@ -1026,7 +1062,7 @@ const ManagerPage: React.FC = () => {
                   <span className="label-text">Namespace</span>
                 </label>
                 <input
-                  id="style-namespace"
+                  id={namespaceId}
                   type="text"
                   value={editingNamespace}
                   onChange={(e) => setEditingNamespace(e.target.value)}
@@ -1036,11 +1072,11 @@ const ManagerPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="label" htmlFor="style-version">
+                <label className="label" htmlFor={styleVersionId}>
                   <span className="label-text">Version</span>
                 </label>
                 <input
-                  id="style-version"
+                  id={styleVersionId}
                   type="text"
                   value={editingVersion}
                   onChange={(e) => setEditingVersion(e.target.value)}
@@ -1054,7 +1090,7 @@ const ManagerPage: React.FC = () => {
                   <span className="label-text">Description</span>
                 </label>
                 <textarea
-                  id="style-description"
+                  id={descriptionId}
                   value={editingDescription}
                   onChange={(e) => setEditingDescription(e.target.value)}
                   className="textarea textarea-bordered w-full h-24"
@@ -1067,7 +1103,7 @@ const ManagerPage: React.FC = () => {
                   <span className="label-text">Author</span>
                 </label>
                 <input
-                  id="style-author"
+                  id={authorId}
                   type="text"
                   value={editingAuthor}
                   onChange={(e) => setEditingAuthor(e.target.value)}
@@ -1081,7 +1117,7 @@ const ManagerPage: React.FC = () => {
                   <span className="label-text">Source URL</span>
                 </label>
                 <input
-                  id="style-source-url"
+                  id={sourceUrlId}
                   type="text"
                   value={editingSourceUrl}
                   onChange={(e) => setEditingSourceUrl(e.target.value)}
@@ -1091,13 +1127,13 @@ const ManagerPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="label" htmlFor="style-domains">
+                <label className="label" htmlFor={styleDomainsId}>
                   <span className="label-text">
                     Domains (CSS @-moz-document format)
                   </span>
                 </label>
                 <input
-                  id="style-domains"
+                  id={styleDomainsId}
                   type="text"
                   value={editingDomains}
                   onChange={(e) => setEditingDomains(e.target.value)}

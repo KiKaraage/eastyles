@@ -19,7 +19,7 @@ import {
   PopupMessageType,
   SaveMessageType,
 } from "../../hooks/useMessage";
-import { UserCSSStyle } from "../../services/storage/schema";
+import type { UserCSSStyle } from "../../services/storage/schema";
 
 interface PopupState {
   isLoading: boolean;
@@ -50,77 +50,77 @@ const App = () => {
   const { sendMessage } = useMessage();
 
   // Load styles for current tab
-  const loadStyles = useCallback(async (currentTabUrl?: string) => {
-    try {
-      let availableStyles: UserCSSStyle[] = [];
-      const tabUrl = currentTabUrl || state.currentTab?.url || "current-site";
+  const loadStyles = useCallback(
+    async (currentTabUrl?: string) => {
+      try {
+        let availableStyles: UserCSSStyle[] = [];
+        const tabUrl = currentTabUrl || state.currentTab?.url || "current-site";
 
-      if (
-        tabUrl &&
-        tabUrl !== "current-site" &&
-        tabUrl !== "restricted-url"
-      ) {
-        // Query styles for specific URL through background script
-        console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
-        const response = await sendMessage(
-          PopupMessageType.QUERY_STYLES_FOR_URL,
-          { url: tabUrl },
-        );
-        console.log("[Popup] QUERY_STYLES_FOR_URL response:", response);
         if (
-          response &&
-          typeof response === "object" &&
-          response.success &&
-          response.styles
+          tabUrl &&
+          tabUrl !== "current-site" &&
+          tabUrl !== "restricted-url"
         ) {
-          availableStyles = response.styles as UserCSSStyle[];
-        } else {
-          console.warn(
-            "[Popup] QUERY_STYLES_FOR_URL failed, falling back to GET_STYLES",
+          // Query styles for specific URL through background script
+          console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
+          const response = await sendMessage(
+            PopupMessageType.QUERY_STYLES_FOR_URL,
+            { url: tabUrl },
           );
-          // Fallback to all styles if domain query fails
-          const fallbackResponse = await sendMessage(
-            PopupMessageType.GET_STYLES,
-            {},
-          );
+          console.log("[Popup] QUERY_STYLES_FOR_URL response:", response);
           if (
-            fallbackResponse &&
-            typeof fallbackResponse === "object" &&
-            fallbackResponse.styles
+            response &&
+            typeof response === "object" &&
+            response.success &&
+            response.styles
           ) {
-            availableStyles = fallbackResponse.styles as UserCSSStyle[];
+            availableStyles = response.styles as UserCSSStyle[];
+          } else {
+            console.warn(
+              "[Popup] QUERY_STYLES_FOR_URL failed, falling back to GET_STYLES",
+            );
+            // Fallback to all styles if domain query fails
+            const fallbackResponse = await sendMessage(
+              PopupMessageType.GET_STYLES,
+              {},
+            );
+            if (
+              fallbackResponse &&
+              typeof fallbackResponse === "object" &&
+              fallbackResponse.styles
+            ) {
+              availableStyles = fallbackResponse.styles as UserCSSStyle[];
+            }
+          }
+        } else {
+          // Fallback: get all styles if URL not available
+          console.log(
+            "[Popup] Using GET_STYLES fallback (no URL or current-site)",
+          );
+          const response = await sendMessage(PopupMessageType.GET_STYLES, {});
+          console.log("[Popup] GET_STYLES response:", response);
+          if (response && typeof response === "object" && response.styles) {
+            availableStyles = response.styles as UserCSSStyle[];
           }
         }
-      } else {
-        // Fallback: get all styles if URL not available
-        console.log(
-          "[Popup] Using GET_STYLES fallback (no URL or current-site)",
-        );
-        const response = await sendMessage(
-          PopupMessageType.GET_STYLES,
-          {},
-        );
-        console.log("[Popup] GET_STYLES response:", response);
-        if (response && typeof response === "object" && response.styles) {
-          availableStyles = response.styles as UserCSSStyle[];
-        }
-      }
 
-      console.log(
-        "[Popup] Setting available styles:",
-        availableStyles.length,
-        "active:",
-        availableStyles.filter((style) => style.enabled).length,
-      );
-      setState((prev) => ({
-        ...prev,
-        availableStyles,
-        activeStyles: availableStyles.filter((style) => style.enabled),
-      }));
-    } catch (error) {
-      console.error("[Popup] Failed to get styles:", error);
-    }
-  }, [sendMessage, state.currentTab?.url]);
+        console.log(
+          "[Popup] Setting available styles:",
+          availableStyles.length,
+          "active:",
+          availableStyles.filter((style) => style.enabled).length,
+        );
+        setState((prev) => ({
+          ...prev,
+          availableStyles,
+          activeStyles: availableStyles.filter((style) => style.enabled),
+        }));
+      } catch (error) {
+        console.error("[Popup] Failed to get styles:", error);
+      }
+    },
+    [state.currentTab?.url, sendMessage],
+  );
 
   // Load styles and current tab info on popup open
   useEffect(() => {
@@ -187,7 +187,7 @@ const App = () => {
     };
 
     loadPopupData();
-  }, [sendMessage, loadStyles]);
+  }, [loadStyles]);
 
   // Helper function to close popup
   // Using window.close() directly as it's supported in extension popups across browsers
@@ -311,7 +311,7 @@ const App = () => {
     if (state.currentPage === "newFontStyle") {
       setFontDomain(getCurrentDomain());
     }
-  }, [state.currentTab, state.currentPage, getCurrentDomain]);
+  }, [state.currentPage, getCurrentDomain]);
 
   // Helper function to format style names with badges for font styles
   const formatStyleName = (name: string) => {
@@ -342,10 +342,14 @@ const App = () => {
           style.id === styleId ? { ...style, enabled } : style,
         ),
         activeStyles: enabled
-          ? [
-              ...prev.activeStyles,
-              prev.availableStyles.find((s) => s.id === styleId)!,
-            ].filter(Boolean)
+          ? (() => {
+              const styleToAdd = prev.availableStyles.find(
+                (s) => s.id === styleId,
+              );
+              return styleToAdd
+                ? [...prev.activeStyles, styleToAdd]
+                : prev.activeStyles;
+            })()
           : prev.activeStyles.filter((style) => style.id !== styleId),
       }));
     } catch (error) {
@@ -417,6 +421,7 @@ const App = () => {
           </h3>
           <div>
             <button
+              type="button"
               onClick={() =>
                 browser.tabs.create({ url: "https://userstyles.world/explore" })
               }
@@ -468,6 +473,7 @@ const App = () => {
                         {/* Edit button for font styles */}
                         {style.name.startsWith("[FONT] ") && (
                           <button
+                            type="button"
                             onClick={() => {
                               const fontName = style.name.substring(7).trim();
                               setSelectedFont(fontName);
@@ -495,6 +501,7 @@ const App = () => {
                         {/* Settings button for styles with variables */}
                         {Object.keys(style.variables).length > 0 && (
                           <button
+                            type="button"
                             onClick={() =>
                               handleToggleVariableExpansion(style.id)
                             }
@@ -524,13 +531,29 @@ const App = () => {
                         <div className="px-2 py-2">
                           <VariableControls
                             showTitle={false}
-                            variables={Object.values(style.variables).map((v) => {
-                              const boolLike =
-                                v.type !== 'checkbox' &&
-                                ((v.options && v.options.length === 2 && v.options.every((o) => ['0','1','true','false'].includes((typeof o === 'string' ? o : o.value).toString().toLowerCase()))) ||
-                                  ['0','1','true','false'].includes((v.value || v.default || '').toString().toLowerCase()));
-                              return boolLike ? { ...v, type: 'checkbox' as const } : v;
-                            })}
+                            variables={Object.values(style.variables).map(
+                              (v) => {
+                                const boolLike =
+                                  v.type !== "checkbox" &&
+                                  ((v.options &&
+                                    v.options.length === 2 &&
+                                    v.options.every((o) =>
+                                      ["0", "1", "true", "false"].includes(
+                                        (typeof o === "string" ? o : o.value)
+                                          .toString()
+                                          .toLowerCase(),
+                                      ),
+                                    )) ||
+                                    ["0", "1", "true", "false"].includes(
+                                      (v.value || v.default || "")
+                                        .toString()
+                                        .toLowerCase(),
+                                    ));
+                                return boolLike
+                                  ? { ...v, type: "checkbox" as const }
+                                  : v;
+                              },
+                            )}
                             onChange={(variableName, value) =>
                               handleVariableChange(
                                 style.id,
@@ -546,6 +569,7 @@ const App = () => {
               </div>
               <div className="text-center mt-4">
                 <button
+                  type="button"
                   onClick={() =>
                     browser.tabs.create({
                       url: "https://userstyles.world/explore",
@@ -574,6 +598,7 @@ const App = () => {
               </p>
               <div className="mt-4">
                 <button
+                  type="button"
                   onClick={() =>
                     browser.tabs.create({
                       url: "https://userstyles.world/explore",
@@ -603,6 +628,7 @@ const App = () => {
                 style={{ maxWidth: "calc(100% - 3rem)" }}
               >
                 <button
+                  type="button"
                   onClick={handleCloseFontSelector}
                   className="btn btn-ghost btn-sm p-2"
                 >
@@ -615,6 +641,7 @@ const App = () => {
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={handleSaveFontStyle}
                 disabled={
                   !selectedFont ||
@@ -695,7 +722,9 @@ const App = () => {
       </div>
 
       {/* Main Content */}
-       <div className={`flex-1 p-2 pt-18 overflow-y-auto ${isDark ? "dark" : ""}`}>
+      <div
+        className={`flex-1 p-2 pt-18 overflow-y-auto ${isDark ? "dark" : ""}`}
+      >
         {renderContent()}
       </div>
 
@@ -704,6 +733,7 @@ const App = () => {
         <div className="sticky bottom-0 bg-base-200 border-t border-base-300 p-2">
           <div className="flex justify-between items-center gap-2">
             <button
+              type="button"
               disabled
               className="btn btn-primary btn-sm flex-1 justify-center normal-case text-xs whitespace-nowrap"
             >
@@ -712,6 +742,7 @@ const App = () => {
             </button>
 
             <button
+              type="button"
               onClick={handleOpenFontSelector}
               disabled={isRestrictedPage}
               className="btn btn-secondary btn-sm flex-1 justify-center normal-case text-xs whitespace-nowrap"
@@ -721,6 +752,7 @@ const App = () => {
             </button>
 
             <button
+              type="button"
               onClick={handleOpenManager}
               className="btn btn-accent btn-sm flex-1 justify-center normal-case text-xs whitespace-nowrap"
             >

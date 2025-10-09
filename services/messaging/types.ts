@@ -3,7 +3,7 @@
  * Defines the contract for message passing between background script, popup, and manager page.
  */
 
-import { VariableDescriptor } from "../usercss/types";
+import type { VariableDescriptor } from "../usercss/types";
 
 // Response types for popup messages
 export interface PopupMessageResponses {

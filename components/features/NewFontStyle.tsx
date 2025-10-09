@@ -1,8 +1,6 @@
- import { useEffect, useState, useRef } from "react";
- import {
-   fontRegistry,
-   BuiltInFont,
- } from "../../services/usercss/font-registry";
+import type { BuiltInFont } from "../../services/usercss/font-registry";
+import { useEffect, useRef, useState, useId } from "react";
+import { fontRegistry } from "../../services/usercss/font-registry";
 
 interface NewFontStyleProps {
   domain: string;
@@ -19,25 +17,32 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
   onFontChange,
   onClose: _onClose,
 }) => {
+  const domainInputId = useId();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const allBuiltInFonts = fontRegistry.getBuiltInFonts();
-  const isCustomFont = selectedFont && !allBuiltInFonts.some(font => font.name === selectedFont);
-  const [customFontName, setCustomFontName] = useState(isCustomFont ? selectedFont : "");
+  const isCustomFont =
+    selectedFont && !allBuiltInFonts.some((font) => font.name === selectedFont);
+  const [customFontName, setCustomFontName] = useState(
+    isCustomFont ? selectedFont : "",
+  );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Clear custom font name when switching to built-in font
   useEffect(() => {
-    if (selectedFont && allBuiltInFonts.some(font => font.name === selectedFont)) {
+    if (
+      selectedFont &&
+      allBuiltInFonts.some((font) => font.name === selectedFont)
+    ) {
       setCustomFontName("");
     }
   }, [selectedFont, allBuiltInFonts]);
 
   // Load font CSS for preview
   useEffect(() => {
-  const allBuiltInFonts = fontRegistry.getBuiltInFonts();
-  const builtInFonts = selectedCategory
-    ? allBuiltInFonts.filter(font => font.category === selectedCategory)
-    : allBuiltInFonts;
+    const allBuiltInFonts = fontRegistry.getBuiltInFonts();
+    const builtInFonts = selectedCategory
+      ? allBuiltInFonts.filter((font) => font.category === selectedCategory)
+      : allBuiltInFonts;
     const styleId = "font-preview-styles";
 
     // Remove existing style if any
@@ -81,7 +86,7 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
     const container = scrollContainerRef.current;
     if (container) {
       // Add scrollbar hiding styles
-      const style = document.createElement('style');
+      const style = document.createElement("style");
       style.textContent = `
         .font-filter-scroll::-webkit-scrollbar {
           display: none;
@@ -95,24 +100,24 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
         container.scrollLeft += e.deltaY;
       };
 
-      container.addEventListener('wheel', handleWheel, { passive: false });
+      container.addEventListener("wheel", handleWheel, { passive: false });
 
       return () => {
         document.head.removeChild(style);
-        container.removeEventListener('wheel', handleWheel);
+        container.removeEventListener("wheel", handleWheel);
       };
     }
   }, []);
 
   const builtInFonts = selectedCategory
-    ? allBuiltInFonts.filter(font => font.category === selectedCategory)
+    ? allBuiltInFonts.filter((font) => font.category === selectedCategory)
     : allBuiltInFonts;
 
   return (
     <div className="space-y-4 pt-2">
       <div className="form-control">
         <input
-          id="domain-input"
+          id={domainInputId}
           type="text"
           value={domain}
           onChange={(e) => onDomainChange(e.target.value)}
@@ -126,8 +131,8 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
           ref={scrollContainerRef}
           className="flex gap-2 overflow-x-auto font-filter-scroll"
           style={{
-            scrollbarWidth: 'none', // Firefox
-            msOverflowStyle: 'none', // IE/Edge
+            scrollbarWidth: "none", // Firefox
+            msOverflowStyle: "none", // IE/Edge
           }}
         >
           <button
@@ -139,35 +144,51 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setSelectedCategory(selectedCategory === "sans" ? null : "sans")}
+            onClick={() =>
+              setSelectedCategory(selectedCategory === "sans" ? null : "sans")
+            }
             className={`btn btn-sm ${selectedCategory === "sans" ? "btn-primary" : "btn-outline"}`}
           >
             Sans
           </button>
           <button
             type="button"
-            onClick={() => setSelectedCategory(selectedCategory === "serif" ? null : "serif")}
+            onClick={() =>
+              setSelectedCategory(selectedCategory === "serif" ? null : "serif")
+            }
             className={`btn btn-sm ${selectedCategory === "serif" ? "btn-primary" : "btn-outline"}`}
           >
             Serif
           </button>
           <button
             type="button"
-            onClick={() => setSelectedCategory(selectedCategory === "techno" ? null : "techno")}
+            onClick={() =>
+              setSelectedCategory(
+                selectedCategory === "techno" ? null : "techno",
+              )
+            }
             className={`btn btn-sm ${selectedCategory === "techno" ? "btn-primary" : "btn-outline"}`}
           >
             Techno
           </button>
           <button
             type="button"
-            onClick={() => setSelectedCategory(selectedCategory === "playful" ? null : "playful")}
+            onClick={() =>
+              setSelectedCategory(
+                selectedCategory === "playful" ? null : "playful",
+              )
+            }
             className={`btn btn-sm ${selectedCategory === "playful" ? "btn-primary" : "btn-outline"}`}
           >
             Playful
           </button>
           <button
             type="button"
-            onClick={() => setSelectedCategory(selectedCategory === "custom" ? null : "custom")}
+            onClick={() =>
+              setSelectedCategory(
+                selectedCategory === "custom" ? null : "custom",
+              )
+            }
             className={`btn btn-sm ${selectedCategory === "custom" ? "btn-primary" : "btn-outline"}`}
           >
             Custom
@@ -175,59 +196,63 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
         </div>
       </div>
 
-        {selectedCategory === "custom" ? (
-          <div className="space-y-4 pt-2">
-            <fieldset className="fieldset">
-              <legend className="fieldset-legend">Type font name to apply</legend>
-              <input
-                type="text"
-                value={customFontName}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setCustomFontName(value);
-                  if (value.trim()) {
-                    onFontChange(value.trim());
-                  }
-                }}
-                placeholder="e.g., Arial, Times New Roman"
-                className="input w-full focus:outline-none"
-              />
-            </fieldset>
-            <div className="text-center p-4 border rounded-lg">
-              <div
-                className="text-2xl font-medium"
-                style={{ fontFamily: `'${customFontName || selectedFont}', sans-serif` }}
-              >
-                The quick brown fox jumps over the lazy dog 0123456789 !@#$%^&*()
-              </div>
+      {selectedCategory === "custom" ? (
+        <div className="space-y-4 pt-2">
+          <fieldset className="fieldset">
+            <legend className="fieldset-legend">Type font name to apply</legend>
+            <input
+              type="text"
+              value={customFontName}
+              onChange={(e) => {
+                const value = e.target.value;
+                setCustomFontName(value);
+                if (value.trim()) {
+                  onFontChange(value.trim());
+                }
+              }}
+              placeholder="e.g., Arial, Times New Roman"
+              className="input w-full focus:outline-none"
+            />
+          </fieldset>
+          <div className="text-center p-4 border rounded-lg">
+            <div
+              className="text-2xl font-medium"
+              style={{
+                fontFamily: `'${customFontName || selectedFont}', sans-serif`,
+              }}
+            >
+              The quick brown fox jumps over the lazy dog 0123456789 !@#$%^&*()
             </div>
           </div>
-       ) : (
-         <div className="form-control">
-           <div className="grid grid-cols-4 gap-3">
-             {builtInFonts.map((font: BuiltInFont) => (
-               <button
-                 key={font.name}
-                 type="button"
-                 onClick={() => onFontChange(font.name)}
-                 className={`card bg-base-100 border-0 transition-colors ${
-                   selectedFont === font.name ? "bg-secondary" : "hover:bg-base-200"
-                 }`}
-               >
-                 <div className="card-body pt-3 pb-2 px-2 text-center">
-                   <div
-                     className={`text-2xl font-medium ${selectedFont === font.name ? "text-secondary-content" : ""}`}
-                     style={{ fontFamily: `'${font.name}', ${font.category}` }}
-                     title={font.name}
-                   >
-                     Abc
-                   </div>
-                 </div>
-               </button>
-             ))}
-           </div>
-         </div>
-       )}
+        </div>
+      ) : (
+        <div className="form-control">
+          <div className="grid grid-cols-4 gap-3">
+            {builtInFonts.map((font: BuiltInFont) => (
+              <button
+                key={font.name}
+                type="button"
+                onClick={() => onFontChange(font.name)}
+                className={`card bg-base-100 border-0 transition-colors ${
+                  selectedFont === font.name
+                    ? "bg-secondary"
+                    : "hover:bg-base-200"
+                }`}
+              >
+                <div className="card-body pt-3 pb-2 px-2 text-center">
+                  <div
+                    className={`text-2xl font-medium ${selectedFont === font.name ? "text-secondary-content" : ""}`}
+                    style={{ fontFamily: `'${font.name}', ${font.category}` }}
+                    title={font.name}
+                  >
+                    Abc
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

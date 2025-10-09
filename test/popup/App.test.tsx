@@ -1,34 +1,7 @@
-import React from "react";
+import { browser } from "wxt/browser";
 import { render, screen, waitFor } from "@testing-library/react";
-import App from "./App";
-
-// Mock the wxt/browser import before defining local variables to handle hoisting
-// Use a more generic approach that doesn't require the local variables to be defined first
-vi.mock("wxt/browser", () => {
-  // Return a mock object that will be updated later in the test setup
-  const mockTabsQuery = vi.fn();
-  const mockTabsCreate = vi.fn();
-  const mockSendMessage = vi.fn();
-
-  return {
-    // Export the mock functions so tests can access them
-    mockTabsQuery,
-    mockTabsCreate,
-    mockSendMessage,
-    browser: {
-      tabs: {
-        query: mockTabsQuery,
-        create: mockTabsCreate,
-      },
-      runtime: {
-        sendMessage: mockSendMessage,
-      },
-    },
-  };
-});
-
-// Import the mock functions - need to get the actual mocks from the module
-import { mockTabsQuery, mockTabsCreate, mockSendMessage } from "wxt/browser";
+import App from "../../entrypoints/popup/App";
+import type React from "react";
 
 // Mock window.close
 Object.defineProperty(window, "close", {
@@ -60,35 +33,13 @@ vi.mock("../../hooks/useI18n", () => ({
   }),
 }));
 
-vi.mock("../../hooks/useMessage", () => {
-  // Include both the function and the constants in the mock
-  return {
-    useMessage: () => ({
-      sendMessage: mockSendMessage, // Use the same mock defined in the browser mock
-    }),
-    PopupMessageType: {
-      QUERY_STYLES_FOR_URL: "QUERY_STYLES_FOR_URL",
-      GET_STYLES: "GET_STYLES",
-      TOGGLE_STYLE: "TOGGLE_STYLE",
-      UPDATE_VARIABLES: "UPDATE_VARIABLES",
-      THEME_CHANGED: "THEME_CHANGED",
-      OPEN_MANAGER: "OPEN_MANAGER",
-      ADD_STYLE: "ADD_STYLE",
-      OPEN_SETTINGS: "OPEN_SETTINGS",
-    },
-    SaveMessageType: {
-      UPDATE_FONT_STYLE: "UPDATE_FONT_STYLE",
-      CREATE_FONT_STYLE: "CREATE_FONT_STYLE",
-      INJECT_FONT: "INJECT_FONT",
-      PARSE_USERCSS: "PARSE_USERCSS",
-      INSTALL_STYLE: "INSTALL_STYLE",
-    },
-  };
-});
-
-vi.mock("../../components/ui/ErrorBoundary", () => ({
-  withErrorBoundary: (component: React.ComponentType) => component,
-}));
+interface NewFontStyleProps {
+  domain: string;
+  selectedFont: string;
+  onDomainChange: (value: string) => void;
+  onFontChange: (value: string) => void;
+  onClose: () => void;
+}
 
 vi.mock("../../components/features/NewFontStyle", () => ({
   default: ({
@@ -97,7 +48,7 @@ vi.mock("../../components/features/NewFontStyle", () => ({
     onDomainChange,
     onFontChange,
     onClose,
-  }: any) => (
+  }: NewFontStyleProps) => (
     <div data-testid="new-font-style">
       <input
         data-testid="domain-input"
@@ -109,20 +60,31 @@ vi.mock("../../components/features/NewFontStyle", () => ({
         value={selectedFont}
         onChange={(e) => onFontChange(e.target.value)}
       />
-      <button data-testid="close-font" onClick={onClose}>
+      <button type="button" data-testid="close-font" onClick={onClose}>
         Close Font Selector
       </button>
     </div>
   ),
 }));
 
+interface VariableControlsProps {
+  variables: Array<{ name: string; value: string }>;
+  onChange: (name: string, value: string) => void;
+}
+
+interface VariableItem {
+  name: string;
+  value: string;
+}
+
 vi.mock("../../components/features/VariableControls", () => ({
-  VariableControls: ({ variables, onChange }: any) => (
+  VariableControls: ({ variables, onChange }: VariableControlsProps) => (
     <div data-testid="variable-controls">
-      {variables.map((v: any) => (
+      {variables.map((v: VariableItem) => (
         <div key={v.name}>
-          <label>{v.name}</label>
+          <label htmlFor={`variable-input-${v.name}`}>{v.name}</label>
           <input
+            id={`variable-input-${v.name}`}
             data-testid={`variable-input-${v.name}`}
             value={v.value}
             onChange={(e) => onChange(v.name, e.target.value)}
@@ -133,9 +95,48 @@ vi.mock("../../components/features/VariableControls", () => ({
   ),
 }));
 
+vi.mock("../../hooks/useMessage", () => ({
+  useMessage: () => ({
+    sendMessage: vi.fn(),
+  }),
+  PopupMessageType: {
+    QUERY_STYLES_FOR_URL: "QUERY_STYLES_FOR_URL",
+    GET_STYLES: "GET_STYLES",
+    TOGGLE_STYLE: "TOGGLE_STYLE",
+    UPDATE_VARIABLES: "UPDATE_VARIABLES",
+    THEME_CHANGED: "THEME_CHANGED",
+    OPEN_MANAGER: "OPEN_MANAGER",
+    ADD_STYLE: "ADD_STYLE",
+    OPEN_SETTINGS: "OPEN_SETTINGS",
+  },
+  SaveMessageType: {
+    UPDATE_FONT_STYLE: "UPDATE_FONT_STYLE",
+    CREATE_FONT_STYLE: "CREATE_FONT_STYLE",
+    INJECT_FONT: "INJECT_FONT",
+    PARSE_USERCSS: "PARSE_USERCSS",
+    INSTALL_STYLE: "INSTALL_STYLE",
+  },
+}));
+
+vi.mock("../../components/ui/ErrorBoundary", () => ({
+  withErrorBoundary: (component: React.ComponentType) => component,
+}));
+
 describe("Popup App", () => {
+  let mockTabsQuery: ReturnType<typeof vi.fn>;
+  let mockSendMessage: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Setup mock functions
+    mockTabsQuery = vi.fn();
+    mockSendMessage = vi.fn();
+
+    // Mock browser APIs
+    vi.mocked(browser.tabs.query).mockImplementation(mockTabsQuery);
+    vi.mocked(browser.runtime.sendMessage).mockImplementation(mockSendMessage);
+
     // Set up default mock responses to ensure they return quickly
     mockTabsQuery.mockResolvedValue(
       Promise.resolve([
@@ -163,7 +164,6 @@ describe("Popup App", () => {
     render(<App />);
 
     // Should show loading indicator initially
-    // Using a basic assertion instead of toBeInTheDocument to avoid matcher issues
     expect(screen.getByText("Loading...")).toBeTruthy();
 
     // Wait for the loading to complete (with explicit timeout to prevent hanging)
@@ -201,7 +201,6 @@ describe("Popup App", () => {
     );
 
     // Should display the current tab information in the header as "Styles for example.com"
-    // The translation "stylesFor" is "Styles for", so we expect to see "Styles for example.com"
     expect(screen.getByText(/example\.com/)).toBeTruthy();
   });
 });

@@ -4,10 +4,11 @@
  */
 
 import { browser } from "@wxt-dev/browser";
-import { ReceivedMessages, ErrorDetails } from "./types";
+import type { ReceivedMessages, ErrorDetails } from "./types";
 import { storageClient } from "../storage/client";
-import { UserCSSStyle } from "../storage/schema";
-import { DomainRule, VariableDescriptor } from "../usercss/types";
+import type { UserCSSStyle } from "../storage/schema";
+import type { DomainRule, VariableDescriptor } from "../usercss/types";
+import type { BuiltInFont } from "../usercss/font-registry";
 import { fontRegistry } from "../usercss/font-registry";
 
 /**
@@ -310,22 +311,24 @@ const handleOpenManager: MessageHandler = async (message) => {
       // Check if manager tab already exists
       const managerTab = await findManagerTab();
 
-      if (managerTab) {
+      if (managerTab?.id) {
         // Track this tab to prevent duplicates
-        await trackManagerTab(managerTab.id!);
+        await trackManagerTab(managerTab.id);
 
         // Focus existing tab
         await browser.tabs.update(managerTab.id, { active: true });
 
         // Navigate to the correct tab if needed
-        const targetHash = tab === "styles" ? "styles" : "settings";
-        const currentUrl = new URL(managerTab.url!);
-        const currentHash = currentUrl.hash.slice(1);
+        if (managerTab.url) {
+          const targetHash = tab === "styles" ? "styles" : "settings";
+          const currentUrl = new URL(managerTab.url);
+          const currentHash = currentUrl.hash.slice(1);
 
-        if (currentHash !== targetHash) {
-          await browser.tabs.update(managerTab.id, {
-            url: `/manager.html#${targetHash}`,
-          });
+          if (currentHash !== targetHash) {
+            await browser.tabs.update(managerTab.id, {
+              url: `/manager.html#${targetHash}`,
+            });
+          }
         }
 
         console.log("[handleOpenManager] Focused existing manager tab");
@@ -347,7 +350,9 @@ const handleOpenManager: MessageHandler = async (message) => {
         const newTab = await browser.tabs.create({ url: fullUrl });
 
         // Track the newly created tab
-        await trackManagerTab(newTab.id!);
+        if (newTab.id !== undefined) {
+          await trackManagerTab(newTab.id);
+        }
 
         console.log(
           "[handleOpenManager] Successfully created manager tab:",
@@ -400,9 +405,9 @@ const handleOpenSettings: MessageHandler = async (_message) => {
       // Check if manager tab already exists
       const managerTab = await findManagerTab();
 
-      if (managerTab) {
+      if (managerTab?.id) {
         // Track this tab to prevent duplicates
-        await trackManagerTab(managerTab.id!);
+        await trackManagerTab(managerTab.id);
 
         // Focus existing tab and navigate to settings
         await browser.tabs.update(managerTab.id, { active: true });
@@ -430,7 +435,9 @@ const handleOpenSettings: MessageHandler = async (_message) => {
         const newTab = await browser.tabs.create({ url });
 
         // Track the newly created tab
-        await trackManagerTab(newTab.id!);
+        if (newTab.id !== undefined) {
+          await trackManagerTab(newTab.id);
+        }
 
         console.log(
           "[handleOpenSettings] Successfully created settings tab:",
@@ -652,7 +659,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
 
       try {
         // Remove protocol prefix
-        let domainPart = pattern.replace(/^https?:\/\//, "");
+        let domainPart: string = pattern.replace(/^https?:\/\//, "");
 
         // Handle escaped characters in the pattern
         domainPart = domainPart.replace(/\\./g, ".");
@@ -669,8 +676,10 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         // Look for domain patterns (word.word or word.word.word)
         const domainRegex =
           /\b([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)?)\b/g;
-        let match;
-        while ((match = domainRegex.exec(parts)) !== null) {
+        let match: RegExpExecArray | null;
+        while (true) {
+          match = domainRegex.exec(parts);
+          if (match === null) break;
           const potentialDomain = match[1];
           // Basic validation - should have at least one dot and be reasonable length
           if (
@@ -717,13 +726,13 @@ const handleParseUserCSS: MessageHandler = async (message) => {
 
       const warnings: string[] = [];
       const errors: string[] = [];
-      let css = raw;
-      let metadataBlock = "";
+      let css: string = raw;
+      let metadataBlock: string = "";
       const domains: string[] = [];
 
       // Basic metadata extraction
       const metadataMatch = raw.match(METADATA_BLOCK_REGEX);
-      let metadataContent = "";
+      let metadataContent: string = "";
       if (metadataMatch) {
         metadataBlock = metadataMatch[0];
         metadataContent = metadataMatch[1];
@@ -785,7 +794,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         domains.push(
           ...domainMatches[1]
             .split(",")
-            .map((d) => d.trim())
+            .map((d: string) => d.trim())
             .filter(Boolean),
         );
       }
@@ -793,7 +802,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       // Extract from match patterns
       const matchMatches = metadataContent.match(/@match\s+([^\r\n]+)/g);
       if (matchMatches) {
-        matchMatches.forEach((match) => {
+        matchMatches.forEach((match: string) => {
           const pattern = match.replace("@match", "").trim();
           // Very basic domain extraction from pattern
           if (pattern.includes("*://*.")) {
@@ -817,7 +826,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
           /domain\(["']?([^"')]+)["']?\)/g,
         );
         if (domainMatchesCss) {
-          domainMatchesCss.forEach((match) => {
+          domainMatchesCss.forEach((match: string) => {
             const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
             if (domainMatch) {
               domains.push(domainMatch[1]);
@@ -834,7 +843,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
             "[parseUserCSSMinimal] Found regexpMatches:",
             regexpMatches,
           );
-          regexpMatches.forEach((match) => {
+          regexpMatches.forEach((match: string) => {
             const regexpMatch = match.match(/regexp\(["']?([^"']+)["']?\)/);
             if (regexpMatch) {
               const pattern = regexpMatch[1];
@@ -848,7 +857,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
                 "[parseUserCSSMinimal] Extracted domains:",
                 extractedDomains,
               );
-              extractedDomains.forEach((domain) => {
+              extractedDomains.forEach((domain: string) => {
                 if (!domains.includes(domain)) {
                   domains.push(domain);
                 }
@@ -862,7 +871,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
           /url-prefix\\(["']?([^"')]+)["']?\\)/g,
         );
         if (urlPrefixMatches) {
-          urlPrefixMatches.forEach((match) => {
+          urlPrefixMatches.forEach((match: string) => {
             const urlMatch = match.match(/url-prefix\\(["']?([^"')]+)["']?\\)/);
             if (urlMatch) {
               domains.push(extractHostname(urlMatch[1]));
@@ -881,9 +890,11 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         let defaultValue = "";
         let hasDefault = false;
 
-        let match;
-        while ((match = eotRegex.exec(value)) !== null) {
-          const [, , displayLabel, cssContent] = match;
+        let match: RegExpExecArray | null;
+        while (true) {
+          match = eotRegex.exec(value);
+          if (match === null) break;
+          const [, , displayLabel, cssContent] = match as RegExpExecArray;
 
           // Check if this is the default option (marked with * in display label like "Sky*")
           const isDefault = displayLabel.includes("*");
@@ -919,14 +930,16 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       // Using \s to match both spaces and tabs
       const directiveRegex =
         /@[\w/.:-]+\s+(range|color|text|select|number|dropdown|checkbox)\s+([\w-]+)\s+"([^"]+)"\s*([^\r\n]+)/g;
-      let directiveMatch;
+      let directiveMatch: RegExpExecArray | null;
 
-      while ((directiveMatch = directiveRegex.exec(metadataContent)) !== null) {
+      while (true) {
+        directiveMatch = directiveRegex.exec(metadataContent);
+        if (directiveMatch === null) break;
         const fullMatch = directiveMatch[0];
         const type = directiveMatch[1]; // "range", "color", "text", "select", "number", "dropdown"
         const name = directiveMatch[2]; // variable name
         const label = directiveMatch[3]; // variable label
-        let defaultValue = directiveMatch[4] || ""; // default value or options
+        let defaultValue: string = directiveMatch[4] || ""; // default value or options
 
         // Clean up the default value (remove leading/trailing spaces)
         defaultValue = defaultValue.trim();
@@ -1078,7 +1091,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
     );
 
     // Only preprocess if we're not in a background context where DOM is not available
-    let compiledCss = parseResult.css;
+    let compiledCss: string = parseResult.css;
     let preprocessorErrors: string[] = [];
 
     console.log("[handleParseUserCSS] About to check DOM preprocessing...");
@@ -1210,7 +1223,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
         /domain\(["']?([^"')]+)["']?\)/g,
       );
       if (domainMatches) {
-        domainMatches.forEach((match) => {
+        domainMatches.forEach((match: string) => {
           const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
           if (domainMatch && !allDomains.includes(domainMatch[1])) {
             allDomains.push(domainMatch[1]);
@@ -1227,7 +1240,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
         /url-prefix\(["']?([^"')]+)["']?\)/g,
       );
       if (urlPrefixMatches) {
-        urlPrefixMatches.forEach((match) => {
+        urlPrefixMatches.forEach((match: string) => {
           const urlMatch = match.match(/url-prefix\(["']?([^"')]+)["']?\)/);
           if (urlMatch) {
             try {
@@ -1241,7 +1254,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
                 );
               }
             } catch {
-              // Ignore invalid URLs
+              // Invalid URL, skip
             }
           }
         });
@@ -1271,9 +1284,11 @@ const handleInstallStyle: MessageHandler = async (message) => {
 
       // Find all @-moz-document blocks
       const mozDocumentRegex = /@-moz-document\s+([^{\n\r]+?)\s*\{/g;
-      let match;
+      let match: RegExpExecArray | null;
 
-      while ((match = mozDocumentRegex.exec(css)) !== null) {
+      while (true) {
+        match = mozDocumentRegex.exec(css);
+        if (match === null) break;
         const conditionList = match[1];
 
         // Extract domain patterns
@@ -1281,7 +1296,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
           /domain\(["']?([^"')]+)["']?\)/g,
         );
         if (domainMatches) {
-          domainMatches.forEach((match) => {
+          domainMatches.forEach((match: string) => {
             const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
             if (domainMatch) {
               rules.push({
@@ -1298,7 +1313,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
           /url-prefix\(["']?([^"')]+)["']?\)/g,
         );
         if (urlPrefixMatches) {
-          urlPrefixMatches.forEach((match) => {
+          urlPrefixMatches.forEach((match: string) => {
             const urlMatch = match.match(/url-prefix\(["']?([^"')]+)["']?\)/);
             if (urlMatch) {
               // Extract domain from URL prefix (simple approach)
@@ -1308,7 +1323,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
                 if (domain) {
                   rules.push({
                     kind: "url-prefix",
-                    pattern: normalizePattern(url),
+                    pattern: `https://${domain}/`,
                     include: true,
                   });
                 }
@@ -1322,7 +1337,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
           /regexp\(["']?([^"')]+)["']?\)/g,
         );
         if (regexpMatches) {
-          regexpMatches.forEach((match) => {
+          regexpMatches.forEach((match: string) => {
             const regexpMatch = match.match(/regexp\(["']?([^"')]+)["']?\)/);
             if (regexpMatch) {
               rules.push({
@@ -1385,6 +1400,8 @@ const handleInstallStyle: MessageHandler = async (message) => {
           case "checkbox":
             mappedType = "checkbox";
             break;
+          default:
+            mappedType = "unknown";
         }
 
         variablesRecord[variable.name] = {
@@ -1572,12 +1589,12 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
     // Determine font type and validate availability
     const builtInFonts = fontRegistry.getBuiltInFonts();
     const fontExists = builtInFonts.some((font) => font.name === fontName);
-    const fontType: 'builtin' | 'custom' = fontExists ? 'builtin' : 'custom';
+    const fontType: "builtin" | "custom" = fontExists ? "builtin" : "custom";
 
-    let font: any = null;
+    let font: BuiltInFont | undefined;
     let absoluteFontPath: string | null = null;
 
-    if (fontType === 'builtin') {
+    if (fontType === "builtin") {
       // Get font data for built-in fonts
       font = builtInFonts.find((f) => f.name === fontName);
       if (!font) {
@@ -1594,14 +1611,17 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
       // The content script will handle fallback if the font is not available
     }
 
-    const fontFaceRule = fontType === 'builtin' ? `
+    const fontFaceRule =
+      fontType === "builtin"
+        ? `
   @font-face {
     font-family: '${fontName}';
     src: url('${absoluteFontPath}') format('woff2');
-    font-weight: ${font.weight};
-    font-style: ${font.style};
+    font-weight: ${(font as BuiltInFont).weight};
+    font-style: ${(font as BuiltInFont).style};
     font-display: swap;
-  }` : '';
+  }`
+        : "";
 
     const fontFamilyRule = `
    * {
@@ -1646,12 +1666,19 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
       compiledCss: `${fontFaceRule}\n${fontFamilyRule}`.trim(),
       variables: {},
       originalDefaults: {},
-      assets: fontType === 'builtin' ? [{
-        name: font.file,
-        url: absoluteFontPath!,
-        type: 'font' as const,
-        mimeType: 'font/woff2'
-      }] : [],
+      assets:
+        fontType === "builtin"
+          ? absoluteFontPath
+            ? [
+                {
+                  name: (font as BuiltInFont).file,
+                  url: absoluteFontPath,
+                  type: "font" as const,
+                  mimeType: "font/woff2",
+                },
+              ]
+            : []
+          : [],
       installedAt: Date.now(),
       enabled: true,
       source: userCSS,
@@ -1811,12 +1838,12 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
     // Determine font type and validate availability
     const builtInFonts = fontRegistry.getBuiltInFonts();
     const fontExists = builtInFonts.some((font) => font.name === fontName);
-    const fontType: 'builtin' | 'custom' = fontExists ? 'builtin' : 'custom';
+    const fontType: "builtin" | "custom" = fontExists ? "builtin" : "custom";
 
-    let font: any = null;
+    let font: BuiltInFont | undefined;
     let absoluteFontPath: string | null = null;
 
-    if (fontType === 'builtin') {
+    if (fontType === "builtin") {
       // Get font data for built-in fonts
       font = builtInFonts.find((f) => f.name === fontName);
       if (!font) {
@@ -1889,22 +1916,29 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
     }
 
     // Verify this is actually a font style before updating
-    if (!existingStyle.name.startsWith('[FONT] ')) {
-      throw new Error(`Style "${styleId}" is not a font style (name: "${existingStyle.name}")`);
+    if (!existingStyle.name.startsWith("[FONT] ")) {
+      throw new Error(
+        `Style "${styleId}" is not a font style (name: "${existingStyle.name}")`,
+      );
     }
 
     // Log total styles count before update to ensure no duplicates are created
     const allStylesBefore = await storageClient.getUserCSSStyles();
-    console.log(`[handleUpdateFontStyle] Total styles before update: ${allStylesBefore.length}`);
+    console.log(
+      `[handleUpdateFontStyle] Total styles before update: ${allStylesBefore.length}`,
+    );
 
-    const fontFaceRule = fontType === 'builtin' ? `
+    const fontFaceRule =
+      fontType === "builtin"
+        ? `
   @font-face {
     font-family: '${fontName}';
     src: url('${absoluteFontPath}') format('woff2');
-    font-weight: ${font.weight};
-    font-style: ${font.style};
+    font-weight: ${(font as BuiltInFont).weight};
+    font-style: ${(font as BuiltInFont).style};
     font-display: swap;
-  }` : '';
+  }`
+        : "";
 
     const fontFamilyRule = `
    * {
@@ -1946,30 +1980,50 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
         ? `domain("${normalizePattern(domain)}")`
         : undefined,
       compiledCss: `${fontFaceRule}\n${fontFamilyRule}`.trim(),
-      assets: fontType === 'builtin' ? [{
-        name: font.file,
-        url: absoluteFontPath!,
-        type: 'font' as const,
-        mimeType: 'font/woff2'
-      }] : [],
+      assets:
+        fontType === "builtin"
+          ? absoluteFontPath
+            ? [
+                {
+                  name: (font as BuiltInFont).file,
+                  url: absoluteFontPath,
+                  type: "font" as const,
+                  mimeType: "font/woff2",
+                },
+              ]
+            : []
+          : [],
       source: userCSS,
       updatedAt: Date.now(),
     };
 
-    const updatedStyle = await storageClient.updateUserCSSStyle(styleId, updates);
+    const updatedStyle = await storageClient.updateUserCSSStyle(
+      styleId,
+      updates,
+    );
 
     // Verify no new styles were created
     const allStylesAfter = await storageClient.getUserCSSStyles();
-    console.log(`[handleUpdateFontStyle] Total styles after update: ${allStylesAfter.length}`);
+    console.log(
+      `[handleUpdateFontStyle] Total styles after update: ${allStylesAfter.length}`,
+    );
 
     if (allStylesAfter.length !== allStylesBefore.length) {
-      console.error(`[handleUpdateFontStyle] ERROR: Style count changed from ${allStylesBefore.length} to ${allStylesAfter.length} - possible duplicate created!`);
-      throw new Error(`Style update created duplicate: count changed from ${allStylesBefore.length} to ${allStylesAfter.length}`);
+      console.error(
+        `[handleUpdateFontStyle] ERROR: Style count changed from ${allStylesBefore.length} to ${allStylesAfter.length} - possible duplicate created!`,
+      );
+      throw new Error(
+        `Style update created duplicate: count changed from ${allStylesBefore.length} to ${allStylesAfter.length}`,
+      );
     }
 
     if (updatedStyle.id !== styleId) {
-      console.error(`[handleUpdateFontStyle] ERROR: Updated style ID changed from ${styleId} to ${updatedStyle.id}`);
-      throw new Error(`Style update changed ID from ${styleId} to ${updatedStyle.id}`);
+      console.error(
+        `[handleUpdateFontStyle] ERROR: Updated style ID changed from ${styleId} to ${updatedStyle.id}`,
+      );
+      throw new Error(
+        `Style update changed ID from ${styleId} to ${updatedStyle.id}`,
+      );
     }
 
     console.log(
@@ -2407,11 +2461,13 @@ export class MessageHandlerService {
    * Register multiple message handlers.
    */
   registerHandlers(handlers: Partial<HandlerRegistry>): void {
-    Object.entries(handlers).forEach(([messageType, handler]) => {
-      if (handler) {
-        this.handlers[messageType as ReceivedMessages["type"]] = handler;
-      }
-    });
+    Object.entries(handlers).forEach(
+      ([messageType, handler]: [string, MessageHandler | undefined]) => {
+        if (handler) {
+          this.handlers[messageType as ReceivedMessages["type"]] = handler;
+        }
+      },
+    );
   }
 
   /**
@@ -2568,7 +2624,7 @@ async function findManagerTab(): Promise<Browser.tabs.Tab | null> {
  * Initialize tab close listener to clear tracking when manager tab is closed
  */
 function initializeTabCloseListener(): void {
-  if (typeof browser !== "undefined" && browser.tabs) {
+  if (browser?.tabs) {
     browser.tabs.onRemoved.addListener((tabId) => {
       if (tabId === activeManagerTabId) {
         console.log("[TabTracker] Manager tab closed, clearing tracking");

@@ -4,10 +4,10 @@
  * Tests for the Manager Page UI component that displays and manages UserCSS styles.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ManagerPage from "../../components/features/manager/ManagerPage";
-import { UserCSSStyle } from "../../services/storage/schema";
+import type { UserCSSStyle } from "../../services/storage/schema";
 import { storageClient } from "../../services/storage/client";
 
 // Mock storage client
@@ -324,10 +324,10 @@ describe("ManagerPage", () => {
 
     // Looking for the actual loading spinner class from the component
     expect(
-      screen.getByText((content, element) => {
+      screen.getByText((_content: string, element: Element | null) => {
         return (
           element?.tagName === "DIV" &&
-          element?.className?.includes("loading-spinner")
+          (element as HTMLElement)?.className?.includes("loading-spinner")
         );
       }),
     ).toBeTruthy();

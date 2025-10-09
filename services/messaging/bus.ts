@@ -6,7 +6,7 @@
 
 import { browser } from "@wxt-dev/browser";
 import { storage } from "@wxt-dev/storage";
-import { ReceivedMessages, SentMessages, ErrorDetails } from "./types";
+import type { ReceivedMessages, SentMessages, ErrorDetails } from "./types";
 import {
   isValidReceivedMessage,
   createInvalidMessageError,
@@ -95,7 +95,7 @@ export class MessageBus {
       return true;
     };
 
-    if (typeof browser !== "undefined" && browser.runtime) {
+    if (browser?.runtime) {
       console.log("[MessageBus] Setting up message listener");
       browser.runtime.onMessage.addListener(listener);
     } else {
@@ -342,7 +342,7 @@ export class MessageBus {
     };
 
     // Try to send to active tab first, otherwise send globally
-    if (browser.tabs && browser.tabs.query) {
+    if (browser.tabs?.query) {
       browser.tabs
         .query({ active: true, currentWindow: true })
         .then((tabs) => {
@@ -419,7 +419,7 @@ export class MessageBus {
   private async checkOnlineStatus(): Promise<void> {
     try {
       // Try to access browser APIs to check if context is alive
-      if (browser.runtime && browser.runtime.id) {
+      if (browser.runtime?.id) {
         const wasOffline = !this.isOnline;
         this.isOnline = true;
 
