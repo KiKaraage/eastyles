@@ -1,6 +1,27 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-    themes:
-        silk --default,
-        sunset --prefersdark;
+  themes:
+    silk --default,
+    sunset --prefersdark;
+}
+
+/* Popover styling for Variable Configuration */
+.popover {
+  position: fixed;
+  z-index: 50;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.popover-content {
+  background: rgb(var(--b1));
+  border: 1px solid rgb(var(--b3));
+  border-radius: 0.5rem;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+  max-width: 28rem;
+  width: max-content;
 }
