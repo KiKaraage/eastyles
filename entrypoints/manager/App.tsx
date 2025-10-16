@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import Settings from "../../components/features/Settings";
+import { Computer, HalfMoon, SunLight } from "iconoir-react";
+import { useEffect, useState } from "react";
 import ManagerPage from "../../components/features/manager/ManagerPage";
+import Settings from "../../components/features/Settings";
 import { useTheme } from "../../hooks/useTheme";
-import { SunLight, HalfMoon, Computer } from "iconoir-react";
 import pkg from "../../package.json";
 
 const App = () => {

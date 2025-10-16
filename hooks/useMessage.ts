@@ -3,8 +3,8 @@
  * Provides reactive communication between popup, background, and manager pages
  */
 
-import { browser } from "@wxt-dev/browser";
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { browser } from "wxt/browser";
 import { errorService } from "../services/errors/service";
 import type {
   PopupMessageResponses,
@@ -99,8 +99,10 @@ export interface SaveMessagePayloads {
       default: string;
       min?: number;
       max?: number;
-      options?: Array<{value: string, label: string}>;
+      options?: Array<{ value: string; label: string }>;
+      optionCss?: Record<string, string>;
     }>;
+    source?: string;
   };
   [SaveMessageType.INJECT_FONT]: {
     fontName: string;
@@ -198,17 +200,24 @@ export function useMessage(): UseMessageReturn {
         setIsConnected((prev) => {
           // Only update if the connection status actually changed
           if (prev !== connected) {
-            console.log("[useMessage] Connection status changed:", connected, {
-              hasRuntime,
-              hasRuntimeId,
-              canSendMessages,
-            });
+            console.log(
+              "[ea-useMessage] Connection status changed:",
+              connected,
+              {
+                hasRuntime,
+                hasRuntimeId,
+                canSendMessages,
+              },
+            );
             return connected;
           }
           return prev;
         });
       } catch (error) {
-        console.warn("[useMessage] Error checking connection status:", error);
+        console.warn(
+          "[ea-useMessage] Error checking connection status:",
+          error,
+        );
         setIsConnected(false);
       }
     };
@@ -231,18 +240,18 @@ export function useMessage(): UseMessageReturn {
     ): Promise<MessageResponses[T]> => {
       return new Promise((resolve, reject) => {
         // Always try to send the message, don't rely on cached connection status
-        console.log("[useMessage] Attempting to send message:", type);
+        console.log("[ea-useMessage] Attempting to send message:", type);
 
         setPendingMessages((count) => count + 1);
 
         const responseId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
         const message: PopupMessage = { type, payload, responseId };
 
-        console.log("[useMessage] Sending message:", message);
+        console.log("[ea-useMessage] Sending message:", message);
 
         // Set up timeout
         const timeoutId = setTimeout(() => {
-          console.warn("[useMessage] Message timeout for:", type);
+          console.warn("[ea-useMessage] Message timeout for:", type);
           setPendingMessages((count) => count - 1);
           reject(new Error("Message timeout"));
         }, 5000);
@@ -256,7 +265,7 @@ export function useMessage(): UseMessageReturn {
             resolve(response as MessageResponses[T]);
           })
           .catch((error: unknown) => {
-            console.error("[useMessage] Failed to send message:", error);
+            console.error("[ea-useMessage] Failed to send message:", error);
             clearTimeout(timeoutId);
             setPendingMessages((count) => count - 1);
             reject(error);
@@ -270,13 +279,13 @@ export function useMessage(): UseMessageReturn {
   const sendNotification = useCallback(
     <T extends MessageType>(type: T, payload: MessagePayloads[T]) => {
       if (!isConnected) {
-        console.warn("Not connected to background script");
+        console.warn("[ea] Not connected to background script");
         return;
       }
 
       const message: PopupMessage = { type, payload };
       browser?.runtime?.sendMessage(message).catch((error: unknown) => {
-        console.error("Failed to send notification:", error);
+        console.error("[ea] Failed to send notification:", error);
       });
     },
     [isConnected],
@@ -471,22 +480,22 @@ export function useSaveActions() {
   const parseUserCSS = useCallback(
     async (text: string, sourceUrl?: string) => {
       console.log(
-        "[useSaveActions] parseUserCSS called, text length:",
+        "[ea-useSaveActions] parseUserCSS called, text length:",
         text.length,
       );
       try {
-        console.log("[useSaveActions] About to send PARSE_USERCSS message");
+        console.log("[ea-useSaveActions] About to send PARSE_USERCSS message");
         const result = await sendMessage(SaveMessageType.PARSE_USERCSS, {
           text,
           sourceUrl,
         });
-        console.log("[useSaveActions] parseUserCSS result:", result);
-        console.log("[useSaveActions] result type:", typeof result);
-        console.log("[useSaveActions] result success:", result?.success);
+        console.log("[ea-useSaveActions] parseUserCSS result:", result);
+        console.log("[ea-useSaveActions] result type:", typeof result);
+        console.log("[ea-useSaveActions] result success:", result?.success);
         trackMessage("sent");
         return result;
       } catch (error: unknown) {
-        console.error("[useSaveActions] parseUserCSS error:", error);
+        console.error("[ea-useSaveActions] parseUserCSS error:", error);
         errorService.createMessageError(
           typeof error === "string" ? error : "Unknown error",
         );
@@ -516,15 +525,17 @@ export function useSaveActions() {
         default: string;
         min?: number;
         max?: number;
-      options?: Array<{value: string, label: string}>;
+        options?: Array<{ value: string; label: string }>;
       }>,
+      source?: string,
     ) => {
-      console.log("[useSaveActions] installStyle called, style:", meta.name);
+      console.log("[ea-useSaveActions] installStyle called, style:", meta.name);
       try {
         const result = await sendMessage(SaveMessageType.INSTALL_STYLE, {
           meta,
           compiledCss,
           variables,
+          source, // Include original source for preprocessor detection
         });
         trackMessage("sent");
         return result;

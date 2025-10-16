@@ -4,14 +4,44 @@
  * Includes offline message queuing for reliable message delivery.
  */
 
-import { browser } from "@wxt-dev/browser";
-import { storage } from "@wxt-dev/storage";
-import type { ReceivedMessages, SentMessages, ErrorDetails } from "./types";
-import {
-  isValidReceivedMessage,
-  createInvalidMessageError,
-} from "./validation";
+import { browser } from "wxt/browser";
+import { storage } from "wxt/utils/storage";
 import { messageHandlerService } from "./handlers";
+import type { ErrorDetails, ReceivedMessages, SentMessages } from "./types";
+import {
+  createInvalidMessageError,
+  isValidReceivedMessage,
+} from "./validation";
+
+const EXTENSION_PROTOCOLS = new Set([
+  "chrome-extension:",
+  "moz-extension:",
+  "safari-extension:",
+  "safari-web-extension:",
+]);
+
+const extensionLoggingEnabled = (() => {
+  const globalScope = globalThis as { location?: Location };
+  if (typeof window !== "undefined" && window.location?.protocol) {
+    return EXTENSION_PROTOCOLS.has(window.location.protocol);
+  }
+
+  if (globalScope.location?.protocol) {
+    return EXTENSION_PROTOCOLS.has(globalScope.location.protocol);
+  }
+
+  return typeof window === "undefined";
+})();
+
+const logMessage = (...args: unknown[]): void => {
+  if (!extensionLoggingEnabled) return;
+  console.log(`[ea]`, ...args);
+};
+
+const logError = (...args: unknown[]): void => {
+  if (!extensionLoggingEnabled) return;
+  console.error(...args);
+};
 
 // Note: Storage functionality removed to avoid initialization issues
 
@@ -70,7 +100,7 @@ export class MessageBus {
       sender: { tab?: { id?: number } },
       sendResponse: (response?: unknown) => void,
     ) => {
-      console.log(
+      logMessage(
         "[MessageBus] Raw message received:",
         message,
         "from sender:",
@@ -80,11 +110,11 @@ export class MessageBus {
       // Handle async processing
       this.handleIncomingMessage(message, sender.tab?.id)
         .then((result) => {
-          console.log("[MessageBus] Sending response:", result);
+          logMessage("[MessageBus] Sending response:", result);
           sendResponse(result);
         })
         .catch((error) => {
-          console.error("[MessageBus] Error in message listener:", error);
+          logError("[MessageBus] Error in message listener:", error);
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : "Unknown error",
@@ -96,10 +126,10 @@ export class MessageBus {
     };
 
     if (browser?.runtime) {
-      console.log("[MessageBus] Setting up message listener");
+      logMessage("[MessageBus] Setting up message listener");
       browser.runtime.onMessage.addListener(listener);
     } else {
-      console.error("[MessageBus] Browser runtime not available");
+      logError("[MessageBus] Browser runtime not available");
     }
   }
 
@@ -110,12 +140,12 @@ export class MessageBus {
     message: unknown,
     tabId?: number,
   ): Promise<unknown> {
-    console.log("[MessageBus] Received message:", message, "from tab:", tabId);
+    logMessage("[MessageBus] Received message:", message, "from tab:", tabId);
 
     // First check if this is a response to a pending message
     const messageObj = message as Record<string, unknown>;
     if (messageObj.replyTo && typeof messageObj.replyTo === "string") {
-      console.log("[MessageBus] Handling response for:", messageObj.replyTo);
+      logMessage("[MessageBus] Handling response for:", messageObj.replyTo);
       const pending = this.pendingMessages.get(messageObj.replyTo);
       if (pending) {
         // Clear the timeout
@@ -124,10 +154,10 @@ export class MessageBus {
 
         // Resolve or reject the promise based on the response
         if (messageObj.error) {
-          console.log("[MessageBus] Rejecting with error:", messageObj.error);
+          logMessage("[MessageBus] Rejecting with error:", messageObj.error);
           pending.reject(messageObj.error);
         } else {
-          console.log(
+          logMessage(
             "[MessageBus] Resolving with response:",
             messageObj.response,
           );
@@ -139,13 +169,13 @@ export class MessageBus {
 
     // Check if this is a valid received message
     if (!isValidReceivedMessage(message)) {
-      console.log("[MessageBus] Invalid message received:", message);
+      logMessage("[MessageBus] Invalid message received:", message);
       // Send error response
       this.sendError(message, createInvalidMessageError(message, "unknown"));
       return true;
     }
 
-    console.log(
+    logMessage(
       "[MessageBus] Processing valid message:",
       (message as ReceivedMessages).type,
     );
@@ -155,7 +185,7 @@ export class MessageBus {
         message as ReceivedMessages,
         tabId,
       );
-      console.log("[MessageBus] Returning synchronous response:", response);
+      logMessage("[MessageBus] Returning synchronous response:", response);
 
       // Include the messageId or responseId in the response if it was present in the original message
       const originalMessage = message as {
@@ -212,7 +242,7 @@ export class MessageBus {
       const result = await messageHandlerService.handleMessage(message, tabId);
       return result;
     } catch (error) {
-      console.error("[MessageBus] Message handler threw error:", error);
+      logError("[MessageBus] Message handler threw error:", error);
       throw error;
     }
   }
@@ -243,7 +273,7 @@ export class MessageBus {
           } else {
             // Increment retry count and try again
             pending.retries++;
-            console.log(
+            logMessage(
               `[MessageBus] Retrying message ${message.type}, attempt ${pending.retries}`,
             );
             this.resendMessage(message, tabId, pending, messageId);
@@ -345,9 +375,16 @@ export class MessageBus {
     if (browser.tabs?.query) {
       browser.tabs
         .query({ active: true, currentWindow: true })
-        .then((tabs) => {
-          if (tabs[0]?.id !== undefined) {
-            browser.tabs.sendMessage(tabs[0].id, errorResponse).catch(() => {
+        .then((tabs: unknown) => {
+          if (
+            Array.isArray(tabs) &&
+            tabs.length > 0 &&
+            typeof tabs[0] === "object" &&
+            tabs[0] !== null &&
+            "id" in tabs[0]
+          ) {
+            const tabId = tabs[0].id as number;
+            browser.tabs.sendMessage(tabId, errorResponse).catch(() => {
               // If tab messaging fails, send globally
               browser.runtime.sendMessage(errorResponse).catch(() => {
                 // Silent fallback - don't log console errors in production

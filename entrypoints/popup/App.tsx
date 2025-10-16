@@ -1,24 +1,24 @@
-import { useState, useEffect, useCallback } from "react";
-import { withErrorBoundary } from "../../components/ui/ErrorBoundary";
-import { browser } from "wxt/browser";
 import {
-  TextSize,
-  Settings,
   ArrowLeft,
   Check,
-  Palette,
-  ViewGrid,
   Edit,
+  Palette,
+  Settings,
+  TextSize,
+  ViewGrid,
 } from "iconoir-react";
-import { useTheme } from "../../hooks/useTheme";
-import { useI18n } from "../../hooks/useI18n";
+import { useCallback, useEffect, useState } from "react";
+import { browser } from "wxt/browser";
 import NewFontStyle from "../../components/features/NewFontStyle";
 import { VariableControls } from "../../components/features/VariableControls";
+import { withErrorBoundary } from "../../components/ui/ErrorBoundary";
+import { useI18n } from "../../hooks/useI18n";
 import {
-  useMessage,
   PopupMessageType,
   SaveMessageType,
+  useMessage,
 } from "../../hooks/useMessage";
+import { useTheme } from "../../hooks/useTheme";
 import type { UserCSSStyle } from "../../services/storage/schema";
 
 interface PopupState {
@@ -62,12 +62,14 @@ const App = () => {
           tabUrl !== "restricted-url"
         ) {
           // Query styles for specific URL through background script
-          console.log("[Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
+          console.log("[ea-Popup] Using QUERY_STYLES_FOR_URL for:", tabUrl);
           const response = await sendMessage(
             PopupMessageType.QUERY_STYLES_FOR_URL,
-            { url: tabUrl },
+            {
+              url: tabUrl,
+            },
           );
-          console.log("[Popup] QUERY_STYLES_FOR_URL response:", response);
+          console.log("[ea-Popup] QUERY_STYLES_FOR_URL response:", response);
           if (
             response &&
             typeof response === "object" &&
@@ -77,7 +79,7 @@ const App = () => {
             availableStyles = response.styles as UserCSSStyle[];
           } else {
             console.warn(
-              "[Popup] QUERY_STYLES_FOR_URL failed, falling back to GET_STYLES",
+              "[ea-Popup] QUERY_STYLES_FOR_URL failed, falling back to GET_STYLES",
             );
             // Fallback to all styles if domain query fails
             const fallbackResponse = await sendMessage(
@@ -95,17 +97,17 @@ const App = () => {
         } else {
           // Fallback: get all styles if URL not available
           console.log(
-            "[Popup] Using GET_STYLES fallback (no URL or current-site)",
+            "[ea-Popup] Using GET_STYLES fallback (no URL or current-site)",
           );
           const response = await sendMessage(PopupMessageType.GET_STYLES, {});
-          console.log("[Popup] GET_STYLES response:", response);
+          console.log("[ea-Popup] GET_STYLES response:", response);
           if (response && typeof response === "object" && response.styles) {
             availableStyles = response.styles as UserCSSStyle[];
           }
         }
 
         console.log(
-          "[Popup] Setting available styles:",
+          "[ea-Popup] Setting available styles:",
           availableStyles.length,
           "active:",
           availableStyles.filter((style) => style.enabled).length,
@@ -116,7 +118,7 @@ const App = () => {
           activeStyles: availableStyles.filter((style) => style.enabled),
         }));
       } catch (error) {
-        console.error("[Popup] Failed to get styles:", error);
+        console.error("[ea-Popup] Failed to get styles:", error);
       }
     },
     [state.currentTab?.url, sendMessage],
@@ -124,10 +126,10 @@ const App = () => {
 
   // Load styles and current tab info on popup open
   useEffect(() => {
-    console.log("[Popup] useEffect running, loading popup data...");
+    console.log("[ea-Popup] useEffect running, loading popup data...");
     const loadPopupData = async () => {
       try {
-        console.log("[Popup] Setting loading state...");
+        console.log("[ea-Popup] Setting loading state...");
         setState((prev) => ({ ...prev, isLoading: true }));
 
         // Get current active tab
@@ -136,7 +138,7 @@ const App = () => {
           currentWindow: true,
         });
         const currentTab = tabs[0];
-        console.log("[Popup] Current tab:", currentTab);
+        console.log("[ea-Popup] Current tab:", currentTab);
 
         let tabUrl = "current-site";
         let tabTitle = "Current Site";
@@ -179,9 +181,9 @@ const App = () => {
           await loadStyles(tabUrl);
         }
       } catch (error) {
-        console.error("[Popup] Failed to load popup data:", error);
+        console.error("[ea-Popup] Failed to load popup data:", error);
       } finally {
-        console.log("[Popup] Finished loading, setting loading to false");
+        console.log("[ea-Popup] Finished loading, setting loading to false");
         setState((prev) => ({ ...prev, isLoading: false }));
       }
     };
@@ -202,7 +204,7 @@ const App = () => {
       await browser.tabs.create({ url: "/manager.html#styles" });
       closePopup();
     } catch (error) {
-      console.error("Failed to open manager page:", error);
+      console.error("[ea-Popup] Failed to open manager page:", error);
     }
   };
 
@@ -353,7 +355,7 @@ const App = () => {
           : prev.activeStyles.filter((style) => style.id !== styleId),
       }));
     } catch (error) {
-      console.error("Failed to toggle style:", error);
+      console.error("[ea-Popup] Failed to toggle style:", error);
     }
   };
 
@@ -370,7 +372,14 @@ const App = () => {
     value: string,
   ) => {
     try {
-      console.log("Variable changed in UI:", styleId, variableName, value);
+      const style = state.availableStyles.find((s) => s.id === styleId);
+      console.log("[ea-Popup] User changed variable:", {
+        styleName: style?.name,
+        styleId,
+        variableName,
+        value,
+        timestamp: new Date().toISOString(),
+      });
 
       // Update local state immediately for responsive UI
       setState((prev) => {
@@ -396,12 +405,16 @@ const App = () => {
       });
 
       // Send message to update variables in storage and content script
-      await sendMessage(PopupMessageType.UPDATE_VARIABLES, {
+      console.log(
+        "[ea-Popup] Sending UPDATE_VARIABLES message to background script",
+      );
+      const response = await sendMessage(PopupMessageType.UPDATE_VARIABLES, {
         styleId: styleId,
         variables: { [variableName]: value },
       });
+      console.log("[ea-Popup] UPDATE_VARIABLES response:", response);
     } catch (error) {
-      console.error("Failed to update variable:", error);
+      console.error("[ea-Popup] Failed to update variable:", error);
     }
   };
 

@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { i18nService } from '../services/i18n/service';
+import { useCallback } from "react";
+import { i18nService } from "../services/i18n/service";
 
 /**
  * React hook for internationalization

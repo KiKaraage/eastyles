@@ -1,8 +1,6 @@
-import { contentController } from "../services/usercss/content-controller";
 import { logger } from "../services/errors/logger";
 import { ErrorSource } from "../services/errors/service";
-import { UserCSSStyle } from "../services/storage/schema";
-import { storageClient } from "../services/storage/client";
+import type { UserCSSStyle } from "../services/storage/schema";
 
 // Types for browser runtime API
 interface BrowserRuntime {
@@ -53,7 +51,7 @@ export default defineContentScript({
   matches: ["<all_urls>"],
   main() {
     console.log(
-      "[ContentScript] UserCSS content script initializing on:",
+      "[ea-ContentScript] UserCSS content script initializing on:",
       window.location.href,
     );
 
@@ -64,46 +62,79 @@ export default defineContentScript({
         return; // Don't initialize content controller for .user.css files
       }
 
-      // Initialize the content controller
-      contentController
-        .initialize()
-        .then(() => {
-          console.log("UserCSS content controller initialized successfully");
-        })
-        .catch((error) => {
+      // Initialize the content controller in a completely non-blocking way
+      // Wait for page to be loaded before applying styles
+      const initController = async () => {
+        try {
+          const { contentController } = await import(
+            "../services/usercss/content-controller"
+          );
+          await contentController.initialize();
+          console.log(
+            "[ea] UserCSS content controller initialized successfully",
+          );
+        } catch (error) {
+          console.error(
+            "Failed to initialize UserCSS content controller:",
+            error,
+          );
           logger.error?.(
             ErrorSource.CONTENT,
             "Failed to initialize UserCSS content controller",
             { error: error instanceof Error ? error.message : String(error) },
           );
+        }
+      };
+
+      // Use requestIdleCallback if available, otherwise setTimeout with delay
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        (window as globalThis.Window).requestIdleCallback(initController, {
+          timeout: 2000,
         });
+      } else if (document.readyState === "loading") {
+        // Page still loading - wait for DOMContentLoaded
+        document.addEventListener("DOMContentLoaded", () => {
+          setTimeout(initController, 100);
+        });
+      } else {
+        // Page already loaded
+        setTimeout(initController, 100);
+      }
 
       // Set up message listener for style updates and variable changes
-      console.log("[ContentScript] Setting up message listener");
+      console.log("[ea-ContentScript] Setting up message listener");
       const runtime =
         (globalThis as GlobalThis).chrome?.runtime ||
         (globalThis as GlobalThis).browser?.runtime;
       if (runtime?.onMessage?.addListener) {
-        runtime.onMessage.addListener((message: ContentScriptMessage) => {
+        runtime.onMessage.addListener(async (message: ContentScriptMessage) => {
           console.log(
-            "[ContentScript] Received message:",
+            "[ea-ContentScript] Received message:",
             message.type,
             message,
           );
           try {
+            // Lazy import controller when needed
+            const { contentController } = await import(
+              "../services/usercss/content-controller"
+            );
+            const { storageClient } = await import(
+              "../services/storage/client"
+            );
+
             if (
               message.type === "styleUpdate" &&
               message.styleId &&
               message.style
             ) {
               console.log(
-                "[ContentScript] Processing styleUpdate for:",
+                "[ea-ContentScript] Processing styleUpdate for:",
                 message.styleId,
               );
               contentController.onStyleUpdate(message.styleId, message.style);
             } else if (message.type === "styleRemove" && message.styleId) {
               console.log(
-                "[ContentScript] Processing styleRemove for:",
+                "[ea-ContentScript] Processing styleRemove for:",
                 message.styleId,
               );
               contentController.onStyleRemove(message.styleId);
@@ -113,7 +144,7 @@ export default defineContentScript({
               message.css
             ) {
               console.log(
-                "[ContentScript] Processing injectFont for:",
+                "[ea-ContentScript] Processing injectFont for:",
                 message.fontName,
               );
               injectFontDirectly(message.fontName, message.css);
@@ -134,7 +165,7 @@ export default defineContentScript({
                 .then((updatedStyle) => {
                   if (updatedStyle) {
                     console.log(
-                      "[ContentScript] Reapplying updated style:",
+                      "[ea-ContentScript] Reapplying updated style:",
                       styleId,
                     );
                     contentController.onStyleUpdate(styleId, updatedStyle);
@@ -142,18 +173,21 @@ export default defineContentScript({
                 })
                 .catch((error) =>
                   console.error(
-                    "[ContentScript] Failed to reapply style:",
+                    "[ea-ContentScript] Failed to reapply style:",
                     error,
                   ),
                 );
             } else {
               console.log(
-                "[ContentScript] Ignoring unknown message type:",
+                "[ea-ContentScript] Ignoring unknown message type:",
                 message.type,
               );
             }
           } catch (error) {
-            console.error("[ContentScript] Failed to handle message:", error);
+            console.error(
+              "[ea-ContentScript] Failed to handle message:",
+              error,
+            );
             logger.error?.(ErrorSource.CONTENT, "Failed to handle message", {
               error: error instanceof Error ? error.message : String(error),
               messageType: message.type,
@@ -162,7 +196,7 @@ export default defineContentScript({
         });
       } else {
         console.error(
-          "[ContentScript] No runtime API available for message listening",
+          "[ea-ContentScript] No runtime API available for message listening",
         );
       }
     } catch (error) {
@@ -208,12 +242,16 @@ function isUserCSSFile(): boolean {
  * Redirect to the Save page with the UserCSS content
  */
 function redirectToSavePage(): void {
-  console.log("Detected UserCSS file, redirecting to Save page");
+  console.log(
+    "[ea-ContentScript] Detected UserCSS file, redirecting to Save page",
+  );
 
   try {
     // Guard against running in non-browser context
     if (typeof window === "undefined" || typeof document === "undefined") {
-      console.warn("Browser APIs not available in content script");
+      console.warn(
+        "[ea-ContentScript] Browser APIs not available in content script",
+      );
       return;
     }
 
@@ -240,22 +278,27 @@ function redirectToSavePage(): void {
           const finalUrl = `${saveURL}?storageId=${storageId}&filename=${encodeURIComponent(filename)}&sourceUrl=${encodeURIComponent(url)}&source=external&storage=local`;
 
           console.log(
-            "Redirecting to Save page with browser storage reference",
+            "[ea] Redirecting to Save page with browser storage reference",
           );
           window.location.href = finalUrl;
         })
         .catch((error: unknown) => {
-          console.error("Failed to store in browser storage:", error);
+          console.error(
+            "[ea-ContentScript] Failed to store in browser storage:",
+            error,
+          );
           // Fallback to direct URL for smaller files
           if (cssContent.length < 50000) {
             // Only for reasonably sized files
             fallbackToDirectUrl(cssContent, url);
           } else {
-            console.error("File too large for direct URL fallback");
+            console.error(
+              "[ea-ContentScript] File too large for direct URL fallback",
+            );
           }
         });
     } else {
-      console.warn("No CSS content found in UserCSS file");
+      console.warn("[ea-ContentScript] No CSS content found in UserCSS file");
     }
   } catch (error) {
     console.error("Failed to redirect to Save page:", error);
@@ -278,7 +321,7 @@ function fallbackToDirectUrl(cssContent: string, sourceUrl: string): void {
     const filename = sourceUrl.split("/").pop() || "external.user.css";
     const finalUrl = `${saveURL}?css=${encodedCss}&filename=${encodeURIComponent(filename)}&sourceUrl=${encodeURIComponent(sourceUrl)}&source=external&encoding=base64`;
 
-    console.log("Using fallback direct URL method");
+    console.log("[ea-ContentScript] Using fallback direct URL method");
     window.location.href = finalUrl;
   } catch (error) {
     console.error("Fallback method also failed:", error);
@@ -296,7 +339,7 @@ function injectFontDirectly(fontName: string, css: string): void {
       return;
     }
 
-    console.log(`[injectFontDirectly] Injecting font CSS for ${fontName}`);
+    console.log(`[ea-injectFontDirectly] Injecting font CSS for ${fontName}`);
 
     // Create a style element for the font
     const styleElement = document.createElement("style");
@@ -308,11 +351,11 @@ function injectFontDirectly(fontName: string, css: string): void {
     head.insertBefore(styleElement, head.firstChild);
 
     console.log(
-      `[injectFontDirectly] Successfully injected font CSS for ${fontName}`,
+      `[ea-injectFontDirectly] Successfully injected font CSS for ${fontName}`,
     );
   } catch (error) {
     console.error(
-      `[injectFontDirectly] Failed to inject font CSS for ${fontName}:`,
+      `[ea-injectFontDirectly] Failed to inject font CSS for ${fontName}:`,
       error,
     );
   }

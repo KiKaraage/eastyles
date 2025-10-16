@@ -3,18 +3,6 @@
  * Displays a table of all installed UserCSS styles with management capabilities
  */
 
-import React, { useCallback, useEffect, useId, useState } from "react";
-import { browser } from "@wxt-dev/browser";
-import { storageClient } from "../../../services/storage/client";
-import type { UserCSSStyle } from "../../../services/storage/schema";
-import type { DomainRule } from "../../../services/usercss/types";
-import {
-  PopupMessageType,
-  SaveMessageType,
-  useMessage,
-} from "../../../hooks/useMessage";
-import { useI18n } from "../../../hooks/useI18n";
-import { VariableControls } from "../VariableControls";
 import {
   ArrowLeft,
   Check,
@@ -24,7 +12,19 @@ import {
   TransitionRight,
   Trash,
 } from "iconoir-react";
+import React, { useCallback, useEffect, useId, useState } from "react";
+import { browser } from "wxt/browser";
+import { useI18n } from "../../../hooks/useI18n";
+import {
+  PopupMessageType,
+  SaveMessageType,
+  useMessage,
+} from "../../../hooks/useMessage";
+import { storageClient } from "../../../services/storage/client";
+import type { UserCSSStyle } from "../../../services/storage/schema";
+import type { DomainRule } from "../../../services/usercss/types";
 import NewFontStyle from "../NewFontStyle";
+import { VariableControls } from "../VariableControls";
 
 const ManagerPage: React.FC = () => {
   const [styles, setStyles] = useState<UserCSSStyle[]>([]);
@@ -412,7 +412,10 @@ const ManagerPage: React.FC = () => {
         try {
           // Read the file content directly
           const cssContent = await file.text();
-          console.log("Read imported CSS file, length:", cssContent.length);
+          console.log(
+            "[ea-ManagerPage] Read imported CSS file, length:",
+            cssContent.length,
+          );
 
           // Store content in sessionStorage to avoid URL length limits
           const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -423,10 +426,15 @@ const ManagerPage: React.FC = () => {
           const filename = encodeURIComponent(file.name);
           const finalUrl = `${saveUrl}?storageId=${storageId}&filename=${filename}&source=local`;
 
-          console.log("Redirecting to Save page with storage reference");
+          console.log(
+            "[ea-ManagerPage] Redirecting to Save page with storage reference",
+          );
           window.location.href = finalUrl;
         } catch (error) {
-          console.error("Failed to read imported CSS file:", error);
+          console.error(
+            "[ea-ManagerPage] Failed to read imported CSS file:",
+            error,
+          );
           setError("Failed to read the CSS file");
         }
       } else if (file) {
@@ -498,7 +506,7 @@ const ManagerPage: React.FC = () => {
               window.location.href = finalUrl;
             })
             .catch((error) => {
-              console.error("Failed to read CSS file:", error);
+              console.error("[ea-ManagerPage] Failed to read CSS file:", error);
               setDragError("Failed to read the CSS file");
               // Keep the modal open for 3 seconds to show the error
               setTimeout(() => {
@@ -976,7 +984,7 @@ const ManagerPage: React.FC = () => {
                   }
                 } catch (error) {
                   console.error(
-                    `Failed to ${editingFontStyle ? "update" : "save"} font style:`,
+                    `[ea-ManagerPage] Failed to ${editingFontStyle ? "update" : "save"} font style:`,
                     error,
                   );
                 } finally {

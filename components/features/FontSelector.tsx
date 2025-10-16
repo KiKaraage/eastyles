@@ -6,14 +6,14 @@
  */
 
 import React, { useState } from "react";
+import { useI18n } from "../../hooks/useI18n";
+import { SaveMessageType, useMessage } from "../../hooks/useMessage";
 import {
-  fontRegistry,
   BuiltInFont,
   CustomFont,
   FontApplication,
+  fontRegistry,
 } from "../../services/usercss/font-registry";
-import { useMessage, SaveMessageType } from "../../hooks/useMessage";
-import { useI18n } from "../../hooks/useI18n";
 
 interface FontSelectorProps {
   onFontApplied?: (application: FontApplication) => void;
@@ -73,9 +73,9 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
     } catch (error: unknown) {
       setFontError(t("font_error_checkFailed"));
       if (error instanceof Error) {
-        console.error("Font check failed:", error.message);
+        console.error("[ea-FontSelector] Font check failed:", error.message);
       } else {
-        console.error("Font check failed:", error);
+        console.error("[ea-FontSelector] Font check failed:", error);
       }
     } finally {
       setIsCheckingFont(false);
@@ -121,9 +121,12 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
     } catch (error: unknown) {
       setFontError(t("font_error_applyFailed"));
       if (error instanceof Error) {
-        console.error("Font application failed:", error.message);
+        console.error(
+          "[ea-FontSelector] Font application failed:",
+          error.message,
+        );
       } else {
-        console.error("Font application failed:", error);
+        console.error("[ea-FontSelector] Font application failed:", error);
       }
     } finally {
       setIsApplying(false);

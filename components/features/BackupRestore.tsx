@@ -31,7 +31,7 @@ const BackupRestore = () => {
       URL.revokeObjectURL(url);
       setExportSuccess("Backup exported successfully!");
     } catch (error) {
-      console.error("Failed to export data:", error);
+      console.error("[ea-BackupRestore] Failed to export data:", error);
       // TODO: Show user-friendly error message
     } finally {
       setIsExporting(false);
@@ -92,13 +92,16 @@ const BackupRestore = () => {
           );
         } catch (parseError) {
           setImportError("Invalid JSON file.");
-          console.error("Failed to parse imported file:", parseError);
+          console.error(
+            "[ea-BackupRestore] Failed to parse imported file:",
+            parseError,
+          );
         }
       };
       reader.readAsText(fileToImport);
     } catch (error) {
       setImportError("Failed to import data.");
-      console.error("Failed to import data:", error);
+      console.error("[ea-BackupRestore] Failed to import data:", error);
     } finally {
       setIsImporting(false);
       setFileToImport(null);

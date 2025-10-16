@@ -3,9 +3,9 @@
  * Provides centralized error management with reporting and recovery options
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ErrorSource, errorService } from "../services/errors/service";
 import { useErrorHandling } from "./useErrorHandling";
-import { errorService, ErrorSource } from "../services/errors/service";
 
 /**
  * Error types for popup operations
@@ -266,7 +266,9 @@ export function useError(): UseErrorReturn {
   useEffect(() => {
     const interval = setInterval(() => {
       const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-      setErrors((prev) => prev.filter((error) => error.timestamp > fiveMinutesAgo));
+      setErrors((prev) =>
+        prev.filter((error) => error.timestamp > fiveMinutesAgo),
+      );
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
@@ -277,7 +279,10 @@ export function useError(): UseErrorReturn {
     errors.forEach((error) => {
       if (error.action) {
         // Auto-execute action for certain error types
-        if (error.type === PopupErrorType.STORAGE_ERROR || error.type === PopupErrorType.MESSAGE_ERROR) {
+        if (
+          error.type === PopupErrorType.STORAGE_ERROR ||
+          error.type === PopupErrorType.MESSAGE_ERROR
+        ) {
           setTimeout(() => {
             error.action?.callback();
           }, 1000); // Delay execution
@@ -289,7 +294,9 @@ export function useError(): UseErrorReturn {
   return {
     errors,
     hasError: errors.length > 0,
-    hasCriticalError: errors.some((error) => error.severity === ErrorSeverity.CRITICAL),
+    hasCriticalError: errors.some(
+      (error) => error.severity === ErrorSeverity.CRITICAL,
+    ),
     addError,
     removeError,
     clearErrors,
@@ -308,16 +315,19 @@ export function useErrorRecovery() {
 
   const retryLastOperation = useCallback(() => {
     // Implementation would depend on the specific operation
-    console.log("Retrying last operation...");
+    console.log("[ea] Retrying last operation...");
   }, []);
 
-  const dismissError = useCallback((_id: string) => {
-    clearErrors();
-  }, [clearErrors]);
+  const dismissError = useCallback(
+    (_id: string) => {
+      clearErrors();
+    },
+    [clearErrors],
+  );
 
   const showErrorDetails = useCallback((id: string) => {
     // Implementation for showing error details in a modal or toast
-    console.log("Showing error details for:", id);
+    console.log("[ea] Showing error details for:", id);
   }, []);
 
   return {
@@ -335,15 +345,21 @@ export function useErrorNotifications() {
 
   useEffect(() => {
     // Show notifications for new errors
-    const newErrors = errors.filter((error) => error.timestamp > Date.now() - 5000);
+    const newErrors = errors.filter(
+      (error) => error.timestamp > Date.now() - 5000,
+    );
 
     newErrors.forEach((error) => {
       // In a real implementation, this would show a toast notification
-      console.log(`[Error Notification] ${error.severity}: ${error.message}`);
+      console.log(`[ea-ErrorNotification] ${error.severity}: ${error.message}`);
 
       // Auto-dismiss after certain time based on severity
-      const dismissTime = error.severity === ErrorSeverity.CRITICAL ? 10000 :
-                         error.severity === ErrorSeverity.HIGH ? 5000 : 3000;
+      const dismissTime =
+        error.severity === ErrorSeverity.CRITICAL
+          ? 10000
+          : error.severity === ErrorSeverity.HIGH
+            ? 5000
+            : 3000;
 
       setTimeout(() => {
         removeError(error.id);

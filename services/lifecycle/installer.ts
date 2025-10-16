@@ -21,7 +21,7 @@ export class InstallerService {
       this.debugEnabled = settings?.isDebuggingEnabled ?? false;
     } catch (error) {
       console.warn(
-        "Failed to initialize debug mode for InstallerService:",
+        "[ea-InstallerService] Failed to initialize debug mode for InstallerService:",
         error,
       );
     }
@@ -29,7 +29,7 @@ export class InstallerService {
 
   private debug(message: string, ...args: unknown[]): void {
     if (this.debugEnabled) {
-      console.log(`[EastylesInstaller] ${message}`, ...args);
+      console.log(`[ea-EastylesInstaller] ${message}`, ...args);
     }
   }
 

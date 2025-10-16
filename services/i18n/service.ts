@@ -19,7 +19,10 @@ export class I18nService {
     try {
       return browser.i18n.getUILanguage() || this.fallbackLocale;
     } catch (error) {
-      console.warn("Failed to get UI language, using fallback:", error);
+      console.warn(
+        "[ea-i18n] Failed to get UI language, using fallback:",
+        error,
+      );
       return this.fallbackLocale;
     }
   }
@@ -46,14 +49,17 @@ export class I18nService {
           return fallbackMessage;
         }
         // Return key as fallback if no translation found
-        console.warn(`Missing translation for key: ${key}`);
+        console.warn(`[ea-i18n] Missing translation for key: ${key}`);
         return key;
       }
 
       this.cache.set(cacheKey, message);
       return message;
     } catch (error) {
-      console.warn(`Error getting translation for key "${key}":`, error);
+      console.warn(
+        `[ea-i18n] Error getting translation for key "${key}":`,
+        error,
+      );
       return key;
     }
   }

@@ -1,9 +1,9 @@
 import React from "react";
 import {
-  errorService,
+  ErrorSeverity,
   ErrorSource,
   ExtensionError,
-  ErrorSeverity,
+  errorService,
 } from "../../services/errors/service";
 
 interface ErrorBoundaryProps {
@@ -255,7 +255,7 @@ class ErrorBoundary extends React.Component<
 
 export function withErrorBoundary<P extends object>(
   WrappedComponent: React.ComponentType<P>,
-  errorBoundaryProps?: Omit<ErrorBoundaryProps, "children">
+  errorBoundaryProps?: Omit<ErrorBoundaryProps, "children">,
 ) {
   const displayName =
     WrappedComponent.displayName || WrappedComponent.name || "Component";

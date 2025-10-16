@@ -3,7 +3,7 @@
  * Provides reactive access to theme settings and applies them to the UI
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { storageClient } from "../services/storage/client";
 
 /**
@@ -101,7 +101,10 @@ export function useTheme(): UseThemeReturn {
       const storedMode = await storageClient.getThemeMode();
       updateTheme(storedMode);
     } catch (error) {
-      console.warn("Failed to load theme from storage, using defaults:", error);
+      console.warn(
+        "[ea-useTheme] Failed to load theme from storage, using defaults:",
+        error,
+      );
       updateTheme("system");
     }
   }, [updateTheme]);
@@ -112,7 +115,7 @@ export function useTheme(): UseThemeReturn {
       await storageClient.setThemeMode(mode);
       setThemeModeState(mode);
     } catch (error) {
-      console.error("Failed to save theme to storage:", error);
+      console.error("[ea-useTheme] Failed to save theme to storage:", error);
       throw new Error(`Failed to save theme preference: ${error}`);
     }
   };
@@ -164,8 +167,9 @@ export function useTheme(): UseThemeReturn {
 
     await setThemeModeHandler(nextMode);
 
-    const state = nextMode === "system" ? `system - ${getSystemTheme()}` : nextMode;
-    console.log(`[useTheme] Theme toggled to: ${state}`);
+    const state =
+      nextMode === "system" ? `system - ${getSystemTheme()}` : nextMode;
+    console.log(`[ea-useTheme] Theme toggled to: ${state}`);
   };
 
   return {

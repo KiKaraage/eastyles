@@ -3,14 +3,13 @@
  * Handles service worker initialization, lifecycle events, and service coordination.
  */
 
-import { browser } from "@wxt-dev/browser";
-import { errorService } from "../services/errors/service";
+import { browser } from "wxt/browser";
 import { logger } from "../services/errors/logger";
 import { reporter } from "../services/errors/reporter";
+import { ErrorSource, errorService } from "../services/errors/service";
+import { migrationService } from "../services/lifecycle/migrations";
 import { messageBus } from "../services/messaging/bus";
 import { storageClient } from "../services/storage/client";
-import { migrationService } from "../services/lifecycle/migrations";
-import { ErrorSource } from "../services/errors/service";
 
 /**
  * Background service initialization state.
@@ -281,21 +280,32 @@ export default defineBackground({
       initializeServices();
 
       // Ensure message bus is properly initialized and listening
-      console.log("[Background] Initializing message bus...");
+      console.log("[ea-Background] Initializing message bus...");
       const handlerValidation = messageBus.validateHandlers();
       if (!handlerValidation.isValid) {
-        logger.warn(ErrorSource.BACKGROUND, "Message handlers validation failed", {
-          missingHandlers: handlerValidation.missingHandlers,
-        });
+        logger.warn(
+          ErrorSource.BACKGROUND,
+          "Message handlers validation failed",
+          {
+            missingHandlers: handlerValidation.missingHandlers,
+          },
+        );
       }
 
       // Log successful initialization
-      logger.info(ErrorSource.BACKGROUND, "Background script fully initialized", {
-        handlers: messageBus.getHandlerService().getRegisteredHandlers(),
-        messageBusOnline: messageBus.getOnlineStatus(),
-      });
+      logger.info(
+        ErrorSource.BACKGROUND,
+        "Background script fully initialized",
+        {
+          handlers: messageBus.getHandlerService().getRegisteredHandlers(),
+          messageBusOnline: messageBus.getOnlineStatus(),
+        },
+      );
 
-      console.log("[Background] Message bus initialized with handlers:", messageBus.getHandlerService().getRegisteredHandlers());
+      console.log(
+        "[ea-Background] Message bus initialized with handlers:",
+        messageBus.getHandlerService().getRegisteredHandlers(),
+      );
 
       // Set up extension lifecycle event listeners
       browser.runtime.onInstalled.addListener(handleInstallation);
@@ -305,16 +315,19 @@ export default defineBackground({
       createContextMenu();
 
       // Listen for context menu clicks
-      browser.contextMenus.onClicked.addListener((info) => {
-        if (info.menuItemId === "open-manager") {
+      browser.contextMenus.onClicked.addListener((info: unknown) => {
+        const clickInfo = info as { menuItemId?: string };
+        if (clickInfo.menuItemId === "open-manager") {
           browser.runtime.openOptionsPage();
         }
       });
 
       // Listen for command shortcuts
-      browser.commands.onCommand.addListener((command) => {
-        if (command === 'open-manager') {
-          browser.tabs.create({ url: browser.runtime.getURL('manager.html#styles') });
+      browser.commands.onCommand.addListener((command: unknown) => {
+        if (typeof command === "string" && command === "open-manager") {
+          browser.tabs.create({
+            url: browser.runtime.getURL("/manager.html#styles"),
+          });
         }
       });
 

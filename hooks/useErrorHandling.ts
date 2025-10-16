@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  errorService,
-  ExtensionError,
   ErrorSource,
+  ExtensionError,
+  errorService,
 } from "../services/errors/service";
 
 interface ErrorState {

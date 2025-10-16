@@ -99,7 +99,7 @@ export class MigrationService {
       this.debugEnabled = settings?.isDebuggingEnabled ?? false;
     } catch (error: unknown) {
       console.warn(
-        "Failed to initialize debug mode for MigrationService:",
+        "[ea-MigrationService] Failed to initialize debug mode for MigrationService:",
         error,
       );
     }
@@ -107,7 +107,7 @@ export class MigrationService {
 
   private debug(message: string, ...args: unknown[]): void {
     if (this.debugEnabled) {
-      console.log(`[EastylesMigration] ${message}`, ...args);
+      console.log(`[ea-EastylesMigration] ${message}`, ...args);
     }
   }
 
@@ -221,10 +221,10 @@ export class MigrationService {
   async runMigrations(previousVersion: string): Promise<void> {
     this.debug("Starting migrations from version:", previousVersion);
     const currentVersion = this.getCurrentVersion();
-    console.log("[runMigrations] Promise started.");
+    console.log("[ea-runMigrations] Promise started.");
 
     try {
-      console.log("[runMigrations] Entering try block.");
+      console.log("[ea-runMigrations] Entering try block.");
 
       // Get current settings
       let currentSettings = await storageClient.getSettings();
@@ -258,8 +258,13 @@ export class MigrationService {
         // A migration should run if:
         // 1. The user's previous version is less than the migration version, AND
         // 2. The migration version is less than or equal to the current extension version
-        const userNeedsMigration = this.shouldRunMigration(previousVersion, version);
-        const migrationIsForCurrentVersion = this.shouldRunMigration(version, currentVersion) || version === currentVersion;
+        const userNeedsMigration = this.shouldRunMigration(
+          previousVersion,
+          version,
+        );
+        const migrationIsForCurrentVersion =
+          this.shouldRunMigration(version, currentVersion) ||
+          version === currentVersion;
         const shouldRun = userNeedsMigration && migrationIsForCurrentVersion;
 
         if (shouldRun) {
@@ -300,15 +305,15 @@ export class MigrationService {
 
       // Final integrity check after all migrations
       await this.repairSettings(currentSettings);
-      console.log("[runMigrations] Resolving promise.");
+      console.log("[ea-runMigrations] Resolving promise.");
     } catch (_error: unknown) {
-      console.error("[runMigrations] Caught error in catch block:", _error);
+      console.error("[ea-runMigrations] Caught error in catch block:", _error);
       logger.error(ErrorSource.BACKGROUND, "Migration failed", {
         error: _error instanceof Error ? _error.message : String(_error),
         previousVersion,
         currentVersion,
       });
-      console.log("[runMigrations] Rejecting promise.");
+      console.log("[ea-runMigrations] Rejecting promise.");
       throw _error; // Re-throw the error after logging
     }
   }

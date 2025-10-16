@@ -23,11 +23,11 @@ interface StyleMetadata {
   description: string;
   author: string;
   sourceUrl: string;
-  homepageURL?: string;
-  supportURL?: string;
-  license?: string;
   domains: string[];
   variables?: Record<string, VariableDescriptor>;
+  license?: string;
+  homepageURL?: string;
+  supportURL?: string;
 }
 
 interface ParseResult {
@@ -397,7 +397,7 @@ const SavePage: React.FC = () => {
       try {
         // Guard against running in non-browser context
         if (typeof window === "undefined" || !window.location) {
-          console.warn("Window not available, skipping UserCSS loading");
+          console.warn("[ea] Window not available, skipping UserCSS loading");
           setError("Page not fully loaded. Please refresh and try again.");
           setLoading(false);
           return;
@@ -405,7 +405,9 @@ const SavePage: React.FC = () => {
 
         // Guard against browser API not being available
         if (typeof browser === "undefined" || !browser.storage) {
-          console.warn("Browser APIs not available, skipping UserCSS loading");
+          console.warn(
+            "[ea] Browser APIs not available, skipping UserCSS loading",
+          );
           setError(
             "Extension context not available. Please refresh and try again.",
           );
@@ -419,8 +421,8 @@ const SavePage: React.FC = () => {
         const userCssUrl = urlParams.get("url");
         const source = urlParams.get("source");
 
-        let cssText: string;
-        let sourceUrl: string;
+        let cssText: string = "";
+        let sourceUrl: string = "";
 
         if (storageId) {
           const storageType = urlParams.get("storage") || "session";
@@ -444,7 +446,7 @@ const SavePage: React.FC = () => {
               await browser.storage.local.remove(storageId);
 
               console.log(
-                "Loading UserCSS from browser storage, length:",
+                "[ea] Loading UserCSS from browser storage, length:",
                 cssText.length,
                 "source:",
                 source,
@@ -466,7 +468,7 @@ const SavePage: React.FC = () => {
               urlParams.get("filename") ||
               "local file";
             console.log(
-              "Loading UserCSS from sessionStorage, length:",
+              "[ea] Loading UserCSS from sessionStorage, length:",
               cssText.length,
               "source:",
               source,
@@ -485,7 +487,7 @@ const SavePage: React.FC = () => {
             urlParams.get("filename") ||
             "local file";
           console.log(
-            "Loading UserCSS from direct content, length:",
+            "[ea] Loading UserCSS from direct content, length:",
             cssText.length,
             "source:",
             source,
@@ -494,7 +496,7 @@ const SavePage: React.FC = () => {
           );
         } else if (userCssUrl) {
           // Need to fetch from URL
-          console.log("Loading UserCSS from URL:", userCssUrl);
+          console.log("[ea] Loading UserCSS from URL:", userCssUrl);
 
           try {
             const fetchResponse = await fetch(userCssUrl);
@@ -505,10 +507,13 @@ const SavePage: React.FC = () => {
             }
             cssText = await fetchResponse.text();
             sourceUrl = userCssUrl;
-            console.log("Fetched UserCSS content, length:", cssText.length);
+            console.log(
+              "[ea] Fetched UserCSS content, length:",
+              cssText.length,
+            );
           } catch (fetchError) {
             // If fetch fails (likely CORS), show helpful error
-            console.error("Failed to fetch UserCSS:", fetchError);
+            console.error("[ea] Failed to fetch UserCSS:", fetchError);
             setError(
               "Unable to load UserCSS from external URL due to browser security restrictions. " +
                 "Try downloading the file and importing it locally instead.",
@@ -538,15 +543,15 @@ const SavePage: React.FC = () => {
 
         // Parse the UserCSS
         console.log(
-          "Calling parseUserCSS with text length:",
+          "[ea] Calling parseUserCSS with text length:",
           cssText.length,
           "sourceUrl:",
           sourceUrl,
         );
         const parseResponse = await parseUserCSS(cssText, sourceUrl);
-        console.log("parseUserCSS response:", parseResponse);
-        console.log("parseResponse type:", typeof parseResponse);
-        console.log("parseResponse.success:", parseResponse?.success);
+        console.log("[ea] parseUserCSS response:", parseResponse);
+        console.log("[ea] parseResponse type:", typeof parseResponse);
+        console.log("[ea] parseResponse.success:", parseResponse?.success);
 
         if (
           parseResponse &&
@@ -582,7 +587,7 @@ const SavePage: React.FC = () => {
           });
         } else {
           console.error(
-            "ParseUserCSS failed or returned invalid response:",
+            "[ea-SavePage] ParseUserCSS failed or returned invalid response:",
             parseResponse,
           );
           if (typeof parseResponse === "boolean") {
@@ -597,7 +602,7 @@ const SavePage: React.FC = () => {
           }
         }
       } catch (loadError) {
-        console.error("Error loading UserCSS:", loadError);
+        console.error("[ea-SavePage] Error loading UserCSS:", loadError);
         setError(
           loadError instanceof Error
             ? loadError.message
@@ -985,4 +990,4 @@ className={`btn btn-primary btn-sm ${hasErrors || installing ? "btn-disabled loa
    );
 };
 
-  export default SavePage;
+export default SavePage;

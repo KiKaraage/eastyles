@@ -3,7 +3,7 @@
  * Provides structured logging with different output strategies for development and production.
  */
 
-import { ExtensionError, ErrorSeverity, ErrorSource } from "./service";
+import { ErrorSeverity, ErrorSource, ExtensionError } from "./service";
 
 /**
  * Logging levels for controlling log output verbosity.
@@ -367,7 +367,7 @@ export class ErrorLogger {
   private outputToConsole(entry: LogEntry): void {
     const timestamp = new Date(entry.timestamp).toISOString();
     const prefix = `[${timestamp}] [${entry.source.toUpperCase()}] [${LogLevel[entry.level]}]`;
-    const message = `${prefix} ${entry.message}`;
+    const message = `[ea-Logger] ${prefix} ${entry.message}`;
 
     // Choose appropriate console method based on log level
     switch (entry.level) {
@@ -387,7 +387,7 @@ export class ErrorLogger {
         }
         break;
       default:
-        console.log(message, entry.context || "");
+        console.log(`[ea] ${message}`, entry.context || "");
     }
   }
 

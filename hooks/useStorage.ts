@@ -3,7 +3,7 @@
  * Provides real-time updates when storage values change
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { storageClient } from "../services/storage/client";
 import { SettingsStorage } from "../services/storage/schema";
 

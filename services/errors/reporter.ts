@@ -3,8 +3,8 @@
  * Provides error tracking, analytics, and reporting capabilities.
  */
 
-import { ExtensionError, ErrorSeverity, ErrorSource } from "./service";
 import { logger } from "./logger";
+import { ErrorSeverity, ErrorSource, ExtensionError } from "./service";
 
 /**
  * Error report structure for analysis and reporting.
