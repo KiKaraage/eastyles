@@ -232,17 +232,18 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
           </p>
 
           <div className="form-control">
-            <label className="label">
+            <label className="label" htmlFor="custom-font-input">
               <span className="label-text">{t("font_custom_inputLabel")}</span>
             </label>
             <div className="flex gap-2">
               <input
+                id="custom-font-input"
                 type="text"
                 value={customFontName}
                 onChange={(e) => setCustomFontName(e.target.value)}
                 placeholder={t("font_custom_placeholder")}
                 className="input input-bordered flex-1"
-                onKeyPress={(e) => e.key === "Enter" && handleCustomFontCheck()}
+                onKeyUp={(e) => e.key === "Enter" && handleCustomFontCheck()}
               />
               <button
                 onClick={handleCustomFontCheck}

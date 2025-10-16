@@ -1,5 +1,5 @@
+import { useEffect, useId, useRef, useState } from "react";
 import type { BuiltInFont } from "../../services/usercss/font-registry";
-import { useEffect, useRef, useState, useId } from "react";
 import { fontRegistry } from "../../services/usercss/font-registry";
 
 interface NewFontStyleProps {
