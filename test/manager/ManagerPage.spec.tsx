@@ -4,11 +4,11 @@
  * Tests for the Manager Page UI component that displays and manages UserCSS styles.
  */
 
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ManagerPage from "../../components/features/manager/ManagerPage";
-import type { UserCSSStyle } from "../../services/storage/schema";
 import { storageClient } from "../../services/storage/client";
+import type { UserCSSStyle } from "../../services/storage/schema";
 
 // Mock storage client
 vi.mock("../../../services/storage/client", () => ({
@@ -38,7 +38,7 @@ vi.mock("../../../hooks/useMessage", () => ({
 }));
 
 // Mock browser
-vi.mock("@wxt-dev/browser", () => ({
+vi.mock("wxt/browser", () => ({
   browser: {
     runtime: {
       getURL: vi.fn(
@@ -317,7 +317,10 @@ describe("ManagerPage", () => {
 
   it("shows loading state", () => {
     vi.mocked(storageClient.getUserCSSStyles).mockImplementation(
-      () => new Promise(() => {}), // Never resolves
+      () =>
+        new Promise(() => {
+          /* never resolve */
+        }),
     );
 
     render(<ManagerPage />);

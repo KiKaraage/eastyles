@@ -3,12 +3,12 @@
  * Tests complex scenarios that involve multiple components working together.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageBus } from "../../services/messaging/bus";
 import type { ReceivedMessages } from "../../services/messaging/types";
 
 // Mock the browser API
-vi.mock("@wxt-dev/browser", () => ({
+vi.mock("wxt/browser", () => ({
   browser: {
     runtime: {
       sendMessage: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock("@wxt-dev/browser", () => ({
 }));
 
 // Mock the storage API
-vi.mock("@wxt-dev/storage", () => ({
+vi.mock("wxt/utils/storage", () => ({
   storage: {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -54,12 +54,12 @@ describe("MessageBus Integration", () => {
     originalSetTimeout = window.setTimeout;
 
     // Setup default mock responses for storage
-    const { storage } = await import("@wxt-dev/storage");
+    const { storage } = await import("wxt/utils/storage");
     vi.mocked(storage.getItem).mockResolvedValue([] as never[]);
     vi.mocked(storage.setItem).mockResolvedValue(undefined);
 
     // Setup default mock responses for browser APIs
-    const { browser } = await import("@wxt-dev/browser");
+    const { browser } = await import("wxt/browser");
     vi.mocked(browser.runtime.sendMessage).mockResolvedValue(undefined);
     vi.mocked(browser.tabs.sendMessage).mockResolvedValue(undefined);
     vi.mocked(browser.tabs.query).mockResolvedValue([] as unknown as never);
@@ -141,7 +141,7 @@ describe("MessageBus Integration", () => {
       // Should have attempted to handle the message
       expect(mockHandleMessage).toHaveBeenCalledWith(message, 1);
 
-       // Error response is returned, no need to query tabs in this case
+      // Error response is returned, no need to query tabs in this case
     });
   });
 
@@ -152,7 +152,7 @@ describe("MessageBus Integration", () => {
       };
 
       // Mock browser API to track calls
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
       vi.mocked(browser.runtime.sendMessage).mockImplementation(() => {
         return Promise.resolve(undefined);
       });
@@ -183,7 +183,7 @@ describe("MessageBus Integration", () => {
         type: "GET_CURRENT_TAB",
       };
 
-      const { storage } = await import("@wxt-dev/storage");
+      const { storage } = await import("wxt/utils/storage");
 
       // Mock storage to fail
       vi.mocked(storage.getItem).mockRejectedValue(new Error("Storage error"));
@@ -195,12 +195,12 @@ describe("MessageBus Integration", () => {
       }).not.toThrow();
 
       // Should still attempt to send the message
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
       expect(browser.runtime.sendMessage).toHaveBeenCalled();
     });
 
     it("should handle browser API unavailability", async () => {
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
 
       // Temporarily make browser APIs unavailable
       const originalRuntime = browser.runtime;

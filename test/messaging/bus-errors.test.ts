@@ -3,12 +3,12 @@
  * Tests invalid message handling, browser API failures, and error recovery scenarios.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageBus } from "../../services/messaging/bus";
 import type { ReceivedMessages } from "../../services/messaging/types";
 
 // Mock the browser API
-vi.mock("@wxt-dev/browser", () => ({
+vi.mock("wxt/browser", () => ({
   browser: {
     runtime: {
       sendMessage: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock("@wxt-dev/browser", () => ({
 }));
 
 // Mock the storage API
-vi.mock("@wxt-dev/storage", () => ({
+vi.mock("wxt/utils/storage", () => ({
   storage: {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -50,12 +50,12 @@ describe("MessageBus Error Handling", () => {
     vi.clearAllMocks();
 
     // Setup default mock responses for storage
-    const { storage } = await import("@wxt-dev/storage");
+    const { storage } = await import("wxt/utils/storage");
     vi.mocked(storage.getItem).mockResolvedValue([] as never[]);
     vi.mocked(storage.setItem).mockResolvedValue(undefined);
 
     // Setup default mock responses for browser APIs
-    const { browser } = await import("@wxt-dev/browser");
+    const { browser } = await import("wxt/browser");
     vi.mocked(browser.runtime.sendMessage).mockResolvedValue(undefined);
     vi.mocked(browser.tabs.sendMessage).mockResolvedValue(undefined);
     vi.mocked(browser.tabs.query).mockResolvedValue([] as unknown as never);
@@ -70,40 +70,44 @@ describe("MessageBus Error Handling", () => {
   });
 
   describe("Invalid Message Handling", () => {
-     it("should handle invalid incoming messages gracefully", async () => {
-       const invalidMessage = { invalid: "message" } as unknown;
+    it("should handle invalid incoming messages gracefully", async () => {
+      const invalidMessage = { invalid: "message" } as unknown;
 
-       const result = await messageBus.handleIncomingMessage(invalidMessage);
+      const result = await messageBus.handleIncomingMessage(invalidMessage);
 
-       expect(result).toBe(true); // Should return true for handled messages
-     });
+      expect(result).toBe(true); // Should return true for handled messages
+    });
 
-     it("should handle messages without type property", async () => {
-       const messageWithoutType = { payload: { data: "test" } } as unknown;
+    it("should handle messages without type property", async () => {
+      const messageWithoutType = { payload: { data: "test" } } as unknown;
 
-       const result = await messageBus.handleIncomingMessage(messageWithoutType);
+      const result = await messageBus.handleIncomingMessage(messageWithoutType);
 
-       expect(result).toBe(true);
-     });
+      expect(result).toBe(true);
+    });
 
-     it("should handle messages with invalid type", async () => {
-       const messageWithInvalidType = { type: 123 } as unknown;
+    it("should handle messages with invalid type", async () => {
+      const messageWithInvalidType = { type: 123 } as unknown;
 
-       const result = await messageBus.handleIncomingMessage(messageWithInvalidType);
+      const result = await messageBus.handleIncomingMessage(
+        messageWithInvalidType,
+      );
 
-       expect(result).toBe(true);
-     });
+      expect(result).toBe(true);
+    });
 
-     it("should handle messages with missing required properties", async () => {
-       const messageWithMissingProps = {
-         type: "GET_CURRENT_TAB",
-         // Missing required properties for this message type
-       } as unknown;
+    it("should handle messages with missing required properties", async () => {
+      const messageWithMissingProps = {
+        type: "GET_CURRENT_TAB",
+        // Missing required properties for this message type
+      } as unknown;
 
-       const result = await messageBus.handleIncomingMessage(messageWithMissingProps);
+      const result = await messageBus.handleIncomingMessage(
+        messageWithMissingProps,
+      );
 
-       expect(result).toBeNull();
-     });
+      expect(result).toBeNull();
+    });
   });
 
   describe("Browser API Failures", () => {
@@ -138,17 +142,17 @@ describe("MessageBus Error Handling", () => {
       );
     });
 
-     it("should handle browser.tabs.query failures", async () => {
-       // Test that invalid messages are handled gracefully
-       const invalidMessage = { invalid: "message" } as unknown;
-       const result = await messageBus.handleIncomingMessage(invalidMessage);
+    it("should handle browser.tabs.query failures", async () => {
+      // Test that invalid messages are handled gracefully
+      const invalidMessage = { invalid: "message" } as unknown;
+      const result = await messageBus.handleIncomingMessage(invalidMessage);
 
-       expect(result).toBe(true);
-     });
+      expect(result).toBe(true);
+    });
 
     it("should handle missing browser APIs gracefully", async () => {
       // Temporarily mock browser APIs as undefined
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
       const originalRuntime = browser.runtime;
       const originalTabs = browser.tabs;
 
@@ -281,7 +285,7 @@ describe("MessageBus Error Handling", () => {
         type: "GET_CURRENT_TAB",
       };
 
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
       vi.mocked(browser.runtime.sendMessage).mockResolvedValue(undefined);
 
       // Mock the send method to return successfully

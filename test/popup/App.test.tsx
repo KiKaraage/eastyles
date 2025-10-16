@@ -1,7 +1,7 @@
-import { browser } from "wxt/browser";
 import { render, screen, waitFor } from "@testing-library/react";
-import App from "../../entrypoints/popup/App";
 import type React from "react";
+import { browser } from "wxt/browser";
+import App from "../../entrypoints/popup/App";
 
 // Mock window.close
 Object.defineProperty(window, "close", {

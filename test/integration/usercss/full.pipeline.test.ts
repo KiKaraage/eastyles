@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { processUserCSS } from "@services/usercss/processor";
+import { describe, expect, it } from "vitest";
 
 describe("UserCSS Full Pipeline Processor", () => {
   it("should process a plain CSS UserCSS", async () => {

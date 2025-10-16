@@ -4,12 +4,12 @@
  * and data transformations between different extension versions.
  */
 
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { logger } from "../../services/errors/logger";
+import { ErrorSource } from "../../services/errors/service";
 import { migrationService } from "../../services/lifecycle/migrations";
 import { storageClient } from "../../services/storage/client";
 import { DEFAULT_SETTINGS } from "../../services/storage/schema";
-import { logger } from "../../services/errors/logger";
-import { ErrorSource } from "../../services/errors/service";
 
 // Mock dependencies
 vi.mock("../../services/storage/client", () => ({
@@ -128,7 +128,7 @@ describe("Migration Scenarios", () => {
     // Set migration steps with spy functions
     migrationService.setMigrations({
       "1.0.0": [migration1_0],
-      "1.1.0": [migration1_1]
+      "1.1.0": [migration1_1],
     });
 
     // Verify the migration functions are correctly assigned
@@ -165,8 +165,8 @@ describe("Migration Scenarios", () => {
       expect.objectContaining({
         issues: expect.arrayContaining([
           expect.stringContaining("Missing setting"),
-        ])
-      })
+        ]),
+      }),
     );
   });
 
@@ -204,9 +204,9 @@ describe("Migration Scenarios", () => {
       "Data integrity issues detected and repaired",
       expect.objectContaining({
         issues: expect.arrayContaining([
-          expect.stringContaining("Missing setting")
-        ])
-      })
+          expect.stringContaining("Missing setting"),
+        ]),
+      }),
     );
   });
 

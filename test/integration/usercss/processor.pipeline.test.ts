@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { parseUserCSS } from "@services/usercss/processor";
 import { PreprocessorEngine } from "@services/usercss/preprocessor";
+import { parseUserCSS } from "@services/usercss/processor";
+import { beforeEach, describe, expect, it } from "vitest";
 
 describe("UserCSS Parse → Preprocess Pipeline", () => {
   let engine: PreprocessorEngine;

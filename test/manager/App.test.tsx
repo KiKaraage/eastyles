@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../entrypoints/manager/App";
 import { useTheme } from "../../hooks/useTheme";
-import { storageClient } from "../../services/storage/client";
 import pkg from "../../package.json";
+import { storageClient } from "../../services/storage/client";
 
 // Mock dependencies
 vi.mock("../../hooks/useTheme", () => ({
@@ -30,7 +30,9 @@ describe("Manager App Component", () => {
     // Set up storage client spies
     vi.spyOn(storageClient, "getUserCSSStyles").mockResolvedValue([]);
     vi.spyOn(storageClient, "watchUserCSSStyles").mockImplementation(
-      () => () => {},
+      () => () => {
+        /* no-op */
+      },
     );
     vi.spyOn(storageClient, "addUserCSSStyle").mockResolvedValue({
       id: "test-id",

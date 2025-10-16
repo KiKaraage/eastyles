@@ -6,19 +6,19 @@
  */
 
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
-import { UserCSSContentController } from "../../../services/usercss/content-controller";
-import { UserCSSStyle } from "../../../services/storage/schema";
 import { browser } from "wxt/browser";
-import { domainDetector } from "../../../services/usercss/domain-detector";
+import { UserCSSStyle } from "../../../services/storage/schema";
+import { UserCSSContentController } from "../../../services/usercss/content-controller";
 import { cssInjector } from "../../../services/usercss/css-injector";
+import { domainDetector } from "../../../services/usercss/domain-detector";
 
 // Mock the dependencies at module level
 vi.mock("wxt/browser", () => ({

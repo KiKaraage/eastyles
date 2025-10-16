@@ -3,11 +3,11 @@
  * Tests basic method availability without complex scenarios.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageBus } from "../../services/messaging/bus";
 
 // Mock the browser API
-vi.mock("@wxt-dev/browser", () => ({
+vi.mock("wxt/browser", () => ({
   browser: {
     runtime: {
       sendMessage: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("@wxt-dev/browser", () => ({
 }));
 
 // Mock the storage API
-vi.mock("@wxt-dev/storage", () => ({
+vi.mock("wxt/utils/storage", () => ({
   storage: {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -48,7 +48,7 @@ describe("MessageBus Smoke Tests", () => {
     vi.clearAllMocks();
 
     // Get mocked modules
-    const { storage } = await import("@wxt-dev/storage");
+    const { storage } = await import("wxt/utils/storage");
 
     // Setup default mock responses
     vi.mocked(storage.getItem).mockResolvedValue([]);

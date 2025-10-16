@@ -3,7 +3,7 @@
  * Tests basic message sending and broadcasting operations.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageBus } from "../../services/messaging/bus";
 import type {
   ReceivedMessages,
@@ -11,7 +11,7 @@ import type {
 } from "../../services/messaging/types";
 
 // Mock the browser API
-vi.mock("@wxt-dev/browser", () => ({
+vi.mock("wxt/browser", () => ({
   browser: {
     runtime: {
       sendMessage: vi.fn(),
@@ -38,7 +38,7 @@ vi.mock("@wxt-dev/browser", () => ({
 }));
 
 // Mock the storage API
-vi.mock("@wxt-dev/storage", () => ({
+vi.mock("wxt/utils/storage", () => ({
   storage: {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -57,12 +57,12 @@ describe("MessageBus Core", () => {
     originalSetTimeout = window.setTimeout;
 
     // Setup default mock responses for storage
-    const { storage } = await import("@wxt-dev/storage");
+    const { storage } = await import("wxt/utils/storage");
     vi.mocked(storage.getItem).mockResolvedValue([]);
     vi.mocked(storage.setItem).mockResolvedValue(undefined);
 
     // Setup default mock responses for browser APIs
-    const { browser } = await import("@wxt-dev/browser");
+    const { browser } = await import("wxt/browser");
     vi.mocked(browser.runtime.sendMessage).mockResolvedValue(undefined);
     vi.mocked(browser.tabs.sendMessage).mockResolvedValue(undefined);
     vi.mocked(browser.tabs.query).mockResolvedValue([] as unknown as never);
@@ -87,7 +87,7 @@ describe("MessageBus Core", () => {
 
       // Mock successful response
       const mockResponse = { success: true };
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
 
       // Start sending the message
       const resultPromise = messageBus.send(message);
@@ -124,7 +124,7 @@ describe("MessageBus Core", () => {
       // Mock successful response
       const tabId = 123;
       const mockResponse = { success: true };
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
 
       const resultPromise = messageBus.send(message, tabId);
 
@@ -171,7 +171,7 @@ describe("MessageBus Core", () => {
         },
       };
 
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
       vi.mocked(browser.runtime.sendMessage).mockResolvedValue(undefined);
 
       await messageBus.broadcast(message);
@@ -194,7 +194,7 @@ describe("MessageBus Core", () => {
         },
       };
 
-      const { browser } = await import("@wxt-dev/browser");
+      const { browser } = await import("wxt/browser");
       vi.mocked(browser.runtime.sendMessage).mockRejectedValue(
         new Error("Broadcast failed"),
       );

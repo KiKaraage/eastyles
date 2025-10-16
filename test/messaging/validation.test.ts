@@ -3,15 +3,15 @@
  * Tests the message type validation and error handling utilities.
  */
 
-import { describe, it, expect } from "vitest";
-import {
-  isValidReceivedMessage,
-  createInvalidMessageError,
-} from "../../services/messaging/validation";
+import { describe, expect, it } from "vitest";
 import type {
-  ReceivedMessages,
   ErrorDetails,
+  ReceivedMessages,
 } from "../../services/messaging/types";
+import {
+  createInvalidMessageError,
+  isValidReceivedMessage,
+} from "../../services/messaging/validation";
 
 describe("Message Validation", () => {
   describe("isValidReceivedMessage", () => {

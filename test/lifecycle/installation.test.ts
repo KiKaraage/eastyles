@@ -4,13 +4,13 @@
  * and handles first-time setup when the extension is installed.
  */
 
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { installerService } from "../../services/lifecycle/installer";
-import { storageClient } from "../../services/storage/client";
-import { DEFAULT_SETTINGS } from "../../services/storage/schema";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { logger } from "../../services/errors/logger";
 import { ErrorSource } from "../../services/errors/service";
+import { installerService } from "../../services/lifecycle/installer";
 import { migrationService } from "../../services/lifecycle/migrations";
+import { storageClient } from "../../services/storage/client";
+import { DEFAULT_SETTINGS } from "../../services/storage/schema";
 
 // Mock dependencies
 vi.mock("../../services/storage/client", () => ({

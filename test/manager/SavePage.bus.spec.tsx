@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock functions
 const mockSendMessage = vi.fn();
@@ -17,7 +17,7 @@ vi.mock("../../hooks/useMessage", () => ({
   useSaveActions: vi.fn(() => ({
     parseUserCSS: async (text: string, sourceUrl?: string) => {
       console.log(
-        "[useSaveActions] parseUserCSS called, text length:",
+        "[ea-useSaveActions] parseUserCSS called, text length:",
         text.length,
       );
       return mockSendMessage("PARSE_USERCSS", { text, sourceUrl });
@@ -39,10 +39,10 @@ vi.mock("../../hooks/useMessage", () => ({
         default: string;
         min?: number;
         max?: number;
-        options?: Array<{value: string, label: string}>;
+        options?: Array<{ value: string; label: string }>;
       }>,
     ) => {
-      console.log("[useSaveActions] installStyle called, style:", meta.name);
+      console.log("[ea-useSaveActions] installStyle called, style:", meta.name);
       return mockSendMessage("INSTALL_STYLE", {
         meta,
         compiledCss,
@@ -287,7 +287,7 @@ describe("ApplyPage Message Bus Communication", () => {
         default: string;
         min?: number;
         max?: number;
-        options?: Array<{value: string, label: string}>;
+        options?: Array<{ value: string; label: string }>;
       }> = [];
 
       await act(async () => {
@@ -488,7 +488,9 @@ describe("ApplyPage Message Bus Communication", () => {
 
   describe("message logging", () => {
     it("logs parseUserCSS calls with text length", async () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {
+        /* no-op */
+      });
 
       mockSendMessage.mockResolvedValue({
         success: true,
@@ -521,7 +523,9 @@ describe("ApplyPage Message Bus Communication", () => {
     });
 
     it("logs installStyle calls with style name", async () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {
+        /* no-op */
+      });
 
       mockSendMessage.mockResolvedValue({
         success: true,

@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ErrorBoundary, {
-  withErrorBoundary,
   ErrorFallbackProps,
+  withErrorBoundary,
 } from "../../../components/ui/ErrorBoundary";
 import { errorService } from "../../../services/errors/service";
 
@@ -39,7 +39,9 @@ const ProblematicComponent = ({ shouldThrow = true }) => {
 describe("ErrorBoundary Component", () => {
   // Suppress console.error output from React
   beforeEach(() => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {
+      /* no-op */
+    });
   });
 
   it("renders children when there is no error", () => {
@@ -169,7 +171,9 @@ describe("ErrorBoundary Component", () => {
 
 describe("withErrorBoundary HOC", () => {
   beforeEach(() => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {
+      /* no-op */
+    });
   });
 
   it("wraps a component and catches rendering errors", () => {
