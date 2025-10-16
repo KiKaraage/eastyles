@@ -1,6 +1,6 @@
-import { defineConfig } from "wxt";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { defineConfig } from "wxt";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -9,9 +9,6 @@ export default defineConfig({
     "@wxt-dev/webextension-polyfill",
     "@wxt-dev/i18n/module",
   ],
-  i18n: {
-    localesDir: "public/_locales",
-  },
   manifest: {
     permissions: ["storage", "contextMenus", "tabs"],
     default_locale: "en",
@@ -22,7 +19,7 @@ export default defineConfig({
     },
     commands: {
       "open-manager": {
-        "description": "Open style manager",
+        description: "Open style manager",
       },
     },
     options_ui: {

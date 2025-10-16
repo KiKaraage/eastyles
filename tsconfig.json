@@ -5,7 +5,13 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "types": ["node", "react", "react-dom", "vitest/globals"],
+    "types": [
+      "node",
+      "react",
+      "react-dom",
+      "vitest/globals",
+      "webextension-polyfill"
+    ],
     "moduleResolution": "bundler",
     "noEmit": true,
     "esModuleInterop": true,

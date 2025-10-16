@@ -46,14 +46,14 @@
 
 | Command | Purpose | Target Browser |
 |---------|---------|---------------|
-| `pnpm dev` | Serve extension in development mode | Firefox |
-| `pnpm dev:crx` | Serve extension in development mode | Chrome |
-| `pnpm build` | Create production build | Firefox |
-| `pnpm build:crx` | Create production build | Chrome |
-| `pnpm builds` | Build for all browsers | Both |
-| `pnpm zip` | Create zipped package | Firefox |
-| `pnpm zip:crx` | Create zipped package | Chrome |
-| `pnpm test` | Run tests | Both |
+| `bun dev` | Serve extension in development mode | Firefox |
+| `bun dev:crx` | Serve extension in development mode | Chrome |
+| `bun build` | Create production build | Firefox |
+| `bun build:crx` | Create production build | Chrome |
+| `bun builds` | Build for all browsers | Both |
+| `bun zip` | Create zipped package | Firefox |
+| `bun zip:crx` | Create zipped package | Chrome |
+| `bun test` | Run tests | Both |
 
 ## Directory Layout
 
@@ -112,13 +112,13 @@ eastyles/
 
 ```bash
 # Format code
-pnpm run format
+bun format
 
 # Lint
-pnpm run lint
+bun lint
 
 # Run tests
-pnpm test
+bun test
 ```
 
 All PRs must pass linting and tests. Use conventional commits (`feat:`, `fix:`, `chore:`).

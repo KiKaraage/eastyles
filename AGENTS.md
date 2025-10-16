@@ -18,11 +18,11 @@ This file provides comprehensive guidance for developers working with the Eastyl
 2. Never run build/dev commands automatically; confirm first.
 3. Test one file/folder at a time.
 
-- Build: `pnpm builds` (both browsers) or `pnpm build` (Firefox) or `pnpm build:crx` (Chrome)
-- Dev server: `pnpm dev` or `pnpm dev:crx`
-- Type checking: `pnpm compile`
-- Linting: `pnpm lint`/`pnpm lint:fix`
-- Testing: `pnpm test`, `pnpm test:watch`, `pnpm test:coverage`
+- Build: `bun builds` (both browsers) or `bun build` (Firefox) or `bun build:crx` (Chrome)
+- Dev server: `bun dev` or `bun dev:crx`
+- Type checking: `bun compile`
+- Linting: `bun lint`/`bun lint:fix`
+- Testing: `bun test`, `bun test:watch`, `bun test:coverage`
 
 ### Project Structure
 
@@ -75,7 +75,7 @@ This project uses Biome for comprehensive linting. Key rules include:
 
 Enable debug mode with:
 ```bash
-NODE_ENV=development pnpm dev
+NODE_ENV=development bun dev
 ```
 This enables verbose logging, error reporting, performance monitoring, and message bus debugging.
 
@@ -86,6 +86,10 @@ This enables verbose logging, error reporting, performance monitoring, and messa
 3. Set up global `browser` object
 4. Mock async operations in `useEffect`
 5. Account for timing issues in loading states
+6. Maintain Type Safety in Test Environments
+   - Provide module declarations for mocked external dependencies (e.g., `wxt/browser`, `wxt/utils/storage`) to prevent TypeScript resolution errors.
+   - Use explicit types (`unknown` with guards) instead of `any` for mock parameters and async operations to maintain strict type checking.
+   - Ensure mock implementations avoid linting violations, such as adding comments to empty blocks in arrow functions to satisfy rules like `suspicious/noEmptyBlock`.
 
 Example mocking pattern:
 
