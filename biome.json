@@ -133,14 +133,7 @@
     },
     "includes": [
       "**",
-      "!**/.output/**",
-      "!**/.wxt/**",
-      "!node_modules/**",
-      "**",
-      "!**/.output/**",
-      "!**/.wxt/**",
-      "!node_modules/**",
-      "**",
+      "!**/.ai/**",
       "!**/.output/**",
       "!**/.wxt/**",
       "!node_modules/**"

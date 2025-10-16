@@ -1,14 +1,14 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
-  useErrorHandling,
   useErrorAnalytics,
   useErrorBoundary,
+  useErrorHandling,
 } from "../../../hooks/useErrorHandling";
 import {
-  errorService,
   ErrorSeverity,
   ErrorSource,
+  errorService,
   RuntimeError,
 } from "../../../services/errors/service";
 

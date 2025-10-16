@@ -2,10 +2,10 @@
  * Font UserCSS Generator Tests
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { FontUserCSSGenerator } from '../../../services/usercss/font-usercss-generator';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FontUserCSSGenerator } from "../../../services/usercss/font-usercss-generator";
 
-describe('FontUserCSSGenerator', () => {
+describe("FontUserCSSGenerator", () => {
   let generator: FontUserCSSGenerator;
 
   beforeEach(() => {
@@ -13,177 +13,185 @@ describe('FontUserCSSGenerator', () => {
     vi.clearAllMocks();
   });
 
-  describe('generateFontUserCSS', () => {
-    it('should generate UserCSS for built-in font', () => {
+  describe("generateFontUserCSS", () => {
+    it("should generate UserCSS for built-in font", () => {
       const fontApplication = {
-        fontName: 'Inter',
-        fontType: 'builtin' as const,
-        targetElements: 'body',
-        cssRule: ''
+        fontName: "Instrument Sans",
+        fontType: "builtin" as const,
+        targetElements: "body",
+        cssRule: "",
       };
 
       const result = generator.generateFontUserCSS({
         fontApplication,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: true
+        addComments: true,
       });
 
-      expect(result.userCSS).toContain('/* ==UserStyle==');
-      expect(result.userCSS).toContain('@name        Eastyles Font: Inter');
-      expect(result.userCSS).toContain('@font-face');
-      expect(result.userCSS).toContain("font-family: 'Inter', system-ui, -apple-system, sans-serif");
-      expect(result.userCSS).toContain('body {');
+      expect(result.userCSS).toContain("/* ==UserStyle==");
+      expect(result.userCSS).toContain(
+        "@name        Eastyles Font: Instrument Sans",
+      );
+      expect(result.userCSS).toContain("@font-face");
+      expect(result.userCSS).toContain(
+        "font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif",
+      );
+      expect(result.userCSS).toContain("body {");
 
-      expect(result.meta.name).toBe('Eastyles Font: Inter');
-      expect(result.meta.id).toMatch(/^font-builtin-inter-/);
+      expect(result.meta.name).toBe("Eastyles Font: Instrument Sans");
+      expect(result.meta.id).toMatch(/^font-builtin-instrument-sans-/);
       expect(result.meta.assets).toHaveLength(1);
       expect(result.meta.assets?.[0]).toEqual({
-        type: 'font',
-        url: '/fonts/Inter.woff2',
-        format: 'woff2'
+        type: "font",
+        url: "/fonts/Instrument Sans.woff2",
+        format: "woff2",
       });
 
       expect(result.fontFaceRules).toHaveLength(1);
-      expect(result.fontFaceRules[0]).toContain('@font-face');
-      expect(result.fontFaceRules[0]).toContain("font-family: 'Inter'");
+      expect(result.fontFaceRules[0]).toContain("@font-face");
+      expect(result.fontFaceRules[0]).toContain(
+        "font-family: 'Instrument Sans'",
+      );
     });
 
-    it('should generate UserCSS for custom font', () => {
+    it("should generate UserCSS for custom font", () => {
       const fontApplication = {
-        fontName: 'Arial',
-        fontType: 'custom' as const,
-        targetElements: 'body',
-        cssRule: ''
+        fontName: "Arial",
+        fontType: "custom" as const,
+        targetElements: "body",
+        cssRule: "",
       };
 
       const result = generator.generateFontUserCSS({
         fontApplication,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: true
+        addComments: true,
       });
 
-      expect(result.userCSS).toContain('/* ==UserStyle==');
-      expect(result.userCSS).toContain('@name        Eastyles Font: Arial');
-      expect(result.userCSS).not.toContain('@font-face'); // No @font-face for custom fonts
+      expect(result.userCSS).toContain("/* ==UserStyle==");
+      expect(result.userCSS).toContain("@name        Eastyles Font: Arial");
+      expect(result.userCSS).not.toContain("@font-face"); // No @font-face for custom fonts
       expect(result.userCSS).toContain("font-family: 'Arial', sans-serif");
-      expect(result.userCSS).toContain('body {');
+      expect(result.userCSS).toContain("body {");
 
-      expect(result.meta.name).toBe('Eastyles Font: Arial');
+      expect(result.meta.name).toBe("Eastyles Font: Arial");
       expect(result.meta.id).toMatch(/^font-custom-arial-/);
       expect(result.meta.assets).toHaveLength(0); // No assets for custom fonts
 
       expect(result.fontFaceRules).toHaveLength(0);
     });
 
-    it('should use custom target selector', () => {
+    it("should use custom target selector", () => {
       const fontApplication = {
-        fontName: 'Inter',
-        fontType: 'builtin' as const,
-        targetElements: 'h1, h2, h3',
-        cssRule: ''
+        fontName: "Instrument Sans",
+        fontType: "builtin" as const,
+        targetElements: "h1, h2, h3",
+        cssRule: "",
       };
 
       const result = generator.generateFontUserCSS({
         fontApplication,
-        targetSelector: 'h1, h2, h3',
+        targetSelector: "h1, h2, h3",
         includeFallbacks: false,
-        addComments: false
+        addComments: false,
       });
 
-      expect(result.userCSS).toContain('h1, h2, h3 {');
-      expect(result.userCSS).toContain("font-family: 'Inter'");
-      expect(result.userCSS).not.toContain('system-ui'); // No fallbacks
+      expect(result.userCSS).toContain("h1, h2, h3 {");
+      expect(result.userCSS).toContain("font-family: 'Instrument Sans'");
+      expect(result.userCSS).not.toContain("system-ui"); // No fallbacks
     });
 
-    it('should exclude comments when addComments is false', () => {
+    it("should exclude comments when addComments is false", () => {
       const fontApplication = {
-        fontName: 'Inter',
-        fontType: 'builtin' as const,
-        targetElements: 'body',
-        cssRule: ''
+        fontName: "Instrument Sans",
+        fontType: "builtin" as const,
+        targetElements: "body",
+        cssRule: "",
       };
 
       const result = generator.generateFontUserCSS({
         fontApplication,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: false
+        addComments: false,
       });
 
-      expect(result.userCSS).not.toContain('/* Font: Inter */');
-      expect(result.userCSS).not.toContain('/* Generated by Eastyles Font Generator */');
+      expect(result.userCSS).not.toContain("/* Font: Instrument Sans */");
+      expect(result.userCSS).not.toContain(
+        "/* Generated by Eastyles Font Generator */",
+      );
     });
 
-    it('should generate unique IDs for different fonts', () => {
+    it("should generate unique IDs for different fonts", () => {
       const fontApplication1 = {
-        fontName: 'Inter',
-        fontType: 'builtin' as const,
-        targetElements: 'body',
-        cssRule: ''
+        fontName: "Instrument Sans",
+        fontType: "builtin" as const,
+        targetElements: "body",
+        cssRule: "",
       };
 
       const fontApplication2 = {
-        fontName: 'JetBrains Mono',
-        fontType: 'builtin' as const,
-        targetElements: 'body',
-        cssRule: ''
+        fontName: "JetBrains Mono",
+        fontType: "builtin" as const,
+        targetElements: "body",
+        cssRule: "",
       };
 
       const result1 = generator.generateFontUserCSS({
         fontApplication: fontApplication1,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: true
+        addComments: true,
       });
 
       const result2 = generator.generateFontUserCSS({
         fontApplication: fontApplication2,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: true
+        addComments: true,
       });
 
       expect(result1.meta.id).not.toBe(result2.meta.id);
-      expect(result1.meta.id).toMatch(/^font-builtin-inter-/);
+      expect(result1.meta.id).toMatch(/^font-builtin-instrument-sans-/);
       expect(result2.meta.id).toMatch(/^font-builtin-jetbrains-mono-/);
     });
   });
 
-  describe('parseFontUserCSS', () => {
-    it('should parse font information from UserCSS', () => {
+  describe("parseFontUserCSS", () => {
+    it("should parse font information from UserCSS", () => {
       const userCSS = `/* ==UserStyle==
-@name        Eastyles Font: Inter
+@name        Eastyles Font: Instrument Sans
 @namespace   https://eastyles.app
 @version     1.0.0
-@description Apply Inter font to body
+@description Apply Instrument Sans font to body
 @author      Eastyles
 ==/UserStyle== */
 
 @font-face {
-  font-family: 'Inter';
-  src: url('/fonts/Inter.woff2') format('woff2');
+  font-family: 'Instrument Sans';
+  src: url('/fonts/Instrument Sans.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
 }`;
 
       const result = generator.parseFontUserCSS(userCSS);
 
       expect(result).toEqual({
-        fontName: 'Inter',
-        fontType: 'builtin',
-        targetElements: 'body',
-        cssRule: userCSS
+        fontName: "Instrument Sans",
+        fontType: "builtin",
+        targetElements: "body",
+        cssRule: userCSS,
       });
     });
 
-    it('should parse custom font from UserCSS', () => {
+    it("should parse custom font from UserCSS", () => {
       const userCSS = `/* ==UserStyle==
 @name        Eastyles Font: Arial
 @namespace   https://eastyles.app
@@ -199,14 +207,14 @@ body {
       const result = generator.parseFontUserCSS(userCSS);
 
       expect(result).toEqual({
-        fontName: 'Arial',
-        fontType: 'custom',
-        targetElements: 'body',
-        cssRule: userCSS
+        fontName: "Arial",
+        fontType: "custom",
+        targetElements: "body",
+        cssRule: userCSS,
       });
     });
 
-    it('should return null for non-font UserCSS', () => {
+    it("should return null for non-font UserCSS", () => {
       const userCSS = `/* ==UserStyle==
 @name        Some Other Style
 @namespace   https://example.com
@@ -223,106 +231,106 @@ body {
       expect(result).toBeNull();
     });
 
-    it('should handle different target elements', () => {
+    it("should handle different target elements", () => {
       const userCSS = `/* ==UserStyle==
-@name        Eastyles Font: Inter
+@name        Eastyles Font: Instrument Sans
 @namespace   https://eastyles.app
 @version     1.0.0
-@description Apply Inter font to headings
+@description Apply Instrument Sans font to headings
 @author      Eastyles
 ==/UserStyle== */
 
 h1, h2, h3 {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
 }`;
 
       const result = generator.parseFontUserCSS(userCSS);
 
-      expect(result?.targetElements).toBe('h1, h2, h3');
+      expect(result?.targetElements).toBe("h1, h2, h3");
     });
   });
 
-  describe('updateFontUserCSS', () => {
-    it('should update existing font UserCSS with new options', () => {
+  describe("updateFontUserCSS", () => {
+    it("should update existing font UserCSS with new options", () => {
       const existingUserCSS = `/* ==UserStyle==
-@name        Eastyles Font: Inter
+@name        Eastyles Font: Instrument Sans
 @namespace   https://eastyles.app
 @version     1.0.0
-@description Apply Inter font to body
+@description Apply Instrument Sans font to body
 @author      Eastyles
 ==/UserStyle== */
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
 }`;
 
       const newOptions = {
         fontApplication: {
-          fontName: 'Inter',
-          fontType: 'builtin' as const,
-          targetElements: 'h1, h2, h3',
-          cssRule: ''
+          fontName: "Instrument Sans",
+          fontType: "builtin" as const,
+          targetElements: "h1, h2, h3",
+          cssRule: "",
         },
-        includeFallbacks: false
+        includeFallbacks: false,
       };
 
       const result = generator.updateFontUserCSS(existingUserCSS, newOptions);
 
       expect(result).not.toBeNull();
-      expect(result?.userCSS).toContain('h1, h2, h3 {');
-      expect(result?.userCSS).toContain("font-family: 'Inter'"); // No fallbacks
-      expect(result?.userCSS).not.toContain('system-ui');
+      expect(result?.userCSS).toContain("h1, h2, h3 {");
+      expect(result?.userCSS).toContain("font-family: 'Instrument Sans'"); // No fallbacks
+      expect(result?.userCSS).not.toContain("system-ui");
     });
 
-    it('should return null for invalid UserCSS', () => {
+    it("should return null for invalid UserCSS", () => {
       const invalidUserCSS = `/* Not a UserStyle */ body { color: red; }`;
 
       const result = generator.updateFontUserCSS(invalidUserCSS, {
-        targetSelector: 'body'
+        targetSelector: "body",
       });
 
       expect(result).toBeNull();
     });
   });
 
-  describe('font fallback system', () => {
-    it('should provide appropriate fallbacks for known fonts', () => {
+  describe("font fallback system", () => {
+    it("should provide appropriate fallbacks for known fonts", () => {
       // This is testing the internal fallback system
       // We can test this indirectly through the generated CSS
 
       const fontApplication = {
-        fontName: 'Inter',
-        fontType: 'builtin' as const,
-        targetElements: 'body',
-        cssRule: ''
+        fontName: "Instrument Sans",
+        fontType: "builtin" as const,
+        targetElements: "body",
+        cssRule: "",
       };
 
       const result = generator.generateFontUserCSS({
         fontApplication,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: false
+        addComments: false,
       });
 
-      expect(result.userCSS).toContain('system-ui, -apple-system, sans-serif');
+      expect(result.userCSS).toContain("system-ui, -apple-system, sans-serif");
     });
 
-    it('should use default fallback for unknown fonts', () => {
+    it("should use default fallback for unknown fonts", () => {
       const fontApplication = {
-        fontName: 'UnknownFont',
-        fontType: 'builtin' as const,
-        targetElements: 'body',
-        cssRule: ''
+        fontName: "UnknownFont",
+        fontType: "builtin" as const,
+        targetElements: "body",
+        cssRule: "",
       };
 
       const result = generator.generateFontUserCSS({
         fontApplication,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: false
+        addComments: false,
       });
 
-      expect(result.userCSS).toContain('sans-serif');
+      expect(result.userCSS).toContain("sans-serif");
     });
   });
 });

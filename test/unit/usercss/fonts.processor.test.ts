@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { Mock } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   extractFontFaces,
   injectFonts,
@@ -95,15 +96,30 @@ describe("Font Processing", () => {
   });
 
   describe("injectFonts", () => {
-    let mockDocument: any;
+    interface MockStyleElement {
+      tagName: string;
+      textContent: string;
+      setAttribute: Mock;
+      style: Record<string, unknown>;
+    }
+
+    interface MockDocument {
+      head: {
+        appendChild: Mock;
+        querySelectorAll: Mock;
+      };
+      createElement: Mock;
+    }
+
+    let mockDocument: MockDocument;
 
     beforeEach(() => {
       mockDocument = {
         head: {
           appendChild: vi.fn(),
           querySelectorAll: vi.fn().mockReturnValue([]),
-        } as any,
-        createElement: vi.fn().mockImplementation((tag) => ({
+        },
+        createElement: vi.fn().mockImplementation((tag: string) => ({
           tagName: tag.toUpperCase(),
           textContent: "",
           setAttribute: vi.fn(),
@@ -111,7 +127,7 @@ describe("Font Processing", () => {
         })),
       };
 
-      global.document = mockDocument;
+      global.document = mockDocument as unknown as Document;
     });
 
     it("should inject @font-face rules before main CSS", () => {
@@ -130,8 +146,8 @@ describe("Font Processing", () => {
       expect(mockDocument.createElement).toHaveBeenCalledWith("style");
       expect(mockDocument.head.appendChild).toHaveBeenCalled();
 
-      const styleElement = (mockDocument.createElement as any).mock.results[0]
-        .value;
+      const styleElement = (mockDocument.createElement as Mock).mock.results[0]
+        .value as MockStyleElement;
       expect(styleElement.textContent).toContain("@font-face");
       expect(styleElement.textContent).toContain("font-family: Inter");
       expect(styleElement.textContent).toContain(mainCss);
@@ -155,8 +171,8 @@ describe("Font Processing", () => {
 
       injectFonts(fontFaces, mainCss);
 
-      const styleElement = (mockDocument.createElement as any).mock.results[0]
-        .value;
+      const styleElement = (mockDocument.createElement as Mock).mock.results[0]
+        .value as MockStyleElement;
       const fontFaceIndex = styleElement.textContent.indexOf("@font-face");
       const mainCssIndex = styleElement.textContent.indexOf("body {");
 
@@ -164,13 +180,13 @@ describe("Font Processing", () => {
     });
 
     it("should handle empty font faces array", () => {
-      const fontFaces: any[] = [];
+      const fontFaces: Array<Record<string, string>> = [];
       const mainCss = "body { font-family: Arial, sans-serif; }";
 
       injectFonts(fontFaces, mainCss);
 
-      const styleElement = (mockDocument.createElement as any).mock.results[0]
-        .value;
+      const styleElement = (mockDocument.createElement as Mock).mock.results[0]
+        .value as MockStyleElement;
       expect(styleElement.textContent).toBe(mainCss);
       expect(styleElement.textContent).not.toContain("@font-face");
     });
@@ -188,8 +204,8 @@ describe("Font Processing", () => {
 
       injectFonts(fontFaces, mainCss);
 
-      const styleElement = (mockDocument.createElement as any).mock.results[0]
-        .value;
+      const styleElement = (mockDocument.createElement as Mock).mock.results[0]
+        .value as MockStyleElement;
       expect(styleElement.setAttribute).toHaveBeenCalledWith(
         "data-eastyles-fonts",
         "true",

@@ -1,8 +1,8 @@
 /// <reference types="vitest" />
 import {
-  render as rtlRender,
   RenderOptions,
   RenderResult,
+  render as rtlRender,
 } from "@testing-library/react";
 import { ReactElement } from "react";
 

@@ -1,16 +1,16 @@
-import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
-  ErrorReporter,
-  reporter,
   createDevelopmentReporter,
   createProductionReporter,
+  ErrorReporter,
+  reporter,
 } from "../../../services/errors/reporter";
 import {
-  StorageError,
-  MessageError,
-  RuntimeError,
   ErrorSeverity,
   ErrorSource,
+  MessageError,
+  RuntimeError,
+  StorageError,
 } from "../../../services/errors/service";
 
 // Mock navigator.userAgent
@@ -41,7 +41,9 @@ describe("ErrorReporter", () => {
       frequentErrorThreshold: 2,
       maxErrorAge: 60 * 60 * 1000, // 1 hour
     });
-    consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
+      /* no-op */
+    });
   });
 
   afterEach(() => {
@@ -166,7 +168,9 @@ describe("ErrorReporter", () => {
         const errorInstance = new StorageError(
           "Test error",
           ErrorSeverity.NOTIFY,
-          { iteration: i },
+          {
+            iteration: i,
+          },
         );
         testReporter.reportError(errorInstance);
       }

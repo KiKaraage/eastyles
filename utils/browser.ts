@@ -150,7 +150,7 @@ export function safeApiCall<T>(apiCall: () => T, fallback: T): T {
   try {
     return apiCall();
   } catch (error: unknown) {
-    console.warn("Browser API call failed:", error);
+    console.warn("[ea] Browser API call failed:", error);
     return fallback;
   }
 }
@@ -166,7 +166,7 @@ export function safeBooleanApi(
     const result = apiCall();
     return !!result;
   } catch (error: unknown) {
-    console.warn("Browser API call failed:", error);
+    console.warn("[ea] Browser API call failed:", error);
     return fallback;
   }
 }

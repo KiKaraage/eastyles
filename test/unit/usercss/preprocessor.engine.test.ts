@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { PreprocessorEngine } from "../../../services/usercss/preprocessor";
-import { PreprocessorType } from "../../../services/usercss/preprocessor";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  PreprocessorEngine,
+  PreprocessorType,
+} from "../../../services/usercss/preprocessor";
 
 // Mock modules at the top level
 const mockLessRender = vi.fn();

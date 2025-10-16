@@ -3,21 +3,21 @@
  * Tests CRUD operations, error handling, and fallback mechanisms
  */
 
-import { describe, it, expect, vi } from "vitest";
-import {
-  SettingsStorage,
-  UserStyle,
-  ExportData,
-  DEFAULT_SETTINGS,
-  validateSettings,
-  validateUserStyle,
-  validateExportData,
-  createUserStyle,
-} from "../services/storage/schema";
+import { describe, expect, it, vi } from "vitest";
 import {
   StorageFallbacks,
   StorageMigrations,
 } from "../services/storage/defaults";
+import {
+  createUserStyle,
+  DEFAULT_SETTINGS,
+  ExportData,
+  SettingsStorage,
+  UserStyle,
+  validateExportData,
+  validateSettings,
+  validateUserStyle,
+} from "../services/storage/schema";
 
 describe("Storage Schema", () => {
   describe("validateSettings", () => {

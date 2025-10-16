@@ -1,19 +1,19 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  StorageQuotaExceededError,
-  StorageInvalidDataError,
-  MessageTimeoutError,
-  MessageInvalidError,
-  InvalidFileFormatError,
-  DataCorruptedError,
   BrowserAPIError,
+  DataCorruptedError,
+  ErrorSeverity,
+  FontLoadError,
+  InjectionCSPError,
+  InvalidFileFormatError,
+  MessageInvalidError,
+  MessageTimeoutError,
+  ParseMetadataError,
   PermissionDeniedError,
   PermissionRequiredError,
-  ParseMetadataError,
   PreprocessorCompileError,
-  InjectionCSPError,
-  FontLoadError,
-  ErrorSeverity,
+  StorageInvalidDataError,
+  StorageQuotaExceededError,
 } from "../../../services/errors/service";
 import { i18nService } from "../../../services/i18n/service";
 

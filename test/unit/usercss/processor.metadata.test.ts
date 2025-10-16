@@ -5,11 +5,11 @@
  * including various edge cases and error conditions.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  parseUserCSS,
-  getPositionFromIndex,
   extractMetadataBlock,
+  getPositionFromIndex,
+  parseUserCSS,
 } from "../../../services/usercss/processor";
 
 describe("UserCSS Metadata Parser", () => {
@@ -122,7 +122,11 @@ body {
       it("should report duplicate directives as errors", () => {
         const result = parseUserCSS(duplicateCSS);
 
-        expect(result.errors.some(error => error.includes("Duplicate @name directive"))).toBe(true);
+        expect(
+          result.errors.some((error) =>
+            error.includes("Duplicate @name directive"),
+          ),
+        ).toBe(true);
         expect(result.warnings).toHaveLength(0);
       });
     });
@@ -139,12 +143,12 @@ body {
   color: red;
 }`;
 
-       it("should handle malformed block boundaries", () => {
-         const result = parseUserCSS(malformedCSS);
+      it("should handle malformed block boundaries", () => {
+        const result = parseUserCSS(malformedCSS);
 
-         expect(result.errors.length).toBeGreaterThan(0);
-         expect(result.meta.name).toBe("");
-       });
+        expect(result.errors.length).toBeGreaterThan(0);
+        expect(result.meta.name).toBe("");
+      });
 
       const missingEndCSS = `/* ==UserStyle==
 @name           Example Style

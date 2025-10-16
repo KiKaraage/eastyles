@@ -4,12 +4,12 @@
  * Tests all injection methods and fallback behavior
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import {
-  UserCSSInjector,
-  CSPError,
-} from "../../../services/usercss/css-injector";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browser } from "wxt/browser";
+import {
+  CSPError,
+  UserCSSInjector,
+} from "../../../services/usercss/css-injector";
 
 // Make CSPError available globally for instanceof checks
 (global as Record<string, unknown>).CSPError = CSPError;
@@ -22,7 +22,9 @@ vi.mock("wxt/browser", () => ({
       removeCSS: vi.fn(() => Promise.resolve()),
     },
     tabs: {
-      query: vi.fn(() => Promise.resolve([{ id: 123, active: true, currentWindow: true }])),
+      query: vi.fn(() =>
+        Promise.resolve([{ id: 123, active: true, currentWindow: true }]),
+      ),
     },
   },
 }));
@@ -411,7 +413,7 @@ describe("UserCSSInjector", () => {
     it("should respect performance budget", async () => {
       // Use real timers for this test to avoid timeout issues
       vi.useRealTimers();
-      
+
       const css = "body { color: red; }";
       const styleId = "test-style";
 
@@ -437,28 +439,33 @@ describe("UserCSSInjector", () => {
 
       // Start injection
       const injectPromise = injector.inject(css, styleId);
-      
+
       // Wait for injection to complete
       await injectPromise;
 
       // Small delay to ensure any async logging completes
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Debug: log what we captured
-      console.log("Captured warn calls:", warnCalls);
-      console.log("Number of warn calls:", warnCalls.length);
+      console.log("[ea] Captured warn calls:", warnCalls);
+      console.log("[ea] Number of warn calls:", warnCalls.length);
 
       // Should have warned about exceeding budget
       expect(warnCalls.length).toBeGreaterThan(0);
-      expect(warnCalls.some((call: unknown) =>
-        Array.isArray(call) && call[0] && typeof call[0] === 'string' &&
-        call[0].includes("CSS injection batch exceeded performance budget")
-      )).toBe(true);
+      expect(
+        warnCalls.some(
+          (call: unknown) =>
+            Array.isArray(call) &&
+            call[0] &&
+            typeof call[0] === "string" &&
+            call[0].includes("CSS injection batch exceeded performance budget"),
+        ),
+      ).toBe(true);
 
       // Restore original performance.now and console.warn
       performanceSpy.mockRestore();
       console.warn = originalWarn;
-      
+
       // Re-enable fake timers for other tests
       vi.useFakeTimers();
     });
@@ -506,7 +513,9 @@ describe("UserCSSInjector", () => {
         "Refused to apply inline style because it violates the following Content Security Policy directive: \"style-src 'self'\"",
       );
       const detectedError = (
-        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
+        injector as unknown as {
+          detectCSPError: (error: unknown) => CSPError | null;
+        }
       ).detectCSPError(cspError);
 
       expect(detectedError).toBeInstanceOf(CSPError);
@@ -519,7 +528,9 @@ describe("UserCSSInjector", () => {
         "Refused to execute inline script because it violates the following Content Security Policy directive: \"script-src 'self'\"",
       );
       const detectedError = (
-        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
+        injector as unknown as {
+          detectCSPError: (error: unknown) => CSPError | null;
+        }
       ).detectCSPError(cspError);
 
       expect(detectedError).toBeInstanceOf(CSPError);
@@ -532,7 +543,9 @@ describe("UserCSSInjector", () => {
         "Refused to apply inline style because it violates CSP directive: style-src 'self' 'unsafe-inline'",
       );
       const detectedError = (
-        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
+        injector as unknown as {
+          detectCSPError: (error: unknown) => CSPError | null;
+        }
       ).detectCSPError(cspError);
 
       expect(detectedError).toBeInstanceOf(CSPError);
@@ -542,7 +555,9 @@ describe("UserCSSInjector", () => {
     it("should return null for non-CSP errors", () => {
       const regularError = new Error("Some other error");
       const detectedError = (
-        injector as unknown as { detectCSPError: (error: unknown) => CSPError | null }
+        injector as unknown as {
+          detectCSPError: (error: unknown) => CSPError | null;
+        }
       ).detectCSPError(regularError);
 
       expect(detectedError).toBeNull();
@@ -561,7 +576,9 @@ describe("UserCSSInjector", () => {
       });
 
       const fallbackMethods = (
-        injector as unknown as { getCSPFallbackMethods: (error: CSPError) => string[] }
+        injector as unknown as {
+          getCSPFallbackMethods: (error: CSPError) => string[];
+        }
       ).getCSPFallbackMethods(cspError);
       expect(fallbackMethods).toEqual([
         "scripting-api",
@@ -599,7 +616,9 @@ describe("UserCSSInjector", () => {
       const styleId = "test-style";
 
       // Should detect CSP error and attempt fallback
-      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        /* no-op */
+      });
 
       try {
         await injector.inject(css, styleId);

@@ -3,18 +3,18 @@
  * Tests the complete storage client implementation with all its methods
  *
  * NOTE: The storage watcher tests (should notify when settings change, should notify when styles change)
- * are currently failing due to issues with the mock implementation of @wxt-dev/storage in test/setup.ts.
+ * are currently failing due to issues with the mock implementation of wxt/storage in test/setup.ts.
  * The core storage functionality works correctly, but the watcher callbacks are not being properly
  * triggered in the test environment.
  *
  * TODO: Follow up task to fix storage watcher test mocks:
  * - Analyze current mock implementation in test/setup.ts
- * - Verify @wxt-dev/storage module mocking
+ * - Verify wxt/storage module mocking
  * - Ensure watcher callbacks are properly triggered on value changes
  * - Add comprehensive tests for watchSettings and watchStyles functionality
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Enable fake timers for proper async handling
 vi.useFakeTimers();
@@ -26,8 +26,12 @@ vi.mock("../services/storage/client", () => {
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
     resetAll: vi.fn(),
-    watchSettings: vi.fn(() => () => {}),
-    watchStyles: vi.fn(() => () => {}),
+    watchSettings: vi.fn(() => () => {
+      /* no-op */
+    }),
+    watchStyles: vi.fn(() => () => {
+      /* no-op */
+    }),
     getThemeMode: vi.fn(),
     setThemeMode: vi.fn(),
     getDebugMode: vi.fn(),
@@ -39,7 +43,9 @@ vi.mock("../services/storage/client", () => {
     removeUserCSSStyle: vi.fn(),
     enableUserCSSStyle: vi.fn(),
     updateUserCSSStyleVariables: vi.fn(),
-    watchUserCSSStyles: vi.fn(() => () => {}),
+    watchUserCSSStyles: vi.fn(() => () => {
+      /* no-op */
+    }),
     getStyles: vi.fn(),
     getStyle: vi.fn(),
     addStyle: vi.fn(),
@@ -68,12 +74,12 @@ vi.mock("../services/storage/client", () => {
 
 import {
   EastylesStorageClient,
-  StorageClient,
+  getDebugMode,
   getSettings,
   getThemeMode,
-  setThemeMode,
-  getDebugMode,
+  StorageClient,
   setDebugMode,
+  setThemeMode,
 } from "../services/storage/client";
 import { DEFAULT_SETTINGS, ExportData } from "../services/storage/schema";
 

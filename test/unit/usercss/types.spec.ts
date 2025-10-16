@@ -5,19 +5,19 @@
  * and provide informative error messages when validation fails.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
-  StyleMetaSchema,
-  ParseResultSchema,
-  ExtensionErrorPayloadSchema,
-  VariableDescriptorSchema,
-  DomainRuleSchema,
   AssetSchema,
-  UserCSSOptionsSchema,
-  validateStyleMeta,
+  DomainRuleSchema,
+  ExtensionErrorPayloadSchema,
   formatZodError,
+  ParseResultSchema,
+  StyleMetaSchema,
+  UserCSSOptionsSchema,
+  VariableDescriptorSchema,
   validateDomainRules,
+  validateStyleMeta,
   validateVariables,
 } from "../../../services/usercss/validators";
 

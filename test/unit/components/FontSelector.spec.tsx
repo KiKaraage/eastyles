@@ -2,8 +2,8 @@
  * FontSelector Component Tests
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FontSelector } from "../../../components/features/FontSelector";
 import { fontRegistry } from "../../../services/usercss/font-registry";
 

@@ -3,11 +3,14 @@
  * Handles data serialization, compression, and file generation for user data exports.
  */
 
-import { ExportData } from "../services/storage/schema";
-import { storageClient } from "../services/storage/client";
 import { logger } from "../services/errors/logger";
-import { ErrorSource, ErrorSeverity } from "../services/errors/service";
-import { ImportExportError } from "../services/errors/service";
+import {
+  ErrorSeverity,
+  ErrorSource,
+  ImportExportError,
+} from "../services/errors/service";
+import { storageClient } from "../services/storage/client";
+import { ExportData } from "../services/storage/schema";
 
 /**
  * Export format options
@@ -375,7 +378,9 @@ export class ExportService {
       logger.info(
         ErrorSource.BACKGROUND,
         "Export file downloaded successfully",
-        { filename: result.filename },
+        {
+          filename: result.filename,
+        },
       );
     } catch (error) {
       logger.error(ErrorSource.BACKGROUND, "Failed to download export file", {
@@ -797,7 +802,8 @@ export class ExportService {
         canImport: true,
         canExport: true,
         supportedFormats: ["json"],
-        compressionSupported: typeof window !== "undefined" && "CompressionStream" in window,
+        compressionSupported:
+          typeof window !== "undefined" && "CompressionStream" in window,
       };
     } catch (error) {
       logger.error(

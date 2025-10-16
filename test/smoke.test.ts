@@ -3,7 +3,7 @@
  * This test should always pass and serves as a baseline for testing setup
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 describe("Test Harness Smoke Test", () => {
   it("should be able to run tests successfully", () => {

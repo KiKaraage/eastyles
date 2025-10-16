@@ -3,9 +3,9 @@
  * Covers CRUD operations, migrations, and import/export round trips
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { createUserCSSStyle } from "../../services/storage/schema";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UserCSSStyle } from "../../services/storage/schema";
+import { createUserCSSStyle } from "../../services/storage/schema";
 
 // Mock the storage client
 vi.mock("../../services/storage/client", () => {

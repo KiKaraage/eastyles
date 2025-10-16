@@ -5,13 +5,13 @@
  * original install-time defaults instead of current defaults.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { variablePersistenceService } from "../../../services/usercss/variable-service";
-import { storageClient } from "../../../services/storage/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { messageBus } from "../../../services/messaging/bus";
-import type { VariableDescriptor } from "../../../services/usercss/types";
+import { storageClient } from "../../../services/storage/client";
 import type { UserCSSStyle } from "../../../services/storage/schema";
 import { createUserCSSStyle } from "../../../services/storage/schema";
+import type { VariableDescriptor } from "../../../services/usercss/types";
+import { variablePersistenceService } from "../../../services/usercss/variable-service";
 
 // Mock browser APIs
 const mockBrowser = {
@@ -50,7 +50,9 @@ vi.mock("../../../services/storage/client", () => ({
     updateUserCSSStyleVariables: vi.fn(),
     addUserCSSStyle: vi.fn(),
     resetAll: vi.fn(),
-    watchUserCSSStyles: vi.fn().mockReturnValue(() => {}),
+    watchUserCSSStyles: vi.fn().mockReturnValue(() => {
+      /* no-op */
+    }),
   },
 }));
 

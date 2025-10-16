@@ -1,25 +1,25 @@
-import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // Unmock the service to test the actual implementation
 vi.unmock("@services/errors/service");
 
 import {
-  ErrorService,
-  errorService,
-  StorageError,
-  StorageQuotaExceededError,
-  StorageInvalidDataError,
-  MessageError,
-  MessageTimeoutError,
-  MessageInvalidError,
-  ImportExportError,
-  InvalidFileFormatError,
-  DataCorruptedError,
-  RuntimeError,
   BrowserAPIError,
-  PermissionDeniedError,
+  DataCorruptedError,
+  ErrorService,
   ErrorSeverity,
   ErrorSource,
+  errorService,
+  ImportExportError,
+  InvalidFileFormatError,
+  MessageError,
+  MessageInvalidError,
+  MessageTimeoutError,
+  PermissionDeniedError,
+  RuntimeError,
+  StorageError,
+  StorageInvalidDataError,
+  StorageQuotaExceededError,
   withErrorHandling,
   withSyncErrorHandling,
 } from "@services/errors/service";
@@ -51,7 +51,9 @@ describe("ErrorService", () => {
 
   beforeEach(() => {
     service = new ErrorService();
-    consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
+      /* no-op */
+    });
   });
 
   afterEach(() => {
