@@ -8,14 +8,15 @@
  * - Handling style updates and removals
  */
 
-import { domainDetector } from "./domain-detector";
-import { UserCSSStyle } from "../storage/schema";
+import { browser } from "wxt/browser";
 import { logger } from "../errors/logger";
 import { ErrorSource } from "../errors/service";
+import { UserCSSStyle } from "../storage/schema";
+// Import types only - actual functions imported lazily to avoid init errors
+import type { ExternalAsset } from "./asset-processor";
 import { cssInjector } from "./css-injector";
+import { domainDetector } from "./domain-detector";
 import { resolveVariables } from "./variables";
-import { extractExternalUrls, ExternalAsset } from "./asset-processor";
-import { browser } from "wxt/browser";
 
 export interface ContentController {
   /**
@@ -74,23 +75,32 @@ export class UserCSSContentController implements ContentController {
    * Initialize the content controller
    */
   async initialize(): Promise<void> {
+    console.log("[ea-ContentController] Starting initialization...");
     this.debug("Initializing content controller");
 
     try {
       // Get current URL
       this.currentUrl = window.location.href;
+      console.log("[ea-ContentController] Current URL:", this.currentUrl);
 
       // Check CSP headers that might affect CSS injection
+      console.log("[ea-ContentController] Checking CSP headers...");
       this.checkCSPHeaders();
 
       // Query active styles for current URL
+      console.log("[ea-ContentController] Querying and applying styles...");
       await this.queryAndApplyStyles();
 
       // Set up navigation listener
+      console.log("[ea-ContentController] Setting up navigation listener...");
       this.setupNavigationListener();
 
+      console.log(
+        "[ea-ContentController] Content controller initialized successfully",
+      );
       this.debug("Content controller initialized successfully");
     } catch (error) {
+      console.error("[ea-ContentController] Failed to initialize:", error);
       logger.error?.(
         ErrorSource.CONTENT,
         "Failed to initialize content controller",
@@ -230,9 +240,11 @@ export class UserCSSContentController implements ContentController {
   }
 
   /**
-   * Query active styles from background script
+   * Query active styles from background script with timeout
    */
   private async queryActiveStyles(): Promise<UserCSSStyle[]> {
+    const queryTimeout = 5000; // 5 second timeout for background query
+
     try {
       this.debug(
         "Querying active styles from background for URL:",
@@ -241,25 +253,49 @@ export class UserCSSContentController implements ContentController {
 
       // Check if background script is available first
       if (!browser.runtime?.id) {
+        console.log(
+          "[ea-ContentController] Background script not available (no runtime.id)",
+        );
         this.debug("Background script not available (no runtime.id)");
         return [];
       }
 
-      // Send message to background script to get styles for current URL
-      console.log("[ContentController] Sending QUERY_STYLES_FOR_URL message");
-      const response = (await browser.runtime.sendMessage({
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(`Background query timeout after ${queryTimeout}ms`),
+            ),
+          queryTimeout,
+        );
+      });
+
+      // Send message to background script
+      console.log(
+        "[ea-ContentController] Sending QUERY_STYLES_FOR_URL message",
+      );
+      const messagePromise = browser.runtime.sendMessage({
         type: "QUERY_STYLES_FOR_URL",
         payload: { url: this.currentUrl },
-      })) as {
+      });
+
+      const response = (await Promise.race([
+        messagePromise,
+        timeoutPromise,
+      ])) as {
         success: boolean;
         error?: string;
         styles?: UserCSSStyle[];
       };
 
-      console.log("[ContentController] Raw response received:", response);
-      console.log("[ContentController] Response type:", typeof response);
+      console.log("[ea-ContentController] Raw response received:", response);
+      console.log("[ea-ContentController] Response type:", typeof response);
 
       if (response && response.success && response.styles) {
+        console.log(
+          `[ContentController] Received ${response.styles.length} styles from background`,
+        );
         this.debug(
           `Received ${response.styles.length} styles from background:`,
           response.styles.map((s) => s.id),
@@ -267,22 +303,31 @@ export class UserCSSContentController implements ContentController {
         this.retryCount = 0; // Reset retry count on success
         return response.styles;
       } else {
+        console.log(
+          "[ea-ContentController] No styles received from background or query failed",
+        );
         this.debug("No styles received from background or query failed");
         return [];
       }
     } catch (error) {
-      // Handle connection errors gracefully
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+      console.error("[ea-ContentController] Query error:", errorMessage);
+
+      // Handle connection errors gracefully
       if (
         errorMessage.includes("Could not establish connection") ||
         errorMessage.includes("Receiving end does not exist") ||
         errorMessage.includes("Message timeout") ||
-        errorMessage.includes("out of scope")
+        errorMessage.includes("out of scope") ||
+        errorMessage.includes("Background query timeout")
       ) {
         this.retryCount++;
 
         if (this.retryCount >= this.maxRetries) {
+          console.error(
+            `[ContentController] Background script not available after ${this.maxRetries} retries`,
+          );
           logger.error?.(
             ErrorSource.CONTENT,
             `Background script not available after ${this.maxRetries} retries, giving up`,
@@ -296,6 +341,9 @@ export class UserCSSContentController implements ContentController {
           return [];
         }
 
+        console.log(
+          `[ContentController] Retrying background query in 2 seconds (${this.retryCount}/${this.maxRetries})`,
+        );
         logger.error?.(
           ErrorSource.CONTENT,
           `Background script not available, retrying in 2 seconds (${this.retryCount}/${this.maxRetries})`,
@@ -308,6 +356,10 @@ export class UserCSSContentController implements ContentController {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         return this.queryActiveStyles();
       } else {
+        console.error(
+          "[ContentController] Unexpected query error:",
+          errorMessage,
+        );
         logger.error?.(
           ErrorSource.CONTENT,
           "Failed to query active styles from background",
@@ -394,10 +446,12 @@ export class UserCSSContentController implements ContentController {
   }
 
   /**
-   * Apply a single style
+   * Apply a single style with timeout protection
    */
   private async applyStyle(style: UserCSSStyle): Promise<void> {
     const styleStartTime = performance.now();
+    const timeoutMs = 30000; // Extended to 30 seconds for heavy styles with large assets
+
     try {
       this.debug(
         "Applying style:",
@@ -413,155 +467,18 @@ export class UserCSSContentController implements ContentController {
         style.compiledCss.length,
       );
 
-      // Resolve variables in the CSS
-      let finalCss = style.compiledCss;
-      if (style.variables && Object.keys(style.variables).length > 0) {
-        // Create values object from variable descriptors
-        const values: Record<string, string> = {};
-        for (const [name, variable] of Object.entries(style.variables)) {
-          let value = variable.value || variable.default || "";
+      // Create an AbortController for the entire operation
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
 
-          // For select variables, if the value is a display label, map it to CSS content
-          if (variable.type === 'select' && variable.optionCss && variable.optionCss[value]) {
-            value = variable.optionCss[value];
-          }
-
-          values[name] = value;
-        }
-
-        console.log(
-          "[ContentController] Resolving variables for style:",
-          style.id,
-          "variables:",
-          values,
-        );
-        // Resolve variables in CSS
-        finalCss = resolveVariables(style.compiledCss, values);
-        this.debug(
-          "Variables resolved for style:",
-          style.id,
-          "final CSS length:",
-          finalCss.length,
-        );
-        console.log(
-          "[ContentController] Variables resolved, final CSS preview:",
-          finalCss.substring(0, 200) + "...",
-        );
-      } else {
-        console.log(
-          "[ContentController] No variables to resolve for style:",
-          style.id,
-        );
+      try {
+        // Wrap the entire style application in a timeout
+        await this.applyStyleInternal(style, styleStartTime, controller.signal);
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-       // Process external assets (images, fonts) to work around CSP restrictions
-       console.log("[ContentController] Processing external assets for style:", style.id);
-       try {
-         const assetProcessingStart = performance.now();
-         const assetResult = await this.processExternalAssets(finalCss);
-         finalCss = assetResult.css;
-
-         const assetProcessingDuration = performance.now() - assetProcessingStart;
-         const successfulAssets = assetResult.assets.filter(a => a.dataUrl).length;
-         const totalAssets = assetResult.assets.length;
-
-         console.log(
-           `[ContentController] Asset processing completed in ${assetProcessingDuration.toFixed(2)}ms:`,
-           `${successfulAssets}/${totalAssets} assets processed`
-         );
-
-         if (successfulAssets < totalAssets) {
-           console.warn(
-             `[ContentController] Some assets failed to load: ${totalAssets - successfulAssets} failed`
-           );
-           // Log failed assets
-           assetResult.assets.filter(a => !a.dataUrl && a.error).forEach(asset => {
-             console.warn(`[ContentController] Failed asset: ${asset.url} - ${asset.error}`);
-           });
-         }
-
-         if (assetProcessingDuration > 500) {
-           logger.warn?.(
-             ErrorSource.CONTENT,
-             `Asset processing exceeded threshold: ${assetProcessingDuration.toFixed(2)}ms`,
-             {
-               styleId: style.id,
-               totalAssets,
-               processedAssets: successfulAssets,
-               duration: `${assetProcessingDuration.toFixed(2)}ms`,
-             },
-           );
-         }
-       } catch (error) {
-         console.warn("[ContentController] Asset processing failed:", error);
-         logger.error?.(
-           ErrorSource.CONTENT,
-           "Failed to process external assets",
-           {
-             error: error instanceof Error ? error.message : String(error),
-             styleId: style.id,
-           },
-         );
-         // Continue with original CSS if asset processing fails
-       }
-
-       // Preprocess CSS to fix browser compatibility issues
-       finalCss = this.preprocessCSS(finalCss);
-
-       // Inject the CSS using the CSS injector
-       console.log(
-         "[ContentController] Injecting CSS for style:",
-         style.id,
-         "final CSS length:",
-         finalCss.length,
-       );
-       console.log(
-         "[ContentController] Final CSS content preview:",
-         finalCss.substring(0, 300) + (finalCss.length > 300 ? "..." : ""),
-       );
-
-      // Check if CSS contains valid selectors
-      const selectorMatches = finalCss.match(/\{[^}]*\}/g);
-      console.log(
-        "[ContentController] CSS rule blocks found:",
-        selectorMatches?.length || 0,
-      );
-
-      await cssInjector.inject(finalCss, style.id);
-      console.log(
-        "[ContentController] CSS injection completed for style:",
-        style.id,
-      );
-
-      // Mark as applied
-      this.appliedStyles.set(style.id, style);
-
-      // Log performance for individual style application
-      const styleDuration = performance.now() - styleStartTime;
-      if (styleDuration > 300) {
-        // Individual style taking too long - log as warning
-        logger.warn?.(
-          ErrorSource.CONTENT,
-          `Individual style application exceeded threshold: ${styleDuration.toFixed(2)}ms`,
-          {
-            styleId: style.id,
-            styleName: style.name,
-            duration: `${styleDuration.toFixed(2)}ms`,
-            threshold: "300ms",
-            cssLength: style.compiledCss.length,
-            hasVariables: !!(
-              style.variables && Object.keys(style.variables).length > 0
-            ),
-          },
-        );
-      } else {
-        this.debug(
-          `Style ${style.id} applied in ${styleDuration.toFixed(2)}ms`,
-        );
-      }
-
-      // Verify the style was actually applied by checking if it's in the DOM
-      this.verifyStyleApplication(style.id);
 
       this.debug("Style applied successfully:", style.id);
     } catch (error) {
@@ -578,6 +495,167 @@ export class UserCSSContentController implements ContentController {
         cssLength: style.compiledCss.length,
       });
     }
+  }
+
+  /**
+   * Instrument Sansnal style application logic
+   */
+  private async applyStyleInternal(
+    style: UserCSSStyle,
+    styleStartTime: number,
+    abortSignal: AbortSignal,
+  ): Promise<void> {
+    // Resolve variables in the CSS
+    let finalCss = style.compiledCss;
+    if (style.variables && Object.keys(style.variables).length > 0) {
+      // Create values object from variable descriptors
+      const values: Record<string, string> = {};
+      for (const [name, variable] of Object.entries(style.variables)) {
+        // Don't transform select/dropdown values here - let resolveVariables handle it
+        // This ensures consistent handling of USO optionCss mappings
+        values[name] = variable.value || variable.default || "";
+      }
+
+      console.log(
+        "[ContentController] Resolving variables for style:",
+        style.id,
+        "variables:",
+        values,
+      );
+      // Resolve variables in CSS (pass variables descriptor for optionCss handling)
+      finalCss = await resolveVariables(
+        style.compiledCss,
+        values,
+        style.variables,
+      );
+      this.debug(
+        "Variables resolved for style:",
+        style.id,
+        "final CSS length:",
+        finalCss.length,
+      );
+      console.log(
+        "[ContentController] Variables resolved, final CSS preview:",
+        finalCss.substring(0, 200) + "...",
+      );
+    } else {
+      console.log(
+        "[ContentController] No variables to resolve for style:",
+        style.id,
+      );
+    }
+
+    // Process external assets (images, fonts) to work around CSP restrictions
+    console.log(
+      "[ea-ContentController] Processing external assets for style:",
+      style.id,
+    );
+    try {
+      const assetProcessingStart = performance.now();
+      const assetResult = await this.processExternalAssets(finalCss);
+      finalCss = assetResult.css;
+
+      const assetProcessingDuration = performance.now() - assetProcessingStart;
+      const successfulAssets = assetResult.assets.filter(
+        (a) => a.dataUrl,
+      ).length;
+      const totalAssets = assetResult.assets.length;
+
+      console.log(
+        `[ContentController] Asset processing completed in ${assetProcessingDuration.toFixed(2)}ms:`,
+        `${successfulAssets}/${totalAssets} assets processed`,
+      );
+
+      if (successfulAssets < totalAssets) {
+        console.warn(
+          `[ea-ContentController] Some assets failed to load: ${totalAssets - successfulAssets} failed`,
+        );
+        // Log failed assets
+        assetResult.assets
+          .filter((a) => !a.dataUrl && a.error)
+          .forEach((asset) => {
+            console.warn(
+              `[ea-ContentController] Failed asset: ${asset.url} - ${asset.error}`,
+            );
+          });
+      }
+
+      if (assetProcessingDuration > 500) {
+        logger.warn?.(
+          ErrorSource.CONTENT,
+          `Asset processing exceeded threshold: ${assetProcessingDuration.toFixed(2)}ms`,
+          {
+            styleId: style.id,
+            totalAssets,
+            processedAssets: successfulAssets,
+            duration: `${assetProcessingDuration.toFixed(2)}ms`,
+          },
+        );
+      }
+    } catch (error) {
+      console.warn("[ContentController] Asset processing failed:", error);
+      logger.error?.(ErrorSource.CONTENT, "Failed to process external assets", {
+        error: error instanceof Error ? error.message : String(error),
+        styleId: style.id,
+      });
+      // Continue with original CSS if asset processing fails
+    }
+
+    // Preprocess CSS to fix browser compatibility issues
+    finalCss = await this.preprocessCSS(finalCss, abortSignal);
+
+    // Inject the CSS using the CSS injector
+    console.log(
+      "[ContentController] Injecting CSS for style:",
+      style.id,
+      "final CSS length:",
+      finalCss.length,
+    );
+    console.log(
+      "[ContentController] Final CSS content preview:",
+      finalCss.substring(0, 300) + (finalCss.length > 300 ? "..." : ""),
+    );
+
+    // Check if CSS contains valid selectors
+    const selectorMatches = finalCss.match(/\{[^}]*\}/g);
+    console.log(
+      "[ContentController] CSS rule blocks found:",
+      selectorMatches?.length || 0,
+    );
+
+    await cssInjector.inject(finalCss, style.id);
+    console.log(
+      "[ContentController] CSS injection completed for style:",
+      style.id,
+    );
+
+    // Mark as applied
+    this.appliedStyles.set(style.id, style);
+
+    // Log performance for individual style application
+    const styleDuration = performance.now() - styleStartTime;
+    if (styleDuration > 300) {
+      // Individual style taking too long - log as warning
+      logger.warn?.(
+        ErrorSource.CONTENT,
+        `Individual style application exceeded threshold: ${styleDuration.toFixed(2)}ms`,
+        {
+          styleId: style.id,
+          styleName: style.name,
+          duration: `${styleDuration.toFixed(2)}ms`,
+          threshold: "300ms",
+          cssLength: style.compiledCss.length,
+          hasVariables: !!(
+            style.variables && Object.keys(style.variables).length > 0
+          ),
+        },
+      );
+    } else {
+      this.debug(`Style ${style.id} applied in ${styleDuration.toFixed(2)}ms`);
+    }
+
+    // Verify the style was actually applied by checking if it's in the DOM
+    this.verifyStyleApplication(style.id);
   }
 
   /**
@@ -613,6 +691,37 @@ export class UserCSSContentController implements ContentController {
       const matches = domainDetector.matches(this.currentUrl, style.domains);
 
       if (matches) {
+        // For style updates (including variable changes), we need to reprocess from source
+        // to ensure variables are properly resolved
+        if (style.source && style.variables) {
+          // Create values object from current variable values
+          const values: Record<string, string> = {};
+          for (const [name, variable] of Object.entries(style.variables)) {
+            values[name] = variable.value || variable.default || "";
+          }
+
+          // Import processUserCSS lazily to avoid circular dependencies
+          try {
+            const { processUserCSS } = await import("./processor");
+            const result = await processUserCSS(style.source, values);
+
+            // Update the style with the newly processed CSS
+            style = {
+              ...style,
+              compiledCss: result.compiledCss,
+              variables: result.meta.variables || {},
+            };
+
+            this.debug(`Reprocessed style ${styleId} with updated variables`);
+          } catch (processError) {
+            console.error(
+              "[ContentController] Failed to reprocess CSS for style update:",
+              processError,
+            );
+            // Fall back to using the existing compiled CSS
+          }
+        }
+
         // Update or apply the style
         await this.applyStyle(style);
         console.log("CSS reloaded for style:", styleId);
@@ -662,46 +771,104 @@ export class UserCSSContentController implements ContentController {
         return;
       }
 
-      // Update the style's variables
-      const updatedStyle = {
-        ...appliedStyle,
-        variables: { ...appliedStyle.variables },
-      };
+      // Create an AbortController for this operation
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 10000); // 10 second timeout for variable updates
 
-      // Update variable values
-      for (const [varName, varValue] of Object.entries(variables)) {
-        if (updatedStyle.variables[varName]) {
-          updatedStyle.variables[varName] = {
-            ...updatedStyle.variables[varName],
-            value: varValue,
-          };
+      try {
+        // Update the style's variables
+        const updatedStyle = {
+          ...appliedStyle,
+          variables: { ...appliedStyle.variables },
+        };
+
+        // Update variable values
+        for (const [varName, varValue] of Object.entries(variables)) {
+          if (updatedStyle.variables[varName]) {
+            updatedStyle.variables[varName] = {
+              ...updatedStyle.variables[varName],
+              value: varValue,
+            };
+          }
         }
-      }
 
-      // Resolve variables in the CSS
-      let finalCss = updatedStyle.compiledCss;
-      if (updatedStyle.variables && Object.keys(updatedStyle.variables).length > 0) {
+        // Resolve variables in the CSS
+        const originalSource = updatedStyle.source;
         const values: Record<string, string> = {};
         for (const [name, variable] of Object.entries(updatedStyle.variables)) {
           values[name] = variable.value;
         }
-        finalCss = resolveVariables(updatedStyle.compiledCss, values);
+        let finalCss = await resolveVariables(
+          originalSource,
+          values,
+          updatedStyle.variables,
+        );
+        if (
+          updatedStyle.variables &&
+          Object.keys(updatedStyle.variables).length > 0
+        ) {
+          const values: Record<string, string> = {};
+          for (const [name, variable] of Object.entries(
+            updatedStyle.variables,
+          )) {
+            values[name] = variable.value;
+          }
+          // Pass variables descriptor for proper optionCss handling
+          finalCss = await resolveVariables(
+            updatedStyle.compiledCss,
+            values,
+            updatedStyle.variables,
+          );
+        }
+
+        // Process external assets
+        // Clear relevant assets from cache when variables change to ensure fresh fetch
+        if (this.appliedStyles.has(styleId)) {
+          const oldStyle = this.appliedStyles.get(styleId);
+          if (oldStyle && oldStyle.compiledCss !== finalCss) {
+            // CSS changed, extract old URLs and clear them from cache
+            try {
+              const { extractExternalUrls } = await import("./asset-processor");
+              const oldAssets = extractExternalUrls(oldStyle.compiledCss);
+              const { assetCache } = await import("./asset-processor");
+
+              // Clear old assets from cache
+              for (const asset of oldAssets) {
+                await assetCache.remove(asset.url);
+              }
+
+              if (oldAssets.length > 0) {
+                console.log(
+                  `[ContentController] Cleared ${oldAssets.length} old assets from cache for style ${styleId}`,
+                );
+              }
+            } catch (error) {
+              console.warn(
+                "[ea-ContentController] Failed to clear old assets from cache:",
+                error,
+              );
+            }
+          }
+        }
+
+        const assetResult = await this.processExternalAssets(finalCss);
+        finalCss = assetResult.css;
+
+        // Preprocess CSS
+        finalCss = await this.preprocessCSS(finalCss, controller.signal);
+
+        // Update the injected CSS instead of re-injecting
+        await cssInjector.update(styleId, finalCss);
+
+        // Update the applied style record
+        this.appliedStyles.set(styleId, updatedStyle);
+
+        this.debug("Variables updated and style re-applied:", styleId);
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      // Process external assets
-      const assetResult = await this.processExternalAssets(finalCss);
-      finalCss = assetResult.css;
-
-      // Preprocess CSS
-      finalCss = this.preprocessCSS(finalCss);
-
-      // Update the injected CSS instead of re-injecting
-      await cssInjector.update(styleId, finalCss);
-
-      // Update the applied style record
-      this.appliedStyles.set(styleId, updatedStyle);
-
-      this.debug("Variables updated and style re-applied:", styleId);
     } catch (error) {
       logger.error?.(ErrorSource.CONTENT, "Failed to handle variable update", {
         error: error instanceof Error ? error.message : String(error),
@@ -715,10 +882,10 @@ export class UserCSSContentController implements ContentController {
    */
   private checkCSPHeaders(): void {
     try {
-      console.log("[ContentController] Checking CSP headers...");
+      console.log("[ea-ContentController] Checking CSP headers...");
 
       // Check meta tag CSP
-      const cspMeta = document.querySelector(
+      const cspMeta = globalThis.document.querySelector(
         'meta[http-equiv="Content-Security-Policy"]',
       );
       if (cspMeta) {
@@ -729,9 +896,9 @@ export class UserCSSContentController implements ContentController {
       }
 
       // Try to detect CSP violations by attempting a simple style injection
-      const testStyle = document.createElement("style");
+      const testStyle = globalThis.document.createElement("style");
       testStyle.textContent = "/* CSP test */";
-      document.head.appendChild(testStyle);
+      globalThis.document.head.appendChild(testStyle);
 
       // Remove test style after a short delay
       setTimeout(() => {
@@ -748,106 +915,42 @@ export class UserCSSContentController implements ContentController {
       }, 100);
 
       // Check for CSP violation events
-      document.addEventListener("securitypolicyviolation", (event) => {
-        console.error("[ContentController] CSP violation detected:", {
-          violatedDirective: event.violatedDirective,
-          blockedURI: event.blockedURI,
-          sourceFile: event.sourceFile,
-          lineNumber: event.lineNumber,
-        });
-      });
+      globalThis.document.addEventListener(
+        "securitypolicyviolation",
+        (event) => {
+          console.error("[ContentController] CSP violation detected:", {
+            violatedDirective: event.violatedDirective,
+            blockedURI: event.blockedURI,
+            sourceFile: event.sourceFile,
+            lineNumber: event.lineNumber,
+          });
+        },
+      );
     } catch (error) {
       console.error("[ContentController] Error checking CSP headers:", error);
     }
   }
 
   /**
-   * Preprocess CSS to fix browser compatibility issues
+   * Preprocess CSS to fix browser compatibility issues with chunked processing
    */
-  private preprocessCSS(css: string): string {
-    let processedCss = css;
-
-    console.log("[ContentController] Original CSS length:", css.length);
+  private async preprocessCSS(
+    css: string,
+    abortSignal: AbortSignal,
+  ): Promise<string> {
+    console.log("[ea-ContentController] Original CSS length:", css.length);
     console.log(
       "[ContentController] Original CSS preview:",
       css.substring(0, 500),
     );
 
-    // Remove @-moz-document rules and extract their content
-    // This is crucial for content script CSS injection as @-moz-document is not supported
-    let allExtractedContent = "";
-    let hasExtractedContent = false;
-    let extractionCount = 0;
+    // Process @-moz-document extraction in chunks to avoid blocking
+    const extractedContent = await this.extractMozDocumentContent(
+      css,
+      abortSignal,
+    );
 
-    // Find all @-moz-document blocks and extract their content
-    // Use a more robust regex that handles nested braces properly
-    const mozDocumentRegex = /@-moz-document\s+[^{]*\{/g;
-    const cssWithoutMozDocument = css;
-    let match;
-
-    while ((match = mozDocumentRegex.exec(cssWithoutMozDocument)) !== null) {
-      const startIndex = match.index;
-      const openBraceIndex = startIndex + match[0].length - 1;
-
-      // Find the matching closing brace
-      let braceCount = 1;
-      const contentStartIndex = openBraceIndex + 1;
-      let currentIndex = contentStartIndex;
-
-      while (currentIndex < cssWithoutMozDocument.length && braceCount > 0) {
-        const char = cssWithoutMozDocument[currentIndex];
-        if (char === "{") {
-          braceCount++;
-        } else if (char === "}") {
-          braceCount--;
-        }
-        currentIndex++;
-      }
-
-      if (braceCount === 0) {
-        const content = cssWithoutMozDocument.substring(
-          contentStartIndex,
-          currentIndex - 1,
-        );
-        extractionCount++;
-
-        console.log(
-          `[ContentController] Extracting @-moz-document block ${extractionCount}`,
-          {
-            blockLength: content.length,
-            preview: content.substring(0, 200),
-            startIndex: contentStartIndex,
-            endIndex: currentIndex - 1,
-          },
-        );
-
-        // Clean up the extracted content
-        const cleanContent = content.trim();
-
-        // Add the extracted content
-        allExtractedContent += cleanContent + "\n\n";
-        hasExtractedContent = true;
-
-        // Move past this block
-        mozDocumentRegex.lastIndex = currentIndex;
-      }
-    }
-
-    // If we extracted content, replace the CSS with all extracted content
-    if (hasExtractedContent) {
-      processedCss = allExtractedContent.trim();
-      console.log(
-        "[ContentController] Total extracted content length:",
-        processedCss.length,
-        "from",
-        extractionCount,
-        "blocks",
-      );
-      console.log(
-        "[ContentController] Extracted content preview:",
-        processedCss.substring(0, 500),
-      );
-    }
+    let processedCss = extractedContent || css;
 
     // Fix IE-specific pseudo-selectors that Firefox doesn't understand
     processedCss = processedCss.replace(
@@ -875,9 +978,11 @@ export class UserCSSContentController implements ContentController {
     processedCss = processedCss.replace(/\n\s*\n/g, "\n"); // Remove excessive line breaks
     processedCss = processedCss.replace(/[^}]*{\s*}\s*/g, ""); // Remove empty rules
 
-    console.log("[ContentController] CSS preprocessing completed");
+    console.log("[ea-ContentController] CSS preprocessing completed");
     if (processedCss !== css) {
-      console.log("[ContentController] CSS was modified during preprocessing");
+      console.log(
+        "[ea-ContentController] CSS was modified during preprocessing",
+      );
       console.log(
         "[ContentController] Original length:",
         css.length,
@@ -889,15 +994,158 @@ export class UserCSSContentController implements ContentController {
     return processedCss.trim();
   }
 
+  /**
+   * Extract @-moz-document content in chunks to avoid blocking
+   */
+  private async extractMozDocumentContent(
+    css: string,
+    abortSignal: AbortSignal,
+  ): Promise<string | null> {
+    // Remove @-moz-document rules and extract their content
+    // This is crucial for content script CSS injection as @-moz-document is not supported
+    let allExtractedContent = "";
+    let hasExtractedContent = false;
+    let extractionCount = 0;
 
+    // Find all @-moz-document blocks and extract their content
+    // Use a more robust regex that handles nested braces properly
+    const mozDocumentRegex = /@-moz-document\s+[^{]*\{/g;
+    let match: RegExpExecArray | null = null;
+    let searchStartIndex = 0;
+
+    match = mozDocumentRegex.exec(css);
+    while (match !== null) {
+      const startIndex = match.index;
+      const openBraceIndex = startIndex + match[0].length - 1;
+
+      // Find the matching closing brace by processing in chunks
+      const content = await this.findClosingBrace(
+        css,
+        openBraceIndex + 1,
+        abortSignal,
+      );
+      if (content === null) {
+        console.warn(
+          "[ea-ContentController] Could not find closing brace for @-moz-document block",
+        );
+        break;
+      }
+
+      extractionCount++;
+
+      console.log(
+        `[ContentController] Extracting @-moz-document block ${extractionCount}`,
+        {
+          blockLength: content.length,
+          preview: content.substring(0, 200),
+          startIndex: openBraceIndex + 1,
+          endIndex: openBraceIndex + 1 + content.length,
+        },
+      );
+
+      // Clean up the extracted content
+      const cleanContent = content.trim();
+
+      // Add the extracted content
+      allExtractedContent += cleanContent + "\n\n";
+      hasExtractedContent = true;
+
+      // Move past this block for next search
+      searchStartIndex = openBraceIndex + 1 + content.length + 1; // +1 for the closing brace
+      mozDocumentRegex.lastIndex = searchStartIndex;
+
+      // Yield control after each block
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      match = mozDocumentRegex.exec(css);
+    }
+
+    // If we extracted content, return it
+    if (hasExtractedContent) {
+      const result = allExtractedContent.trim();
+      console.log(
+        "[ContentController] Total extracted content length:",
+        result.length,
+        "from",
+        extractionCount,
+        "blocks",
+      );
+      console.log(
+        "[ContentController] Extracted content preview:",
+        result.substring(0, 500),
+      );
+      return result;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find the matching closing brace for a CSS block by processing one character at a time
+   */
+  private async findClosingBrace(
+    css: string,
+    startIndex: number,
+    abortSignal: AbortSignal,
+  ): Promise<string | null> {
+    let braceCount = 1;
+    let currentIndex = startIndex;
+    const maxIterations = 100000; // Safety limit to prevent infinite loops
+    let iterations = 0;
+
+    while (
+      currentIndex < css.length &&
+      braceCount > 0 &&
+      !abortSignal.aborted
+    ) {
+      const char = css[currentIndex];
+      if (char === "{") {
+        braceCount++;
+      } else if (char === "}") {
+        braceCount--;
+      }
+      currentIndex++;
+      iterations++;
+
+      // Yield control more frequently for large CSS with data URLs
+      if (iterations % 50 === 0) {
+        // Yield every 50 characters for responsiveness
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      // Safety check to prevent infinite loops
+      if (iterations > maxIterations) {
+        console.warn(
+          "[ea-ContentController] findClosingBrace exceeded maximum iterations, possibly malformed CSS",
+        );
+        break;
+      }
+
+      // Check for abort
+      if (abortSignal.aborted) {
+        throw new Error("CSS processing aborted");
+      }
+    }
+
+    if (abortSignal.aborted) {
+      throw new Error("CSS processing aborted");
+    }
+
+    if (braceCount === 0) {
+      // Return the content between startIndex and currentIndex - 1
+      return css.substring(startIndex, currentIndex - 1);
+    }
+
+    return null;
+  }
 
   /**
    * Verify that a style was actually applied to the DOM
    */
-   private verifyStyleApplication(styleId: string): void {
+  private verifyStyleApplication(styleId: string): void {
     try {
       // Check if style element exists in DOM
-      const styleElement = document.querySelector(
+      const styleElement = globalThis.document.querySelector(
         `style[data-eastyles-id="${styleId}"]`,
       );
       console.log(
@@ -927,9 +1175,9 @@ export class UserCSSContentController implements ContentController {
       }
 
       // Check if constructable stylesheet was used
-      if (document.adoptedStyleSheets) {
+      if (globalThis.document.adoptedStyleSheets) {
         console.log(
-          `[ContentController] AdoptedStyleSheets count: ${document.adoptedStyleSheets.length}`,
+          `[ContentController] AdoptedStyleSheets count: ${globalThis.document.adoptedStyleSheets.length}`,
         );
       }
 
@@ -940,34 +1188,13 @@ export class UserCSSContentController implements ContentController {
         );
         console.log(
           `- Body background:`,
-          window.getComputedStyle(document.body).backgroundColor,
+          globalThis.window.getComputedStyle(globalThis.document.body)
+            .backgroundColor,
         );
         console.log(
           `- Body color:`,
-          window.getComputedStyle(document.body).color,
+          globalThis.window.getComputedStyle(globalThis.document.body).color,
         );
-
-        // Look for common Discord elements that might be styled
-        const discordElements = document.querySelectorAll(
-          '[class*="header"], [class*="channel"], [class*="message"]',
-        );
-        if (discordElements.length > 0) {
-          console.log(
-            `[ContentController] Found ${discordElements.length} potential Discord elements`,
-          );
-          // Check first few elements
-          for (let i = 0; i < Math.min(discordElements.length, 3); i++) {
-            const el = discordElements[i] as HTMLElement;
-            console.log(
-              `[ContentController] Element ${i} classes:`,
-              el.className,
-            );
-            console.log(
-              `[ContentController] Element ${i} display:`,
-              window.getComputedStyle(el).display,
-            );
-          }
-        }
       }, 200);
     } catch (error) {
       console.error(
@@ -978,59 +1205,28 @@ export class UserCSSContentController implements ContentController {
   }
 
   /**
-   * Process external assets in CSS content
+   * Process external assets in CSS content with chunked processing
+   * Fetches assets directly in content script context (has access to fetch API)
    */
-  private async processExternalAssets(css: string): Promise<{ css: string; assets: ExternalAsset[] }> {
-    // Extract external URLs from CSS
-    const assets = extractExternalUrls(css);
-
-    if (assets.length === 0) {
-      return { css, assets: [] };
-    }
-
-    console.log(`[ContentController] Found ${assets.length} external assets to process`);
-
-    // Check if background script is available
-    if (!browser.runtime?.id) {
-      console.warn("[ContentController] Background script not available for asset processing");
-      return { css, assets };
-    }
-
+  private async processExternalAssets(
+    css: string,
+  ): Promise<{ css: string; assets: ExternalAsset[] }> {
     try {
-      // Send assets to background script for processing
-      const response = await browser.runtime.sendMessage({
-        type: "FETCH_ASSETS",
-        payload: { assets },
-      }) as {
-        success: boolean;
-        assets?: ExternalAsset[];
-        error?: string;
-      };
+      // Import asset processor functions lazily
+      const { processAssetsInCss } = await import("./asset-processor");
 
-      if (response.success && response.assets) {
-        console.log(`[ContentController] Background processed ${response.assets.filter((a: ExternalAsset) => a.dataUrl).length}/${response.assets.length} assets`);
+      // Use the chunked processing function
+      const result = await processAssetsInCss(css);
 
-        // Replace URLs in CSS with data URLs
-        let processedCss = css;
-        for (const asset of response.assets) {
-          if (asset.dataUrl) {
-            // Escape special regex characters in URL
-            const escapedUrl = asset.originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      console.log(
+        `[ContentController] Asset processing completed: ${result.assets.filter((a) => a.dataUrl).length}/${result.assets.length} successful`,
+      );
 
-            // Replace the URL in CSS
-            const urlRegex = new RegExp(`url\\(["']?${escapedUrl}["']?\\)`, 'g');
-            processedCss = processedCss.replace(urlRegex, `url("${asset.dataUrl}")`);
-          }
-        }
-
-        return { css: processedCss, assets: response.assets };
-      } else {
-        console.warn("[ContentController] Background asset processing failed:", response.error);
-        return { css, assets };
-      }
+      return { css: result.css, assets: result.assets };
     } catch (error) {
-      console.warn("[ContentController] Failed to communicate with background for asset processing:", error);
-      return { css, assets };
+      console.warn("[ea-ContentController] Asset processing failed:", error);
+      // Return original CSS if processing fails
+      return { css, assets: [] };
     }
   }
 
