@@ -46,48 +46,62 @@ const VariableControl: React.FC<VariableControlProps> = ({
     if (variable.type === "color" && e.target.type === "color") {
       // Color input should always produce valid values, but let's ensure
       if (!isValidColor(value)) {
-        console.warn(`Invalid color value from color input: ${value}`);
+        console.warn(
+          `[ea-VariableControls] Invalid color value from color input: ${value}`,
+        );
         value = "#000000"; // Fallback
       }
     }
 
+    console.log(
+      `[ea-VariableControls] User changed variable "${variable.name}" (${variable.type}) from "${variable.value}" to "${value}"`,
+    );
     onChange(value);
   };
 
   // Use label if available, otherwise fall back to a humanized name
-  const humanize = (s: string) => s.replace(/^--/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-  const displayLabel = (variable as any).label || humanize(variable.name);
+  const humanize = (s: string) =>
+    s
+      .replace(/^--/, "")
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (m) => m.toUpperCase());
+  const displayLabel =
+    "label" in variable && typeof variable.label === "string"
+      ? variable.label
+      : humanize(variable.name);
 
   // Get a valid color value for the color input, fallback to default
   const getValidColorValue = (value: string): string => {
     if (isValidColor(value)) {
-      // Expand 3-digit hex to 6-digit
-      if (value.length === 4) { // #rgb
+      // Expand 3-digit hex (#rgb) to 6-digit (#rrggbb)
+      if (value.length === 4) {
         return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
       }
-      // For 8-digit colors, strip alpha for input[type="color"]
-      if (value.length === 9) { // #rrggbbaa
+      // For 8-digit colors (#rrggbbaa), strip alpha for input[type="color"]
+      if (value.length === 9) {
         return value.substring(0, 7);
       }
       return value;
     }
     // Try to extract valid color from malformed strings
-    if (value.startsWith('#') && value.length >= 7) {
+    if (value.startsWith("#") && value.length >= 7) {
       const hexPart = value.substring(0, 7);
       if (isValidColor(hexPart)) {
         return hexPart;
       }
     }
     // Fallback to default
-    return variable.default && isValidColor(variable.default) ? variable.default : "#000000";
+    return variable.default && isValidColor(variable.default)
+      ? variable.default
+      : "#000000";
   };
 
   switch (variable.type) {
     case "color":
       return (
         <div className="form-control">
-          <label className="label cursor-pointer items-start justify-between w-full">
-            <span className="label-text flex-1 pr-4 break-words">
+          <label className="label cursor-pointer items-center justify-between w-full">
+            <span className="label-text flex-1 pr-4 break-words font-medium">
               {displayLabel}
             </span>
             <input
@@ -96,9 +110,9 @@ const VariableControl: React.FC<VariableControlProps> = ({
               onChange={handleChange}
               className="w-10 h-10 border-2 border-base-300 rounded-lg cursor-pointer flex-shrink-0 overflow-hidden"
               style={{
-                padding: '0.25rem',
-                borderRadius: '0.5rem',
-                appearance: 'none',
+                padding: "0.25rem",
+                borderRadius: "0.5rem",
+                appearance: "none",
               }}
               title={`${displayLabel}: ${variable.value}`}
             />
@@ -106,16 +120,58 @@ const VariableControl: React.FC<VariableControlProps> = ({
         </div>
       );
 
+    case "range": {
+      const unit = variable.unit ?? "";
+      const minValue = variable.min ?? 0;
+      const maxValue = variable.max ?? 100;
+      const step = variable.step ?? 1;
+      const fallbackValue = variable.default || "0";
+      const numericValue = Number.parseFloat(variable.value || fallbackValue);
+      const currentValue = Number.isNaN(numericValue)
+        ? Number.parseFloat(fallbackValue) || 0
+        : numericValue;
+
+      return (
+        <fieldset className="fieldset">
+          <div className="flex justify-between items-center mb-2">
+            <legend className="fieldset-legend flex-1 font-medium break-words">
+              {displayLabel}
+            </legend>
+            <span className="text-sm font-medium text-base-content/80 ml-2">
+              {currentValue}
+              {unit}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={minValue}
+            max={maxValue}
+            step={step}
+            value={currentValue}
+            onChange={(e) => {
+              const newValue = e.target.value;
+              onChange(`${newValue}${unit}`);
+            }}
+            className="range range-primary w-full cursor-pointer"
+            title={`${displayLabel}: ${currentValue}${unit}`}
+          />
+        </fieldset>
+      );
+    }
+
     case "number":
       return (
         <fieldset className="fieldset">
-          <legend className="fieldset-legend">{displayLabel}</legend>
+          <legend className="fieldset-legend font-medium break-words">
+            {displayLabel}
+          </legend>
           <input
             type="number"
             value={variable.value}
             onChange={handleChange}
             min={variable.min}
             max={variable.max}
+            step={variable.step}
             className="input input-bordered input-sm w-full"
             placeholder={variable.default}
             title={`${displayLabel}${variable.min !== undefined ? ` (min: ${variable.min})` : ""}${variable.max !== undefined ? ` (max: ${variable.max})` : ""}`}
@@ -125,11 +181,15 @@ const VariableControl: React.FC<VariableControlProps> = ({
 
     case "select": {
       const options = variable.options || [];
-      const optionsAreLong = options.length > 5 || options.some((o) => (typeof o === 'string' ? o : o.label)?.length > 14);
+      const optionsAreLong =
+        options.length > 5 ||
+        options.some((o) => (typeof o === "string" ? o : o.label)?.length > 14);
       if (optionsAreLong) {
         return (
           <fieldset className="fieldset">
-            <legend className="fieldset-legend">{displayLabel}</legend>
+            <legend className="fieldset-legend font-medium break-words">
+              {displayLabel}
+            </legend>
             <select
               value={variable.value}
               onChange={handleChange}
@@ -137,8 +197,10 @@ const VariableControl: React.FC<VariableControlProps> = ({
               title={`${displayLabel}`}
             >
               {options.map((option) => {
-                const value = typeof option === 'string' ? option : option.value;
-                const label = typeof option === 'string' ? option : option.label;
+                const value =
+                  typeof option === "string" ? option : option.value;
+                const label =
+                  typeof option === "string" ? option : option.label;
                 return (
                   <option key={value} value={value}>
                     {label}
@@ -152,7 +214,7 @@ const VariableControl: React.FC<VariableControlProps> = ({
       return (
         <div className="form-control">
           <label className="label cursor-pointer items-center justify-between w-full">
-            <span className="label-text flex-1 pr-4 break-words">
+            <span className="label-text flex-1 pr-4 break-words font-medium">
               {displayLabel}
             </span>
             <select
@@ -162,8 +224,10 @@ const VariableControl: React.FC<VariableControlProps> = ({
               title={`${displayLabel}`}
             >
               {options.map((option) => {
-                const value = typeof option === 'string' ? option : option.value;
-                const label = typeof option === 'string' ? option : option.label;
+                const value =
+                  typeof option === "string" ? option : option.value;
+                const label =
+                  typeof option === "string" ? option : option.label;
                 return (
                   <option key={value} value={value}>
                     {label}
@@ -180,7 +244,7 @@ const VariableControl: React.FC<VariableControlProps> = ({
       return (
         <div className="form-control">
           <label className="label cursor-pointer items-center justify-between w-full">
-            <span className="label-text flex-1 pr-4 break-words">
+            <span className="label-text flex-1 pr-4 break-words font-medium">
               {displayLabel}
             </span>
             <input
@@ -198,7 +262,9 @@ const VariableControl: React.FC<VariableControlProps> = ({
     default:
       return (
         <fieldset className="fieldset">
-          <legend className="fieldset-legend">{displayLabel}</legend>
+          <legend className="fieldset-legend font-medium break-words">
+            {displayLabel}
+          </legend>
           <input
             type="text"
             value={variable.value}
@@ -231,7 +297,9 @@ export const VariableControls: React.FC<VariableControlsProps> = ({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {showTitle && <h3 className="text-lg font-semibold">Variable Configuration</h3>}
+      {showTitle && (
+        <h3 className="text-lg font-semibold">Variable Configuration</h3>
+      )}
       <div className="grid grid-cols-1 gap-3">
         {variables.map((variable) => (
           <VariableControl
