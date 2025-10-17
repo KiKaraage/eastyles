@@ -3,13 +3,22 @@
  * Implements typed request/response handling for all message types.
  */
 
-import { browser } from "@wxt-dev/browser";
-import type { ReceivedMessages, ErrorDetails } from "./types";
+import { browser, type PublicPath } from "wxt/browser";
 import { storageClient } from "../storage/client";
 import type { UserCSSStyle } from "../storage/schema";
-import type { DomainRule, VariableDescriptor } from "../usercss/types";
 import type { BuiltInFont } from "../usercss/font-registry";
 import { fontRegistry } from "../usercss/font-registry";
+import type {
+  DomainRule,
+  ParseResult,
+  VariableDescriptor,
+} from "../usercss/types";
+import type { ErrorDetails, ReceivedMessages } from "./types";
+
+function extractHostname(url: string): string {
+  const match = url.match(/^https?:\/\/([^/]+)/);
+  return match ? match[1] : url;
+}
 
 /**
  * Helper function to keep service worker alive using browser.tabs API
@@ -20,7 +29,7 @@ async function keepServiceWorkerAlive(): Promise<void> {
     // Query tabs to keep the service worker active
     await browser.tabs.query({});
   } catch (error) {
-    console.warn("Failed to keep service worker alive:", error);
+    console.warn("[ea-Handlers] Failed to keep service worker alive:", error);
   }
 }
 
@@ -37,7 +46,7 @@ async function ensureUniqueOperation(
 ): Promise<unknown> {
   if (pendingTabOperations.has(operationId)) {
     console.log(
-      `[ensureUniqueOperation] Operation ${operationId} already in progress, skipping`,
+      `[ea-ensureUniqueOperation] Operation ${operationId} already in progress, skipping`,
     );
     return { success: true, action: "skipped_duplicate" };
   }
@@ -98,7 +107,10 @@ async function keepServiceWorkerAliveWithStorage(): Promise<void> {
     // Immediately read it back to complete the operation
     await browser.storage.local.get("swKeepAlive");
   } catch (error) {
-    console.warn("Failed to keep service worker alive with storage:", error);
+    console.warn(
+      "[ea-Handlers] Failed to keep service worker alive with storage:",
+      error,
+    );
     // Fallback to tabs API if storage fails
     await keepServiceWorkerAlive();
   }
@@ -114,7 +126,10 @@ async function keepServiceWorkerAliveWithRuntime(): Promise<void> {
     // This is the most reliable method for Firefox
     await browser.runtime.getPlatformInfo();
   } catch (error) {
-    console.warn("Failed to keep service worker alive with runtime:", error);
+    console.warn(
+      "[ea-Handlers] Failed to keep service worker alive with runtime:",
+      error,
+    );
     // Fallback to storage API if runtime fails
     await keepServiceWorkerAliveWithStorage();
   }
@@ -150,7 +165,7 @@ function withErrorHandling(handler: MessageHandler): MessageHandler {
       };
 
       // Log error for debugging (conditional on debug flag)
-      console.error("Message handler error:", {
+      console.error("[ea-Handlers] Message handler error:", {
         messageType: message.type,
         error: errorDetails,
         tabId,
@@ -190,7 +205,7 @@ const handleGetCurrentTab: MessageHandler = async (_message, tabId) => {
 const handleToggleTheme: MessageHandler = async (_message) => {
   // TODO: Implement theme toggling logic when storage service is available
   // For now, return success as placeholder
-  console.log("Toggle theme requested");
+  console.log("[ea] Toggle theme requested");
   return { success: true, theme: "toggled" };
 };
 
@@ -204,7 +219,7 @@ const handleRequestExport: MessageHandler = async (message) => {
     ReceivedMessages,
     { type: "REQUEST_EXPORT" }
   >;
-  console.log("Export requested:", exportMessage.payload);
+  console.log("[ea] Export requested:", exportMessage.payload);
 
   const exportData = {
     settings: {
@@ -234,7 +249,7 @@ const handleRequestImport: MessageHandler = async (message) => {
     ReceivedMessages,
     { type: "REQUEST_IMPORT" }
   >;
-  console.log("Import requested:", importMessage.payload);
+  console.log("[ea] Import requested:", importMessage.payload);
 
   const { data } = importMessage.payload;
 
@@ -277,7 +292,7 @@ const handleRequestImport: MessageHandler = async (message) => {
 const handleResetSettings: MessageHandler = async (_message) => {
   // TODO: Implement actual settings reset when storage service is available
   // For now, return success as placeholder
-  console.log("Settings reset requested");
+  console.log("[ea] Settings reset requested");
   return { success: true };
 };
 
@@ -294,7 +309,7 @@ const handleGetAllStyles: MessageHandler = async (_message) => {
  * Handler for OPEN_MANAGER messages.
  */
 const handleOpenManager: MessageHandler = async (message) => {
-  console.log("[handleOpenManager] Processing request");
+  console.log("[ea-handleOpenManager] Processing request");
   try {
     // Extract optional payload for navigation
     const navMessage = message as Extract<
@@ -331,7 +346,7 @@ const handleOpenManager: MessageHandler = async (message) => {
           }
         }
 
-        console.log("[handleOpenManager] Focused existing manager tab");
+        console.log("[ea-handleOpenManager] Focused existing manager tab");
         return {
           success: true,
           action: "focused_existing_manager_page",
@@ -344,7 +359,7 @@ const handleOpenManager: MessageHandler = async (message) => {
         const fullUrl = tab === "styles" ? `${url}#styles` : `${url}#settings`;
 
         console.log(
-          "[handleOpenManager] Creating new manager page with URL:",
+          "[ea-handleOpenManager] Creating new manager page with URL:",
           fullUrl,
         );
         const newTab = await browser.tabs.create({ url: fullUrl });
@@ -355,7 +370,7 @@ const handleOpenManager: MessageHandler = async (message) => {
         }
 
         console.log(
-          "[handleOpenManager] Successfully created manager tab:",
+          "[ea-handleOpenManager] Successfully created manager tab:",
           newTab.id,
         );
         return {
@@ -369,7 +384,7 @@ const handleOpenManager: MessageHandler = async (message) => {
 
     return { success: true, action: "processed", tab: tab };
   } catch (error: unknown) {
-    console.error("[handleOpenManager] Error:", error);
+    console.error("[ea-handleOpenManager] Error:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     throw new Error(`Failed to open manager page: ${errorMessage}`);
@@ -383,7 +398,7 @@ const handleOpenManager: MessageHandler = async (message) => {
  * Handler for ADD_STYLE messages.
  */
 const handleAddStyle: MessageHandler = async (message) => {
-  console.log("Add style requested:", message);
+  console.log("[ea] Add style requested:", message);
   // TODO: Implement actual style creation when storage service is available
   return {
     success: true,
@@ -395,7 +410,7 @@ const handleAddStyle: MessageHandler = async (message) => {
  * Handler for OPEN_SETTINGS messages.
  */
 const handleOpenSettings: MessageHandler = async (_message) => {
-  console.log("[handleOpenSettings] Processing request");
+  console.log("[ea-handleOpenSettings] Processing request");
   try {
     // Generate unique operation ID to prevent duplicates
     const operationId = `open-settings-${Date.now()}`;
@@ -416,7 +431,7 @@ const handleOpenSettings: MessageHandler = async (_message) => {
         });
 
         console.log(
-          "[handleOpenSettings] Focused existing manager tab with settings",
+          "[ea-handleOpenSettings] Focused existing manager tab with settings",
         );
         return {
           success: true,
@@ -429,7 +444,7 @@ const handleOpenSettings: MessageHandler = async (_message) => {
         const url = "/manager.html#settings";
 
         console.log(
-          "[handleOpenSettings] Creating new manager page with URL:",
+          "[ea-handleOpenSettings] Creating new manager page with URL:",
           url,
         );
         const newTab = await browser.tabs.create({ url });
@@ -440,7 +455,7 @@ const handleOpenSettings: MessageHandler = async (_message) => {
         }
 
         console.log(
-          "[handleOpenSettings] Successfully created settings tab:",
+          "[ea-handleOpenSettings] Successfully created settings tab:",
           newTab.id,
         );
         return {
@@ -454,7 +469,7 @@ const handleOpenSettings: MessageHandler = async (_message) => {
 
     return { success: true, action: "processed", tab: "settings" };
   } catch (error: unknown) {
-    console.error("[handleOpenSettings] Error:", error);
+    console.error("[ea-handleOpenSettings] Error:", error);
     throw new Error(
       `Failed to open settings page: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
@@ -468,12 +483,12 @@ const handleOpenSettings: MessageHandler = async (_message) => {
  * Handler for GET_STYLES messages.
  */
 const handleGetStyles: MessageHandler = async (message) => {
-  console.log("[handleGetStyles] Processing message:", message);
+  console.log("[ea-handleGetStyles] Processing message:", message);
   try {
     // Get all UserCSS styles
     const userCSSStyles = await storageClient.getUserCSSStyles();
     console.log(
-      "[handleGetStyles] Retrieved UserCSS styles:",
+      "[ea-handleGetStyles] Retrieved UserCSS styles:",
       userCSSStyles.length,
     );
 
@@ -484,7 +499,7 @@ const handleGetStyles: MessageHandler = async (message) => {
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("[handleGetStyles] Error:", errorMessage);
+    console.error("[ea-handleGetStyles] Error:", errorMessage);
     return {
       success: false,
       error: errorMessage,
@@ -500,7 +515,7 @@ const handleToggleStyle: MessageHandler = async (message) => {
     ReceivedMessages,
     { type: "TOGGLE_STYLE" }
   >;
-  console.log("[handleToggleStyle] Processing message:", toggleMessage);
+  console.log("[ea-handleToggleStyle] Processing message:", toggleMessage);
 
   try {
     const { id, enabled, tabId } = toggleMessage.payload;
@@ -508,7 +523,7 @@ const handleToggleStyle: MessageHandler = async (message) => {
     // Update the style's enabled status in storage
     await storageClient.enableUserCSSStyle(id, enabled);
     console.log(
-      `[handleToggleStyle] Style ${id} ${enabled ? "enabled" : "disabled"}`,
+      `[ea-handleToggleStyle] Style ${id} ${enabled ? "enabled" : "disabled"}`,
     );
 
     // Notify content scripts to update/remove the style
@@ -519,7 +534,7 @@ const handleToggleStyle: MessageHandler = async (message) => {
       try {
         if (tabId) {
           console.log(
-            `[handleToggleStyle] Sending ${enabled ? "styleUpdate" : "styleRemove"} for style ${id} to specific tab ${tabId}`,
+            `[ea-handleToggleStyle] Sending ${enabled ? "styleUpdate" : "styleRemove"} for style ${id} to specific tab ${tabId}`,
           );
           browser.tabs
             .sendMessage(tabId, {
@@ -529,29 +544,29 @@ const handleToggleStyle: MessageHandler = async (message) => {
             })
             .then(() => {
               console.log(
-                `[handleToggleStyle] Successfully sent message to tab ${tabId}`,
+                `[ea-handleToggleStyle] Successfully sent message to tab ${tabId}`,
               );
             })
-            .catch((error) => {
+            .catch((error: unknown) => {
               const errorMessage =
                 error instanceof Error ? error.message : String(error);
               console.warn(
-                `[handleToggleStyle] Error notifying tab ${tabId}:`,
+                `[ea-handleToggleStyle] Error notifying tab ${tabId}:`,
                 errorMessage,
               );
             });
         } else {
           console.log(
-            `[handleToggleStyle] Broadcasting ${enabled ? "styleUpdate" : "styleRemove"} for style ${id} to all tabs`,
+            `[ea-handleToggleStyle] Broadcasting ${enabled ? "styleUpdate" : "styleRemove"} for style ${id} to all tabs`,
           );
           browser.tabs.query({}).then((tabs) => {
             console.log(
-              `[handleToggleStyle] Found ${tabs.length} tabs to notify`,
+              `[ea-handleToggleStyle] Found ${tabs.length} tabs to notify`,
             );
             tabs.forEach((tab) => {
               if (tab.id) {
                 console.log(
-                  `[handleToggleStyle] Sending message to tab ${tab.id} (${tab.url})`,
+                  `[ea-handleToggleStyle] Sending message to tab ${tab.id} (${tab.url})`,
                 );
                 browser.tabs
                   .sendMessage(tab.id, {
@@ -561,7 +576,7 @@ const handleToggleStyle: MessageHandler = async (message) => {
                   })
                   .then(() => {
                     console.log(
-                      `[handleToggleStyle] Successfully sent message to tab ${tab.id}`,
+                      `[ea-handleToggleStyle] Successfully sent message to tab ${tab.id}`,
                     );
                   })
                   .catch((error) => {
@@ -576,12 +591,12 @@ const handleToggleStyle: MessageHandler = async (message) => {
                       !errorMessage.includes("Receiving end does not exist")
                     ) {
                       console.warn(
-                        `[handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
+                        `[ea-handleToggleStyle] Unexpected error notifying tab ${tab.id}:`,
                         error,
                       );
                     } else {
                       console.log(
-                        `[handleToggleStyle] Expected error for tab ${tab.id}: ${errorMessage}`,
+                        `[ea-handleToggleStyle] Expected error for tab ${tab.id}: ${errorMessage}`,
                       );
                     }
                   });
@@ -591,7 +606,7 @@ const handleToggleStyle: MessageHandler = async (message) => {
         }
       } catch (error) {
         console.warn(
-          "[handleToggleStyle] Error notifying content scripts:",
+          "[ea-handleToggleStyle] Error notifying content scripts:",
           error,
         );
       }
@@ -603,7 +618,7 @@ const handleToggleStyle: MessageHandler = async (message) => {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("[handleToggleStyle] Error:", errorMessage);
+    console.error("[ea-handleToggleStyle] Error:", errorMessage);
     return {
       success: false,
       error: errorMessage,
@@ -619,7 +634,7 @@ const handleThemeChanged: MessageHandler = async (message) => {
     ReceivedMessages,
     { type: "THEME_CHANGED" }
   >;
-  console.log("Theme changed:", themeMessage.payload);
+  console.log("[ea] Theme changed:", themeMessage.payload);
   // TODO: Implement actual theme change handling when storage service is available
   return {
     success: true,
@@ -634,7 +649,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
     ReceivedMessages,
     { type: "PARSE_USERCSS" }
   >;
-  console.log("Parse UserCSS requested:", parseMessage.payload);
+  console.log("[ea] Parse UserCSS requested:", parseMessage.payload);
 
   try {
     const { text, sourceUrl } = parseMessage.payload;
@@ -644,14 +659,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       throw new Error("Invalid UserCSS text: must be a non-empty string");
     }
 
-    // Inline ultra-minimal parser to avoid import issues in background context
-    console.log("[handleParseUserCSS] Using inline parser...");
-
-    // Extract hostname from URL string without using URL constructor
-    const extractHostname = (url: string): string => {
-      const match = url.match(/^https?:\/\/([^/]+)/);
-      return match ? match[1] : url;
-    };
+    // Use the main processor which now supports background context
 
     // Extract domains from regexp patterns
     const extractDomainsFromRegexp = (pattern: string): string[] => {
@@ -693,7 +701,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       } catch (error) {
         // If parsing fails, try fallback methods
         console.warn(
-          "Failed to parse regexp pattern for domains:",
+          "[ea-handleParseUserCSS] Failed to parse regexp pattern for domains:",
           pattern,
           error,
         );
@@ -722,7 +730,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
 
     // Minimal parseUserCSS function with zero DOM dependencies
     const parseUserCSSUltraMinimal = (raw: string) => {
-      console.log("[parseUserCSSMinimal] Function called");
+      console.log("[ea-parseUserCSSMinimal] Function called");
 
       const warnings: string[] = [];
       const errors: string[] = [];
@@ -817,7 +825,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       if (mozDocumentCssMatch) {
         const mozDocumentRule = mozDocumentCssMatch[1];
         console.log(
-          "[parseUserCSSMinimal] Found mozDocumentRule:",
+          "[ea-parseUserCSSMinimal] Found mozDocumentRule:",
           mozDocumentRule,
         );
 
@@ -840,7 +848,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         );
         if (regexpMatches) {
           console.log(
-            "[parseUserCSSMinimal] Found regexpMatches:",
+            "[ea-parseUserCSSMinimal] Found regexpMatches:",
             regexpMatches,
           );
           regexpMatches.forEach((match: string) => {
@@ -848,13 +856,13 @@ const handleParseUserCSS: MessageHandler = async (message) => {
             if (regexpMatch) {
               const pattern = regexpMatch[1];
               console.log(
-                "[parseUserCSSMinimal] Extracting from pattern:",
+                "[ea-parseUserCSSMinimal] Extracting from pattern:",
                 pattern,
               );
               // Parse the regexp pattern to extract domain
               const extractedDomains = extractDomainsFromRegexp(pattern);
               console.log(
-                "[parseUserCSSMinimal] Extracted domains:",
+                "[ea-parseUserCSSMinimal] Extracted domains:",
                 extractedDomains,
               );
               extractedDomains.forEach((domain: string) => {
@@ -883,7 +891,8 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       // Helper function to parse USO EOT blocks (similar to processor.ts)
       const parseEOTBlocksMinimal = (value: string) => {
         // Regular expression to match EOT blocks in USO format
-        const eotRegex = /([\w-]+)\s+"([^"]+)"\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+        // Handles patterns like: bg-default	"Sky*"			<<<EOT https://i.imgur.com/P5VYGj4.jpeg EOT;
+        const eotRegex = /([\w*-]+)\s+([^<]+?)\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
 
         const options: string[] = [];
         const optionCss: Record<string, string> = {};
@@ -894,15 +903,24 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         while (true) {
           match = eotRegex.exec(value);
           if (match === null) break;
-          const [, , displayLabel, cssContent] = match as RegExpExecArray;
+          const [, , rawLabel, cssContent] = match as RegExpExecArray;
+
+          // Clean up the label - remove quotes and trim
+          let displayLabel = rawLabel.trim();
+          if (displayLabel.startsWith('"') && displayLabel.endsWith('"')) {
+            displayLabel = displayLabel.slice(1, -1);
+          }
 
           // Check if this is the default option (marked with * in display label like "Sky*")
           const isDefault = displayLabel.includes("*");
           const cleanDisplayLabel = displayLabel.replace(/\*$/, "");
 
           options.push(cleanDisplayLabel);
-          // Preserve the CSS content for each option
-          optionCss[cleanDisplayLabel] = cssContent.trim();
+          // Preserve the CSS content for each option, with backslash escapes handled
+          let cleanCss = cssContent.trim();
+          // Handle escaped comment markers like /*[[bg-custom]]*\/
+          cleanCss = cleanCss.replace(/\*\\\//g, "*/");
+          optionCss[cleanDisplayLabel] = cleanCss;
 
           if (isDefault && !hasDefault) {
             defaultValue = cleanDisplayLabel;
@@ -929,7 +947,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       // @path/range name "label" [default, min, max, step, unit]
       // Using \s to match both spaces and tabs
       const directiveRegex =
-        /@[\w/.:-]+\s+(range|color|text|select|number|dropdown|checkbox)\s+([\w-]+)\s+"([^"]+)"\s*([^\r\n]+)/g;
+        /@[\w/.:-]+\s+(range|color|text|select|number|dropdown|checkbox)\s+([\w-]+)\s+"([^"]+)"\s*([\s\S]*?)(?=\r?\n\s*@|\r?\n==\/UserStyle==|$)/g;
       let directiveMatch: RegExpExecArray | null;
 
       while (true) {
@@ -943,21 +961,6 @@ const handleParseUserCSS: MessageHandler = async (message) => {
 
         // Clean up the default value (remove leading/trailing spaces)
         defaultValue = defaultValue.trim();
-
-        // Handle different types of default values
-        if (defaultValue.startsWith('"') && defaultValue.endsWith('"')) {
-          // Quoted string value
-          defaultValue = defaultValue.slice(1, -1);
-        } else if (defaultValue.startsWith("[") && defaultValue.endsWith("]")) {
-          // Array format [default, min, max, step, unit] - for ranges
-          const rangeParts = defaultValue
-            .slice(1, -1)
-            .split(",")
-            .map((s) => s.trim());
-          if (rangeParts.length >= 3) {
-            defaultValue = rangeParts[0]; // First value is typically the default
-          }
-        }
 
         // Map the regex-matched type to the enum
         let mappedType: VariableDescriptor["type"];
@@ -1020,20 +1023,19 @@ const handleParseUserCSS: MessageHandler = async (message) => {
           // Find the opening brace in the full match
           const braceStart = fullMatch.indexOf("{");
           if (braceStart !== -1) {
-            // Find the matching closing brace in the full metadataContent
-            const globalPos = directiveMatch.index + braceStart;
+            // Find the matching closing brace in the full match
             let braceCount = 1;
-            let pos = globalPos + 1;
+            let pos = braceStart + 1;
 
-            while (pos < metadataContent.length && braceCount > 0) {
-              if (metadataContent[pos] === "{") braceCount++;
-              else if (metadataContent[pos] === "}") braceCount--;
+            while (pos < fullMatch.length && braceCount > 0) {
+              if (fullMatch[pos] === "{") braceCount++;
+              else if (fullMatch[pos] === "}") braceCount--;
               pos++;
             }
 
             if (braceCount === 0) {
-              const optionsBlock = metadataContent
-                .substring(globalPos + 1, pos - 1)
+              const optionsBlock = fullMatch
+                .substring(braceStart + 1, pos - 1)
                 .trim();
 
               // Use parseEOTBlocks equivalent logic for USO format
@@ -1058,6 +1060,161 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         variables[varDescriptor.name] = varDescriptor;
       }
 
+      // Also handle @advanced directives that may not match the regex due to complex formatting
+      // Look for @advanced lines that weren't captured
+      // Updated regex to handle tabs and multi-line braces blocks better
+      const advancedRegex =
+        /@advanced\s+(dropdown|color|text|select|checkbox|number|range)\s+([\w-]+)\s+"([^"]+)"?\s*\{([\s\S]*?)\n\}/gm;
+      let advancedMatch: RegExpExecArray | null;
+
+      console.log(
+        "[ea-parseUserCSSMinimal] Starting variable extraction from @advanced directives",
+      );
+
+      while (true) {
+        advancedMatch = advancedRegex.exec(metadataContent);
+        if (advancedMatch === null) break;
+
+        const type = advancedMatch[1];
+        const name = advancedMatch[2];
+        const label = advancedMatch[3];
+        const optionsBlock = advancedMatch[4];
+
+        console.log(
+          `[ea-parseUserCSSMinimal] Found @advanced: name=${name}, type=${type}, label=${label}`,
+        );
+        console.log(
+          `[ea-parseUserCSSMinimal] Options block length: ${optionsBlock.length} chars`,
+        );
+
+        // Skip if already captured by directiveRegex
+        if (!variables[name]) {
+          let mappedType: VariableDescriptor["type"];
+          switch (type) {
+            case "color":
+              mappedType = "color";
+              break;
+            case "text":
+              mappedType = "text";
+              break;
+            case "dropdown":
+            case "select":
+              mappedType = "select";
+              break;
+            case "checkbox":
+              mappedType = "checkbox";
+              break;
+            case "number":
+            case "range":
+              mappedType = "number";
+              break;
+            default:
+              mappedType = "unknown";
+          }
+
+          if (type === "dropdown" || type === "select") {
+            const dropdownOptions = parseEOTBlocksMinimal(optionsBlock);
+            if (dropdownOptions) {
+              console.log(
+                `[ea-parseUserCSSMinimal] Successfully parsed ${dropdownOptions.options.length} options for ${name}`,
+              );
+              variables[name] = {
+                name,
+                type: mappedType,
+                label,
+                default: dropdownOptions.defaultValue,
+                value: dropdownOptions.defaultValue,
+                options: dropdownOptions.options.map((opt) => ({
+                  value: opt,
+                  label: opt,
+                })),
+                optionCss: dropdownOptions.optionCss,
+              };
+            } else {
+              console.log(
+                `[ea-parseUserCSSMinimal] Failed to parse dropdown options for ${name}`,
+              );
+              variables[name] = {
+                name,
+                type: mappedType,
+                label,
+                default: "",
+                value: "",
+              };
+            }
+          } else {
+            // For non-dropdown types with braces (though unusual), just store basic descriptor
+            variables[name] = {
+              name,
+              type: mappedType,
+              label,
+              default: "",
+              value: "",
+            };
+          }
+        } else {
+          console.log(
+            `[ea-parseUserCSSMinimal] Variable ${name} already exists, skipping`,
+          );
+        }
+      }
+
+      // Handle simple @advanced directives without braces (e.g., @advanced color name "label" #value)
+      const simpleAdvancedRegex =
+        /@advanced\s+(color|text|checkbox)\s+([\w-]+)\s+"([^"]+)"?\s+([^\r\n{]+)/g;
+      let simpleMatch: RegExpExecArray | null;
+
+      while (true) {
+        simpleMatch = simpleAdvancedRegex.exec(metadataContent);
+        if (simpleMatch === null) break;
+
+        const type = simpleMatch[1];
+        const name = simpleMatch[2];
+        const label = simpleMatch[3];
+        const defaultValue = simpleMatch[4].trim();
+
+        // Skip if already parsed
+        if (variables[name]) continue;
+
+        console.log(
+          `[ea-parseUserCSSMinimal] Found simple @advanced: name=${name}, type=${type}, default=${defaultValue}`,
+        );
+
+        let mappedType: VariableDescriptor["type"];
+        switch (type) {
+          case "color":
+            mappedType = "color";
+            break;
+          case "text":
+            mappedType = "text";
+            break;
+          case "checkbox":
+            mappedType = "checkbox";
+            break;
+          default:
+            mappedType = "unknown";
+        }
+
+        variables[name] = {
+          name,
+          type: mappedType,
+          label,
+          default: defaultValue,
+          value: defaultValue,
+        };
+      }
+
+      console.log(
+        `[ea-parseUserCSSMinimal] Total variables extracted: ${Object.keys(variables).length}`,
+      );
+
+      const homepageURL = homepageURLMatch
+        ? homepageURLMatch[1].trim()
+        : undefined;
+      const supportURL = supportURLMatch
+        ? supportURLMatch[1].trim()
+        : undefined;
+
       const meta = {
         id: name && namespace ? generateId(name, namespace) : "",
         name,
@@ -1067,26 +1224,56 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         author,
         license,
         sourceUrl,
+        homepageURL,
+        supportURL,
         domains,
+        variables,
+        compiledCss: "",
       };
 
       return {
         meta,
         css,
         metadataBlock,
-        variables,
         warnings,
         errors,
       };
     };
 
-    // Use the ultra-minimal processor to avoid any DOM dependencies
+    // Try using the main processor (with our fixes)
     console.log(
-      "[handleParseUserCSS] About to call parseUserCSSUltraMinimal...",
+      "[ea-handleParseUserCSS] Using main processor (with document safety fixes)...",
     );
-    const parseResult = parseUserCSSUltraMinimal(text);
+
+    let parseResult: ParseResult;
+
+    try {
+      const { parseUserCSS } = await import("../usercss/processor");
+      parseResult = parseUserCSS(text);
+      console.log(
+        "[ea-handleParseUserCSS] Main processor execution successful",
+      );
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error("[ea-handleParseUserCSS] Main processor failed:", err);
+      console.error(
+        "[ea-handleParseUserCSS] Error stack:",
+        err.stack ?? "<no stack>",
+      );
+      console.error(
+        "[ea-handleParseUserCSS] Error message:",
+        err.message ?? "<no message>",
+      );
+      // Fallback to simplified parser
+      console.log(
+        "[ea-handleParseUserCSS] Falling back to simplified parser...",
+      );
+
+      // Use the parseUserCSSUltraMinimal function which has proper variable extraction
+      parseResult = parseUserCSSUltraMinimal(text);
+    }
     console.log(
-      "[handleParseUserCSS] parseUserCSSUltraMinimal returned:",
+      "[ea-handleParseUserCSS] Simplified parser result:",
       parseResult,
     );
 
@@ -1094,7 +1281,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
     let compiledCss: string = parseResult.css;
     let preprocessorErrors: string[] = [];
 
-    console.log("[handleParseUserCSS] About to check DOM preprocessing...");
+    console.log("[ea-handleParseUserCSS] About to check DOM preprocessing...");
     try {
       // Check if we're in a context where DOM APIs are available
       let hasDom = false;
@@ -1136,7 +1323,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       },
       css: compiledCss,
       metadataBlock: parseResult.metadataBlock,
-      variables: parseResult.variables || {}, // Include variables from ultra-minimal parser
+      variables: parseResult.meta.variables || {}, // Include variables from ultra-minimal parser
       warnings: [...parseResult.warnings, ...preprocessorErrors],
       errors: parseResult.errors,
     };
@@ -1155,11 +1342,11 @@ const handleParseUserCSS: MessageHandler = async (message) => {
  */
 const handleInstallStyle: MessageHandler = async (message) => {
   console.log(
-    "[handleInstallStyle] Handler called with message:",
+    "[ea-handleInstallStyle] Handler called with message:",
     message?.type,
   );
   console.log(
-    "[handleInstallStyle] Message has payload:",
+    "[ea-handleInstallStyle] Message has payload:",
     "payload" in (message || {}),
   );
 
@@ -1167,13 +1354,14 @@ const handleInstallStyle: MessageHandler = async (message) => {
     ReceivedMessages,
     { type: "INSTALL_STYLE" }
   >;
-  console.log("[handleInstallStyle] Type casting completed");
+  console.log("[ea-handleInstallStyle] Type casting completed");
   console.log("Install style requested:", installMessage.payload);
 
   try {
-    console.log("[handleInstallStyle] Starting installation process...");
-    const { meta, compiledCss, variables } = installMessage.payload;
-    console.log("[handleInstallStyle] Payload extracted successfully");
+    console.log("[ea-handleInstallStyle] Starting installation process...");
+    const { meta, compiledCss, variables, source } = installMessage.payload;
+    console.log("[ea-handleInstallStyle] Payload extracted successfully");
+    console.log("[ea-handleInstallStyle] Has source:", !!source);
 
     // Basic validation
     if (!meta || !meta.name) {
@@ -1194,15 +1382,15 @@ const handleInstallStyle: MessageHandler = async (message) => {
     }
 
     // Use direct storage access to avoid window dependencies
-    console.log("[handleInstallStyle] Using direct storage access...");
-    // Use the already imported storageClient instead of importing @wxt-dev/storage directly
-    console.log("[handleInstallStyle] Storage client ready");
+    console.log("[ea-handleInstallStyle] Using direct storage access...");
+    // Use the already imported storageClient instead of importing wxt/storage directly
+    console.log("[ea-handleInstallStyle] Storage client ready");
 
     // Parse domains from CSS content if not found in metadata
-    console.log("[handleInstallStyle] About to process domains...");
+    console.log("[ea-handleInstallStyle] About to process domains...");
     const allDomains = [...meta.domains];
     console.log(
-      "[handleInstallStyle] Initial domains processed:",
+      "[ea-handleInstallStyle] Initial domains processed:",
       allDomains.length,
     );
 
@@ -1214,7 +1402,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
     if (mozDocumentCssMatch) {
       originalDomainCondition = mozDocumentCssMatch[1].trim();
       console.log(
-        "[handleInstallStyle] Found @-moz-document rule in CSS:",
+        "[ea-handleInstallStyle] Found @-moz-document rule in CSS:",
         originalDomainCondition,
       );
 
@@ -1228,7 +1416,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
           if (domainMatch && !allDomains.includes(domainMatch[1])) {
             allDomains.push(domainMatch[1]);
             console.log(
-              "[handleInstallStyle] Extracted domain from CSS:",
+              "[ea-handleInstallStyle] Extracted domain from CSS:",
               domainMatch[1],
             );
           }
@@ -1249,7 +1437,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
               if (!allDomains.includes(domain)) {
                 allDomains.push(domain);
                 console.log(
-                  "[handleInstallStyle] Extracted domain from url-prefix:",
+                  "[ea-handleInstallStyle] Extracted domain from url-prefix:",
                   domain,
                 );
               }
@@ -1262,7 +1450,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
     }
 
     // Convert string domains to DomainRule format (inline to avoid window access)
-    console.log("[handleInstallStyle] About to create domain rules...");
+    console.log("[ea-handleInstallStyle] About to create domain rules...");
     const normalizePattern = (domain: string): string => {
       // Simple normalization without URL constructor
       return domain.toLowerCase().trim();
@@ -1274,7 +1462,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
       include: true,
     }));
     console.log(
-      "[handleInstallStyle] Domain rules created:",
+      "[ea-handleInstallStyle] Domain rules created:",
       domainRules.length,
     );
 
@@ -1356,7 +1544,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
     const extractedRules = extractDomains(compiledCss);
     if (extractedRules.length > 0) {
       console.log(
-        "[handleInstallStyle] Extracted domain rules from CSS:",
+        "[ea-handleInstallStyle] Extracted domain rules from CSS:",
         extractedRules,
       );
       // Merge with existing rules, avoiding duplicates
@@ -1371,8 +1559,8 @@ const handleInstallStyle: MessageHandler = async (message) => {
       }
     }
 
-    console.log("[handleInstallStyle] Final domains:", allDomains);
-    console.log("[handleInstallStyle] Domain rules:", domainRules);
+    console.log("[ea-handleInstallStyle] Final domains:", allDomains);
+    console.log("[ea-handleInstallStyle] Domain rules:", domainRules);
 
     // Convert variables array to Record format
     const variablesRecord: Record<
@@ -1404,7 +1592,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
             mappedType = "unknown";
         }
 
-        variablesRecord[variable.name] = {
+        const varDescriptor: import("../usercss/types").VariableDescriptor = {
           name: variable.name,
           type: mappedType,
           default: variable.default,
@@ -1413,8 +1601,19 @@ const handleInstallStyle: MessageHandler = async (message) => {
           max: variable.max,
           options: variable.options,
         };
+        // Add optionCss if it exists (for USO dropdown variables)
+        if ("optionCss" in variable && variable.optionCss) {
+          varDescriptor.optionCss = variable.optionCss as Record<
+            string,
+            string
+          >;
+        }
+        variablesRecord[variable.name] = varDescriptor;
       });
     }
+
+    // Apply default variable values to compiled CSS
+    const processedCompiledCss = compiledCss;
 
     // Create the style object for storage
     const styleData = {
@@ -1426,21 +1625,21 @@ const handleInstallStyle: MessageHandler = async (message) => {
       sourceUrl: meta.sourceUrl || "",
       domains: domainRules,
       originalDomainCondition,
-      compiledCss: compiledCss,
+      compiledCss: processedCompiledCss,
       variables: variablesRecord,
       originalDefaults: {},
       assets: [],
       installedAt: Date.now(),
       enabled: true,
-      source: "", // Original source code (could be added later if needed)
+      source: source || "", // Original source code for preprocessor detection
       updatedAt: Date.now(),
     };
 
     // Add the style to storage using inline operations
-    console.log("[handleInstallStyle] About to save style to storage...");
+    console.log("[ea-handleInstallStyle] About to save style to storage...");
     const savedStyle = await storageClient.addUserCSSStyle(styleData);
     console.log(
-      "[handleInstallStyle] Style saved successfully:",
+      "[ea-handleInstallStyle] Style saved successfully:",
       savedStyle.id,
     );
 
@@ -1449,7 +1648,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
 
     // Notify all content scripts to apply the new style
     console.log(
-      "[handleInstallStyle] Notifying content scripts about new style",
+      "[ea-handleInstallStyle] Notifying content scripts about new style",
     );
     try {
       browser.tabs.query({}).then((tabs) => {
@@ -1471,7 +1670,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
                   !errorMessage.includes("Receiving end does not exist")
                 ) {
                   console.warn(
-                    `[handleInstallStyle] Unexpected error notifying tab ${tab.id}:`,
+                    `[ea-handleInstallStyle] Unexpected error notifying tab ${tab.id}:`,
                     error,
                   );
                 }
@@ -1481,7 +1680,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
       });
     } catch (error) {
       console.warn(
-        "[handleInstallStyle] Error notifying content scripts:",
+        "[ea-handleInstallStyle] Error notifying content scripts:",
         error,
       );
     }
@@ -1501,7 +1700,10 @@ const handleInstallStyle: MessageHandler = async (message) => {
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("Failed to install style:", errorMessage);
+    console.error(
+      "[ea-handleInstallStyle] Failed to install style:",
+      errorMessage,
+    );
     return {
       success: false,
       error: errorMessage,
@@ -1604,11 +1806,8 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
       // Generate font path for built-in fonts
       const fontPath = `/fonts/${font.file}`;
       absoluteFontPath = browser?.runtime?.getURL
-        ? browser.runtime.getURL(fontPath)
+        ? browser.runtime.getURL(fontPath as PublicPath)
         : fontPath;
-    } else {
-      // For custom fonts, we assume availability was checked in the UI
-      // The content script will handle fallback if the font is not available
     }
 
     const fontFaceRule =
@@ -1737,10 +1936,10 @@ const handleCreateFontStyle: MessageHandler = async (message) => {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     console.error(
-      "[handleInstallStyle] Failed to install style:",
+      "[ea-handleInstallStyle] Failed to install style:",
       errorMessage,
     );
-    console.error("[handleInstallStyle] Error details:", error);
+    console.error("[ea-handleInstallStyle] Error details:", error);
     return {
       success: false,
       error: errorMessage,
@@ -1853,7 +2052,7 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
       // Generate font path for built-in fonts
       const fontPath = `/fonts/${font.file}`;
       absoluteFontPath = browser?.runtime?.getURL
-        ? browser.runtime.getURL(fontPath)
+        ? browser.runtime.getURL(fontPath as PublicPath)
         : fontPath;
     } else {
       // For custom fonts, we assume availability was checked in the UI
@@ -2010,7 +2209,7 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
 
     if (allStylesAfter.length !== allStylesBefore.length) {
       console.error(
-        `[handleUpdateFontStyle] ERROR: Style count changed from ${allStylesBefore.length} to ${allStylesAfter.length} - possible duplicate created!`,
+        `[ea-handleUpdateFontStyle] ERROR: Style count changed from ${allStylesBefore.length} to ${allStylesAfter.length} - possible duplicate created!`,
       );
       throw new Error(
         `Style update created duplicate: count changed from ${allStylesBefore.length} to ${allStylesAfter.length}`,
@@ -2019,7 +2218,7 @@ const handleUpdateFontStyle: MessageHandler = async (message) => {
 
     if (updatedStyle.id !== styleId) {
       console.error(
-        `[handleUpdateFontStyle] ERROR: Updated style ID changed from ${styleId} to ${updatedStyle.id}`,
+        `[ea-handleUpdateFontStyle] ERROR: Updated style ID changed from ${styleId} to ${updatedStyle.id}`,
       );
       throw new Error(
         `Style update changed ID from ${styleId} to ${updatedStyle.id}`,
@@ -2097,7 +2296,7 @@ const handleInjectFont: MessageHandler = async (message) => {
       }
     ).payload;
 
-    console.log("[handleInjectFont] Injecting font:", fontName);
+    console.log("[ea-handleInjectFont] Injecting font:", fontName);
 
     // Get the current active tab
     const tabs = await browser.tabs.query({
@@ -2117,11 +2316,11 @@ const handleInjectFont: MessageHandler = async (message) => {
         fontName,
         css,
       });
-      console.log("[handleInjectFont] Successfully sent to content script");
+      console.log("[ea-handleInjectFont] Successfully sent to content script");
     } catch (contentScriptError) {
       // Content script not available, inject directly using executeScript
       console.log(
-        "[handleInjectFont] Content script not available, injecting directly",
+        "[ea-handleInjectFont] Content script not available, injecting directly",
       );
 
       const errorMessage =
@@ -2139,7 +2338,9 @@ const handleInjectFont: MessageHandler = async (message) => {
           runAt: "document_start",
         });
 
-        console.log("[handleInjectFont] Successfully injected font directly");
+        console.log(
+          "[ea-handleInjectFont] Successfully injected font directly",
+        );
       } else {
         // Re-throw unexpected errors
         throw contentScriptError;
@@ -2152,7 +2353,7 @@ const handleInjectFont: MessageHandler = async (message) => {
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("[handleInjectFont] Failed to inject font:", errorMessage);
+    console.error("[ea-handleInjectFont] Failed to inject font:", errorMessage);
     return {
       success: false,
       error: errorMessage,
@@ -2171,13 +2372,91 @@ const handleUpdateVariables: MessageHandler = async (message) => {
       }
     ).payload;
 
-    console.log("Variables changed for style:", styleId, variables);
+    // Get style name for better logging
+    const style = await storageClient.getUserCSSStyle(styleId);
+    const styleName = style?.name || "Unknown";
 
-    // Update variables using the variable persistence service
-    const { variablePersistenceService } = await import(
-      "../usercss/variable-service"
+    console.log("[ea-handleUpdateVariables] Received variable update:", {
+      styleName,
+      styleId,
+      variables,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(
+      "[ea-handleUpdateVariables] Updating variables via storageClient",
     );
-    await variablePersistenceService.updateVariables(styleId, variables);
+
+    const updatedStyle = await storageClient.updateUserCSSStyleVariables(
+      styleId,
+      variables,
+    );
+
+    console.log("[ea-handleUpdateVariables] Variables updated successfully:", {
+      styleName,
+      styleId,
+      variables,
+    });
+
+    // Notify other extension contexts about the variable change
+    if (browser.runtime?.sendMessage) {
+      try {
+        await browser.runtime.sendMessage({
+          type: "VARIABLES_UPDATED",
+          payload: {
+            styleId,
+            variables,
+            timestamp: Date.now(),
+          },
+        });
+      } catch (notifyError) {
+        console.warn(
+          "[ea-handleUpdateVariables] Failed to broadcast VARIABLES_UPDATED notification:",
+          notifyError,
+        );
+      }
+    }
+
+    // Notify content scripts to reapply the style with new variables
+    console.log(
+      "[ea-handleUpdateVariables] Notifying content scripts about variable change",
+    );
+    try {
+      const tabs = await browser.tabs.query({});
+      console.log(
+        `[ea-handleUpdateVariables] Found ${tabs.length} tabs to notify`,
+      );
+
+      for (const tab of tabs) {
+        if (tab.id) {
+          browser.tabs
+            .sendMessage(tab.id, {
+              type: "styleUpdate",
+              styleId,
+              style: updatedStyle, // Send the UPDATED style, not the old one
+            })
+            .catch((error) => {
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              // Only log unexpected errors
+              if (
+                !errorMessage.includes("Could not establish connection") &&
+                !errorMessage.includes("Receiving end does not exist")
+              ) {
+                console.warn(
+                  `[ea-handleUpdateVariables] Error notifying tab ${tab.id}:`,
+                  error,
+                );
+              }
+            });
+        }
+      }
+    } catch (broadcastError) {
+      console.warn(
+        "[ea-handleUpdateVariables] Error broadcasting to tabs:",
+        broadcastError,
+      );
+    }
 
     return {
       success: true,
@@ -2185,7 +2464,10 @@ const handleUpdateVariables: MessageHandler = async (message) => {
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("Failed to update variables:", errorMessage);
+    console.error("[ea-handleUpdateVariables] Failed to update variables:", {
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return {
       success: false,
       error: errorMessage,
@@ -2203,18 +2485,18 @@ const handleUpdateVariables: MessageHandler = async (message) => {
 const handleQueryStylesForUrl: MessageHandler = async (message) => {
   try {
     console.log(
-      "[handleQueryStylesForUrl] Handler called with message:",
+      "[ea-handleQueryStylesForUrl] Handler called with message:",
       message,
     );
     const { url } = (message as { payload: { url: string } }).payload;
 
-    console.log("[handleQueryStylesForUrl] Processing URL:", url);
+    console.log("[ea-handleQueryStylesForUrl] Processing URL:", url);
 
     // Get all UserCSS styles using storage client
-    console.log("[handleQueryStylesForUrl] About to get UserCSS styles");
+    console.log("[ea-handleQueryStylesForUrl] About to get UserCSS styles");
     const userCSSStyles = await storageClient.getUserCSSStyles();
     console.log(
-      "[handleQueryStylesForUrl] Retrieved styles:",
+      "[ea-handleQueryStylesForUrl] Retrieved styles:",
       userCSSStyles.length,
     );
 
@@ -2225,7 +2507,10 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
         const match = url.match(/^https?:\/\/([^/?#]+)/i);
         return match ? match[1].toLowerCase() : url.toLowerCase();
       } catch (error) {
-        console.log("[handleQueryStylesForUrl] Error in extractDomain:", error);
+        console.log(
+          "[ea-handleQueryStylesForUrl] Error in extractDomain:",
+          error,
+        );
         return url.toLowerCase();
       }
     };
@@ -2265,7 +2550,7 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
               return regex.test(url);
             } catch (error) {
               console.log(
-                "[handleQueryStylesForUrl] Invalid regex pattern:",
+                "[ea-handleQueryStylesForUrl] Invalid regex pattern:",
                 rulePattern,
                 error,
               );
@@ -2277,7 +2562,7 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
         }
       } catch (error) {
         console.log(
-          "[handleQueryStylesForUrl] Error in matchesDomainRule:",
+          "[ea-handleQueryStylesForUrl] Error in matchesDomainRule:",
           error,
         );
         return false;
@@ -2285,7 +2570,7 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
     };
 
     // Filter styles that match the URL using inline domain detection
-    console.log("[handleQueryStylesForUrl] About to filter styles");
+    console.log("[ea-handleQueryStylesForUrl] About to filter styles");
     const matchingStyles = userCSSStyles.filter((style: UserCSSStyle) => {
       try {
         const styleDomains = style.domains || [];
@@ -2321,7 +2606,7 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
         return true;
       } catch (error) {
         console.log(
-          "[handleQueryStylesForUrl] Error filtering style:",
+          "[ea-handleQueryStylesForUrl] Error filtering style:",
           style.id,
           error,
         );
@@ -2331,7 +2616,7 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
     });
 
     console.log(
-      "[handleQueryStylesForUrl] Found matching styles:",
+      "[ea-handleQueryStylesForUrl] Found matching styles:",
       matchingStyles.length,
     );
 
@@ -2342,8 +2627,8 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("[handleQueryStylesForUrl] Error:", errorMessage);
-    console.error("[handleQueryStylesForUrl] Error stack:", error);
+    console.error("[ea-handleQueryStylesForUrl] Error:", errorMessage);
+    console.error("[ea-handleQueryStylesForUrl] Error stack:", error);
     return {
       success: false,
       error: errorMessage,
@@ -2355,7 +2640,7 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
  * Handler for FETCH_ASSETS messages.
  */
 const handleFetchAssets: MessageHandler = async (message) => {
-  console.log("[handleFetchAssets] Processing message:", message);
+  console.log("[ea-handleFetchAssets] Processing message:", message);
   try {
     const { assets } = (
       message as {
@@ -2364,10 +2649,24 @@ const handleFetchAssets: MessageHandler = async (message) => {
         };
       }
     ).payload;
-    console.log(`[handleFetchAssets] Fetching ${assets.length} assets`);
+    console.log(`[ea-handleFetchAssets] Fetching ${assets.length} assets`);
 
-    // Import asset processor
-    const { fetchAssetAsDataUrl } = await import("../usercss/asset-processor");
+    // Import asset processor with error handling
+    let fetchAssetAsDataUrl;
+    try {
+      const assetProcessor = await import("../usercss/asset-processor");
+      fetchAssetAsDataUrl = assetProcessor.fetchAssetAsDataUrl;
+    } catch (importError) {
+      console.error(
+        "[ea-handleFetchAssets] Failed to import asset-processor:",
+        importError,
+      );
+      // Return failed assets if import fails
+      return {
+        success: false,
+        error: `Failed to import asset processor: ${importError instanceof Error ? importError.message : "Unknown error"}`,
+      };
+    }
 
     // Fetch all assets in parallel
     const fetchPromises = assets.map((asset) =>
@@ -2380,7 +2679,7 @@ const handleFetchAssets: MessageHandler = async (message) => {
     const results = await Promise.all(fetchPromises);
 
     console.log(
-      `[handleFetchAssets] Successfully processed ${results.filter((r) => r.dataUrl).length}/${assets.length} assets`,
+      `[ea-handleFetchAssets] Successfully processed ${results.filter((r) => r.dataUrl).length}/${assets.length} assets`,
     );
 
     return {
@@ -2390,7 +2689,11 @@ const handleFetchAssets: MessageHandler = async (message) => {
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("[handleFetchAssets] Error:", errorMessage);
+    console.error("[ea-handleFetchAssets] Error:", errorMessage);
+    console.error(
+      "[ea-handleFetchAssets] Error stack:",
+      error instanceof Error ? error.stack : "No stack",
+    );
     return {
       success: false,
       error: errorMessage,
@@ -2499,16 +2802,16 @@ export class MessageHandlerService {
     message: ReceivedMessages,
     tabId?: number,
   ): Promise<unknown> {
-    console.log("[MessageHandlerService] Handling message:", message.type);
+    console.log("[ea-MessageHandlerService] Handling message:", message.type);
     // Ensure service is initialized
     if (!this.isInitialized) {
-      console.log("[MessageHandlerService] Initializing service");
+      console.log("[ea-MessageHandlerService] Initializing service");
       this.initialize();
     }
 
     const handler = this.handlers[message.type];
     console.log(
-      "[MessageHandlerService] Found handler for",
+      "[ea-MessageHandlerService] Found handler for",
       message.type,
       ":",
       !!handler,
@@ -2516,7 +2819,7 @@ export class MessageHandlerService {
 
     if (!handler) {
       console.error(
-        "[MessageHandlerService] No handler registered for message type:",
+        "[ea-MessageHandlerService] No handler registered for message type:",
         message.type,
       );
       throw new Error(
@@ -2524,7 +2827,7 @@ export class MessageHandlerService {
       );
     }
 
-    console.log("[MessageHandlerService] Calling handler for", message.type);
+    console.log("[ea-MessageHandlerService] Calling handler for", message.type);
     return await handler(message, tabId);
   }
 
@@ -2615,7 +2918,7 @@ async function findManagerTab(): Promise<Browser.tabs.Tab | null> {
     // Return the first manager tab found
     return tabs.length > 0 ? tabs[0] : null;
   } catch (error: unknown) {
-    console.warn("[findManagerTab] Error querying tabs:", error);
+    console.warn("[ea-findManagerTab] Error querying tabs:", error);
     return null;
   }
 }
@@ -2627,7 +2930,7 @@ function initializeTabCloseListener(): void {
   if (browser?.tabs) {
     browser.tabs.onRemoved.addListener((tabId) => {
       if (tabId === activeManagerTabId) {
-        console.log("[TabTracker] Manager tab closed, clearing tracking");
+        console.log("[ea-TabTracker] Manager tab closed, clearing tracking");
         activeManagerTabId = null;
         if (managerTabCheckTimeout) {
           clearTimeout(managerTabCheckTimeout);
