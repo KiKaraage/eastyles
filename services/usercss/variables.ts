@@ -25,8 +25,8 @@ export function extractVariables(css: string): VariableDescriptor[] {
   // /*[[variable-name|type|default|options:opt1,opt2,opt3]]*/
   const variableRegex = /\/\*\[\[([^\]]+)\]\]\*\//g;
 
-  let match;
-  while ((match = variableRegex.exec(css)) !== null) {
+  let match = variableRegex.exec(css);
+  while (match !== null) {
     const variableString = match[1];
 
     try {
@@ -38,6 +38,7 @@ export function extractVariables(css: string): VariableDescriptor[] {
       // Skip malformed variable declarations
       continue;
     }
+    match = variableRegex.exec(css);
   }
 
   return variables;
@@ -155,57 +156,86 @@ function parseVariableType(typeString: string): VariableDescriptor["type"] {
 }
 
 /**
- * Resolves variables in CSS content
+ * Resolves variables in CSS content with chunked processing to prevent blocking
  *
  * @param css - The CSS content with variable placeholders
  * @param values - The variable values to substitute
  * @param variables - Variable descriptors for advanced resolution
- * @returns CSS content with variables resolved
+ * @returns Promise that resolves to CSS content with variables resolved
  */
-export function resolveVariables(
+export async function resolveVariables(
   css: string,
   values: Record<string, string>,
   variables?: Record<string, VariableDescriptor>,
-): string {
-  // First, handle USO-style variable resolution with CSS snippets
-  if (variables) {
-    for (const [varName, varDesc] of Object.entries(variables)) {
-      if (varDesc.type === 'select' && varDesc.optionCss && values[varName]) {
-        const selectedValue = values[varName];
-        const cssSnippet = varDesc.optionCss[selectedValue];
-        if (cssSnippet) {
-          // Replace the variable placeholder with the CSS snippet
-          css = css.replace(new RegExp(`var\\(${varName}\\)`, 'g'), cssSnippet);
+): Promise<string> {
+  // Find all variable placeholders
+  const variableRegex = /\/\*\[\[([^\]]+)\]\]\*\//g;
+  const matches: Array<{
+    match: string;
+    variableString: string;
+    index: number;
+  }> = [];
+  let match = variableRegex.exec(css);
+
+  while (match !== null) {
+    matches.push({
+      match: match[0],
+      variableString: match[1],
+      index: match.index,
+    });
+    match = variableRegex.exec(css);
+  }
+
+  if (matches.length === 0) {
+    return css;
+  }
+
+  // Process in chunks to avoid blocking the main thread
+  const chunkSize = 50; // Process 50 variables at a time
+  let processedCss = css;
+
+  for (let i = 0; i < matches.length; i += chunkSize) {
+    const chunk = matches.slice(i, i + chunkSize);
+
+    // Process this chunk synchronously
+    for (const { match: originalMatch, variableString } of chunk) {
+      const parts = variableString.split("|");
+      const variableName = parts[0];
+
+      let replacement = originalMatch; // Default to original if no replacement found
+
+      // Check if this is a select/dropdown variable with optionCss mapping (USO-style)
+      if (variables && variables[variableName]) {
+        const varDesc = variables[variableName];
+
+        // For select/dropdown variables with CSS snippets
+        if (varDesc.type === "select" && varDesc.optionCss) {
+          const selectedValue = values[variableName];
+          if (selectedValue && varDesc.optionCss[selectedValue]) {
+            // Use the CSS content from optionCss mapping
+            replacement = varDesc.optionCss[selectedValue];
+          }
         }
       }
+
+      // If not a select with optionCss, use simple value replacement
+      if (replacement === originalMatch) {
+        if (values[variableName] !== undefined) {
+          replacement = values[variableName];
+        } else if (parts.length > 2) {
+          replacement = parts[2]; // Use default
+        }
+      }
+
+      // Replace in the CSS
+      processedCss = processedCss.replace(originalMatch, replacement);
+    }
+
+    // Yield control back to the event loop after each chunk
+    if (i + chunkSize < matches.length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
 
-  // Replace variable placeholders with actual values
-  return css.replace(/\/\*\[\[([^\]]+)\]\]\*\//g, (match, variableString) => {
-    const parts = variableString.split("|");
-    const variableName = parts[0];
-
-    // Check if this is a select variable with optionCss mapping
-    if (variables && variables[variableName] && variables[variableName].type === 'select' && variables[variableName].optionCss) {
-      const selectedValue = values[variableName];
-      if (selectedValue && variables[variableName].optionCss[selectedValue]) {
-        // Use the CSS content from optionCss mapping
-        return variables[variableName].optionCss[selectedValue];
-      }
-    }
-
-    // Return the value if it exists, otherwise return the original placeholder
-    if (values[variableName]) {
-      return values[variableName];
-    }
-
-    // If no value is provided, return the default if specified
-    if (parts.length > 2) {
-      return parts[2];
-    }
-
-    // Otherwise return the placeholder as-is
-    return match;
-  });
+  return processedCss;
 }

@@ -5,10 +5,11 @@
  * Integrates with StorageClient for persistence and MessageBus for real-time updates.
  */
 
-import { VariableDescriptor } from "../usercss/types";
-import { storageClient } from "../storage/client";
 import { messageBus } from "../messaging/bus";
-import { processUserCSS } from "./processor";
+import { storageClient } from "../storage/client";
+import { VariableDescriptor } from "../usercss/types";
+// NOTE: Don't import processUserCSS at module level - it accesses DOM
+// We'll import it dynamically when needed
 
 export interface VariableUpdate {
   styleId: string;
@@ -33,18 +34,45 @@ export class VariablePersistenceService {
     variables: Record<string, string>,
   ): Promise<void> {
     try {
+      console.log("[VariablePersistenceService] Updating variables:", {
+        styleId,
+        variables,
+        timestamp: new Date().toISOString(),
+      });
+
       // Update the style in storage
+      console.log(
+        "[VariablePersistenceService] Calling storageClient.updateUserCSSStyleVariables",
+      );
       const updatedStyle = await storageClient.updateUserCSSStyleVariables(
         styleId,
         variables,
       );
+      console.log(
+        "[VariablePersistenceService] Style variables updated in storage:",
+        {
+          styleId,
+          styleName: updatedStyle.name,
+          updatedVariables: Object.keys(variables),
+        },
+      );
 
       // Check if this is a preprocessed style and re-process with new variables
       // Skip reprocessing in background context where DOM is not available
-      if (updatedStyle.source.includes("@preprocessor") && typeof globalThis.document !== "undefined") {
+      // In service worker context, we should never reprocess CSS that requires DOM
+      const isServiceWorkerContext =
+        typeof globalThis !== "undefined" &&
+        typeof globalThis.document === "undefined";
+
+      if (
+        updatedStyle.source.includes("@preprocessor") &&
+        !isServiceWorkerContext
+      ) {
         const startTime = performance.now();
 
         try {
+          // Lazy import to avoid DOM access errors in service worker
+          const { processUserCSS } = await import("./processor");
           const reprocessed = await processUserCSS(
             updatedStyle.source,
             variables,
@@ -93,9 +121,15 @@ export class VariablePersistenceService {
       };
 
       // Broadcast the change to all listeners
+      console.log(
+        "[VariablePersistenceService] Broadcasting update to local watchers",
+      );
       this.broadcastUpdate(update);
 
       // Send message to content scripts for live updates
+      console.log(
+        "[VariablePersistenceService] Broadcasting VARIABLES_UPDATED message to content scripts",
+      );
       await messageBus.broadcast({
         type: "VARIABLES_UPDATED",
         payload: {
@@ -104,8 +138,15 @@ export class VariablePersistenceService {
           timestamp: Date.now(),
         },
       });
+
+      console.log(
+        "[VariablePersistenceService] Variable update completed successfully",
+      );
     } catch (error) {
-      console.error("Failed to update variables:", error);
+      console.error(
+        "[VariablePersistenceService] Failed to update variables:",
+        error,
+      );
       throw new Error(`Failed to update variables: ${error}`);
     }
   }
