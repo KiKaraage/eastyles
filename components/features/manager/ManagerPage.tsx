@@ -907,21 +907,10 @@ const ManagerPage: React.FC = () => {
       )}
 
       {/* Create Font Style Modal */}
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <dialog
         ref={fontDialogRef}
         className="modal"
         onClose={() => setShowFontModal(false)}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setShowFontModal(false);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" || e.key === "Enter") {
-            setShowFontModal(false);
-          }
-        }}
       >
         <div className="modal-box max-w-md">
           <div className="flex items-center justify-between mb-4">
@@ -1027,6 +1016,11 @@ const ManagerPage: React.FC = () => {
             }}
           />
         </div>
+        <form method="dialog" className="modal-backdrop">
+          <button type="button" onClick={() => setShowFontModal(false)}>
+            Close
+          </button>
+        </form>
       </dialog>
 
       {/* Edit Style Modal */}
