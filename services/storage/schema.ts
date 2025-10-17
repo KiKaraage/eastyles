@@ -3,7 +3,7 @@
  * Defines TypeScript interfaces for all data structures stored in browser storage
  */
 
-import { DomainRule, VariableDescriptor, Asset } from '../usercss/types';
+import { Asset, DomainRule, VariableDescriptor } from "../usercss/types";
 
 /**
  * Core settings stored in extension storage
@@ -67,12 +67,12 @@ export interface UserCSSStyle {
   originalDomainCondition?: string;
   /** Compiled CSS ready for injection */
   compiledCss: string;
-   /** User-configurable variables with their current values */
-   variables: Record<string, VariableDescriptor>;
-   /** Original default values captured at install time for reset functionality */
-   originalDefaults: Record<string, string>;
-   /** Additional assets (fonts, images, etc.) */
-   assets: Asset[];
+  /** User-configurable variables with their current values */
+  variables: Record<string, VariableDescriptor>;
+  /** Original default values captured at install time for reset functionality */
+  originalDefaults: Record<string, string>;
+  /** Additional assets (fonts, images, etc.) */
+  assets: Asset[];
   /** Timestamp when style was installed */
   installedAt: number;
   /** Whether the style is currently enabled */
@@ -179,8 +179,10 @@ export function isUserCSSStyle(obj: unknown): obj is UserCSSStyle {
     Array.isArray(style.domains) &&
     style.domains.every((rule) => typeof rule === "object" && rule !== null) &&
     typeof style.compiledCss === "string" &&
-    typeof style.variables === "object" && style.variables !== null &&
-    typeof style.originalDefaults === "object" && style.originalDefaults !== null &&
+    typeof style.variables === "object" &&
+    style.variables !== null &&
+    typeof style.originalDefaults === "object" &&
+    style.originalDefaults !== null &&
     Array.isArray(style.assets) &&
     typeof style.installedAt === "number" &&
     typeof style.enabled === "boolean" &&
@@ -328,23 +330,28 @@ export function validateUserCSSStyle(data: unknown): ValidationResult {
     result.errors.push("installedAt cannot be in the future");
   }
 
-   // Validate domains
-   data.domains.forEach((rule, index) => {
-     if (!rule.kind || !rule.pattern) {
-       result.errors.push(`Domain rule at index ${index} is invalid`);
-     }
-   });
+  // Validate domains
+  data.domains.forEach((rule, index) => {
+    if (!rule.kind || !rule.pattern) {
+      result.errors.push(`Domain rule at index ${index} is invalid`);
+    }
+  });
 
-   // Validate originalDefaults
-   if (typeof data.originalDefaults !== "object" || data.originalDefaults === null) {
-     result.errors.push("originalDefaults must be an object");
-   } else {
-     for (const [key, value] of Object.entries(data.originalDefaults)) {
-       if (typeof key !== "string" || typeof value !== "string") {
-         result.errors.push(`originalDefaults entry "${key}" must have string key and value`);
-       }
-     }
-   }
+  // Validate originalDefaults
+  if (
+    typeof data.originalDefaults !== "object" ||
+    data.originalDefaults === null
+  ) {
+    result.errors.push("originalDefaults must be an object");
+  } else {
+    for (const [key, value] of Object.entries(data.originalDefaults)) {
+      if (typeof key !== "string" || typeof value !== "string") {
+        result.errors.push(
+          `originalDefaults entry "${key}" must have string key and value`,
+        );
+      }
+    }
+  }
 
   if (result.errors.length > 0) {
     result.isValid = false;
@@ -378,7 +385,9 @@ export function validateExportData(data: unknown): ValidationResult {
     const styleValidation = validateUserStyle(style);
     if (!styleValidation.isValid) {
       result.errors.push(
-        ...styleValidation.errors.map((error) => `Legacy Style ${index}: ${error}`),
+        ...styleValidation.errors.map(
+          (error) => `Legacy Style ${index}: ${error}`,
+        ),
       );
     }
   });
@@ -388,7 +397,9 @@ export function validateExportData(data: unknown): ValidationResult {
     const styleValidation = validateUserCSSStyle(style);
     if (!styleValidation.isValid) {
       result.errors.push(
-        ...styleValidation.errors.map((error) => `UserCSS Style ${index}: ${error}`),
+        ...styleValidation.errors.map(
+          (error) => `UserCSS Style ${index}: ${error}`,
+        ),
       );
     }
   });
@@ -424,7 +435,9 @@ export function createUserStyle(
 /**
  * Extract original default values from variables
  */
-function extractOriginalDefaults(variables: Record<string, VariableDescriptor>): Record<string, string> {
+function extractOriginalDefaults(
+  variables: Record<string, VariableDescriptor>,
+): Record<string, string> {
   const defaults: Record<string, string> = {};
   for (const [varName, varDescriptor] of Object.entries(variables)) {
     defaults[varName] = varDescriptor.default;
@@ -442,7 +455,8 @@ export function createUserCSSStyle(
   const variables = partial.variables || {};
 
   return {
-    id: partial.id || `usercss_${now}_${Math.random().toString(36).substr(2, 9)}`,
+    id:
+      partial.id || `usercss_${now}_${Math.random().toString(36).substr(2, 9)}`,
     name: partial.name,
     namespace: partial.namespace || "user",
     version: partial.version || "1.0.0",
@@ -452,7 +466,8 @@ export function createUserCSSStyle(
     domains: partial.domains || [],
     compiledCss: partial.compiledCss || "",
     variables,
-    originalDefaults: partial.originalDefaults || extractOriginalDefaults(variables),
+    originalDefaults:
+      partial.originalDefaults || extractOriginalDefaults(variables),
     assets: partial.assets || [],
     installedAt: partial.installedAt || now,
     enabled: partial.enabled ?? true,

@@ -5,8 +5,11 @@
  * Handles creation, installation, and management of font styles through the standard UserCSS system.
  */
 
-import { FontApplication } from './font-registry';
-import { FontUserCSSGenerator, GeneratedFontUserCSS } from './font-usercss-generator';
+import { FontApplication } from "./font-registry";
+import {
+  FontUserCSSGenerator,
+  GeneratedFontUserCSS,
+} from "./font-usercss-generator";
 
 export interface FontStyleInstallation {
   fontApplication: FontApplication;
@@ -27,14 +30,16 @@ export class FontUserCSSManager {
   /**
    * Create and install a font-based UserCSS style
    */
-  async installFontStyle(fontApplication: FontApplication): Promise<FontStyleInstallation> {
+  async installFontStyle(
+    fontApplication: FontApplication,
+  ): Promise<FontStyleInstallation> {
     try {
       // Generate UserCSS from font application
       const generatedUserCSS = this.generator.generateFontUserCSS({
         fontApplication,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: true
+        addComments: true,
       });
 
       // Create installation record
@@ -43,7 +48,7 @@ export class FontUserCSSManager {
         generatedUserCSS,
         installationId: generatedUserCSS.meta.id,
         installedAt: new Date(),
-        isActive: true
+        isActive: true,
       };
 
       // Store the installation
@@ -51,16 +56,18 @@ export class FontUserCSSManager {
 
       // Here we would typically send this to the background script for actual installation
       // For now, we'll just return the installation record
-      console.log('Font style generated and ready for installation:', {
+      console.log("[ea] Font style generated and ready for installation:", {
         id: installation.installationId,
         fontName: fontApplication.fontName,
-        userCSS: generatedUserCSS.userCSS
+        userCSS: generatedUserCSS.userCSS,
       });
 
       return installation;
     } catch (error) {
-      console.error('Failed to install font style:', error);
-      throw new Error(`Failed to install font style for ${fontApplication.fontName}: ${error}`);
+      console.error("Failed to install font style:", error);
+      throw new Error(
+        `Failed to install font style for ${fontApplication.fontName}: ${error}`,
+      );
     }
   }
 
@@ -75,9 +82,9 @@ export class FontUserCSSManager {
       }
 
       // Here we would typically send a removal request to the background script
-      console.log('Font style removal requested:', {
+      console.log("[ea] Font style removal requested:", {
         id: installationId,
-        fontName: installation.fontApplication.fontName
+        fontName: installation.fontApplication.fontName,
       });
 
       // Remove from local storage
@@ -85,7 +92,7 @@ export class FontUserCSSManager {
 
       return true;
     } catch (error) {
-      console.error('Failed to remove font style:', error);
+      console.error("Failed to remove font style:", error);
       return false;
     }
   }
@@ -100,36 +107,44 @@ export class FontUserCSSManager {
   /**
    * Get a specific font style installation
    */
-  getFontStyleInstallation(installationId: string): FontStyleInstallation | undefined {
+  getFontStyleInstallation(
+    installationId: string,
+  ): FontStyleInstallation | undefined {
     return this.installedFonts.get(installationId);
   }
 
   /**
    * Check if a font is already installed
    */
-  isFontInstalled(fontName: string, fontType: 'builtin' | 'custom'): boolean {
+  isFontInstalled(fontName: string, fontType: "builtin" | "custom"): boolean {
     return Array.from(this.installedFonts.values()).some(
-      installation =>
+      (installation) =>
         installation.fontApplication.fontName === fontName &&
-        installation.fontApplication.fontType === fontType
+        installation.fontApplication.fontType === fontType,
     );
   }
 
   /**
    * Get installation for a specific font
    */
-  getFontInstallation(fontName: string, fontType: 'builtin' | 'custom'): FontStyleInstallation | undefined {
+  getFontInstallation(
+    fontName: string,
+    fontType: "builtin" | "custom",
+  ): FontStyleInstallation | undefined {
     return Array.from(this.installedFonts.values()).find(
-      installation =>
+      (installation) =>
         installation.fontApplication.fontName === fontName &&
-        installation.fontApplication.fontType === fontType
+        installation.fontApplication.fontType === fontType,
     );
   }
 
   /**
    * Update an existing font style
    */
-  async updateFontStyle(installationId: string, updates: Partial<FontApplication>): Promise<FontStyleInstallation | null> {
+  async updateFontStyle(
+    installationId: string,
+    updates: Partial<FontApplication>,
+  ): Promise<FontStyleInstallation | null> {
     try {
       const existingInstallation = this.installedFonts.get(installationId);
       if (!existingInstallation) {
@@ -139,15 +154,15 @@ export class FontUserCSSManager {
       // Create updated font application
       const updatedApplication: FontApplication = {
         ...existingInstallation.fontApplication,
-        ...updates
+        ...updates,
       };
 
       // Generate new UserCSS
       const updatedUserCSS = this.generator.generateFontUserCSS({
         fontApplication: updatedApplication,
-        targetSelector: 'body',
+        targetSelector: "body",
         includeFallbacks: true,
-        addComments: true
+        addComments: true,
       });
 
       // Update installation
@@ -155,20 +170,20 @@ export class FontUserCSSManager {
         ...existingInstallation,
         fontApplication: updatedApplication,
         generatedUserCSS: updatedUserCSS,
-        installedAt: new Date() // Update timestamp
+        installedAt: new Date(), // Update timestamp
       };
 
       this.installedFonts.set(installationId, updatedInstallation);
 
-      console.log('Font style updated:', {
+      console.log("[ea] Font style updated:", {
         id: installationId,
         fontName: updatedApplication.fontName,
-        updates
+        updates,
       });
 
       return updatedInstallation;
     } catch (error) {
-      console.error('Failed to update font style:', error);
+      console.error("Failed to update font style:", error);
       return null;
     }
   }
@@ -186,9 +201,9 @@ export class FontUserCSSManager {
   generateFontUserCSS(fontApplication: FontApplication): GeneratedFontUserCSS {
     return this.generator.generateFontUserCSS({
       fontApplication,
-      targetSelector: 'body',
+      targetSelector: "body",
       includeFallbacks: true,
-      addComments: true
+      addComments: true,
     });
   }
 
@@ -205,9 +220,13 @@ export class FontUserCSSManager {
 
     return {
       total: installations.length,
-      active: installations.filter(inst => inst.isActive).length,
-      builtin: installations.filter(inst => inst.fontApplication.fontType === 'builtin').length,
-      custom: installations.filter(inst => inst.fontApplication.fontType === 'custom').length
+      active: installations.filter((inst) => inst.isActive).length,
+      builtin: installations.filter(
+        (inst) => inst.fontApplication.fontType === "builtin",
+      ).length,
+      custom: installations.filter(
+        (inst) => inst.fontApplication.fontType === "custom",
+      ).length,
     };
   }
 
@@ -220,31 +239,33 @@ export class FontUserCSSManager {
     installedAt: string;
     isActive: boolean;
   }> {
-    return Array.from(this.installedFonts.values()).map(installation => ({
+    return Array.from(this.installedFonts.values()).map((installation) => ({
       installationId: installation.installationId,
       fontApplication: installation.fontApplication,
       installedAt: installation.installedAt.toISOString(),
-      isActive: installation.isActive
+      isActive: installation.isActive,
     }));
   }
 
   /**
    * Import font styles from backup
    */
-  async importFontStyles(fontStyles: Array<{
-    installationId: string;
-    fontApplication: FontApplication;
-    installedAt: string;
-    isActive: boolean;
-  }>): Promise<void> {
+  async importFontStyles(
+    fontStyles: Array<{
+      installationId: string;
+      fontApplication: FontApplication;
+      installedAt: string;
+      isActive: boolean;
+    }>,
+  ): Promise<void> {
     for (const fontStyle of fontStyles) {
       try {
         // Generate UserCSS for the imported font
         const generatedUserCSS = this.generator.generateFontUserCSS({
           fontApplication: fontStyle.fontApplication,
-          targetSelector: 'body',
+          targetSelector: "body",
           includeFallbacks: true,
-          addComments: true
+          addComments: true,
         });
 
         // Create installation record
@@ -253,12 +274,15 @@ export class FontUserCSSManager {
           generatedUserCSS,
           installationId: fontStyle.installationId,
           installedAt: new Date(fontStyle.installedAt),
-          isActive: fontStyle.isActive
+          isActive: fontStyle.isActive,
         };
 
         this.installedFonts.set(installation.installationId, installation);
       } catch (error) {
-        console.error(`Failed to import font style ${fontStyle.installationId}:`, error);
+        console.error(
+          `Failed to import font style ${fontStyle.installationId}:`,
+          error,
+        );
       }
     }
   }

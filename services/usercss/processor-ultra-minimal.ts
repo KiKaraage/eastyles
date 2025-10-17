@@ -35,7 +35,7 @@ function simpleHash(text: string): string {
     hash = (hash << 5) - hash + char;
     hash = hash >>> 0; // Convert to unsigned 32-bit
   }
-  return hash.toString(16).padStart(8, '0');
+  return hash.toString(16).padStart(8, "0");
 }
 
 /**
@@ -47,23 +47,25 @@ export function parseUserCSSUltraMinimal(raw: string): UltraMinimalParseResult {
   const errors: string[] = [];
 
   let css = raw;
-  let metadataBlock = '';
+  let metadataBlock = "";
   const domains: string[] = [];
 
   // Basic metadata extraction
-  const metadataMatch = raw.match(/\/\*\s*==UserStyle==\s*\r?\n([\s\S]*?)\s*==\/UserStyle==\s*\*\//);
-  let metadataContent = '';
+  const metadataMatch = raw.match(
+    /\/\*\s*==UserStyle==\s*\r?\n([\s\S]*?)\s*==\/UserStyle==\s*\*\//,
+  );
+  let metadataContent = "";
   if (metadataMatch) {
     metadataBlock = metadataMatch[0];
     metadataContent = metadataMatch[1];
-    css = raw.replace(metadataMatch[0], '').trim();
+    css = raw.replace(metadataMatch[0], "").trim();
   } else {
     // Try to find a general comment block at the start
     const generalCommentMatch = raw.match(/^\/\*\*([\s\S]*?)\*\//);
     if (generalCommentMatch) {
       metadataBlock = generalCommentMatch[0];
       metadataContent = generalCommentMatch[1];
-      css = raw.replace(generalCommentMatch[0], '').trim();
+      css = raw.replace(generalCommentMatch[0], "").trim();
     } else {
       css = raw;
     }
@@ -74,51 +76,56 @@ export function parseUserCSSUltraMinimal(raw: string): UltraMinimalParseResult {
   const namespaceMatch = metadataContent.match(/@namespace\s+([^\r\n]+)/);
   const versionMatch = metadataContent.match(/@version\s+([^\r\n]+)/);
 
-  const name = nameMatch ? nameMatch[1].trim() : '';
-  const namespace = namespaceMatch ? namespaceMatch[1].trim() : '';
-  const version = versionMatch ? versionMatch[1].trim() : '';
+  const name = nameMatch ? nameMatch[1].trim() : "";
+  const namespace = namespaceMatch ? namespaceMatch[1].trim() : "";
+  const version = versionMatch ? versionMatch[1].trim() : "";
 
   // Validation - only if metadata block exists
   if (metadataMatch) {
     if (!name) {
-      errors.push('Missing required @name directive');
+      errors.push("Missing required @name directive");
     }
     if (!namespace) {
-      errors.push('Missing required @namespace directive');
+      errors.push("Missing required @namespace directive");
     }
     if (!version) {
-      errors.push('Missing required @version directive');
+      errors.push("Missing required @version directive");
     }
   }
 
   // Extract domains
   const domainMatches = metadataContent.match(/@domain\s+([^\r\n]+)/);
   if (domainMatches) {
-    domains.push(...domainMatches[1].split(',').map(d => d.trim()).filter(Boolean));
+    domains.push(
+      ...domainMatches[1]
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean),
+    );
   }
 
   // Extract from match patterns
   const matchMatches = metadataContent.match(/@match\s+([^\r\n]+)/g);
   if (matchMatches) {
-    matchMatches.forEach(match => {
-      const pattern = match.replace('@match', '').trim();
+    matchMatches.forEach((match) => {
+      const pattern = match.replace("@match", "").trim();
       // Very basic domain extraction from pattern
-      if (pattern.includes('*://*.')) {
-        const domain = pattern.split('*://*.')[1]?.split('/')[0];
+      if (pattern.includes("*://*.")) {
+        const domain = pattern.split("*://*.")[1]?.split("/")[0];
         if (domain) domains.push(domain);
       }
     });
   }
 
   const meta: UltraMinimalStyleMeta = {
-    id: name && namespace ? simpleHash(`${namespace}:${name}`) : '',
+    id: name && namespace ? simpleHash(`${namespace}:${name}`) : "",
     name,
     namespace,
     version,
-    description: '',
-    author: '',
-    sourceUrl: '',
-    domains
+    description: "",
+    author: "",
+    sourceUrl: "",
+    domains,
   };
 
   return {
@@ -126,6 +133,6 @@ export function parseUserCSSUltraMinimal(raw: string): UltraMinimalParseResult {
     css,
     metadataBlock,
     warnings,
-    errors
+    errors,
   };
 }

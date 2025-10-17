@@ -1,25 +1,25 @@
 /**
  * Storage client wrapper for Eastyles extension
- * Provides a type-safe interface to the @wxt-dev/storage API
+ * Provides a type-safe interface to the wxt/storage API
  */
 
-import { storage } from "@wxt-dev/storage";
+import { storage } from "wxt/utils/storage";
 import type {
-  SettingsStorage,
-  UserStyle,
-  UserCSSStyle,
   ExportData,
+  SettingsStorage,
+  UserCSSStyle,
+  UserStyle,
 } from "./schema";
 import {
-  DEFAULT_SETTINGS,
-  STORAGE_KEYS,
-  validateSettings,
-  validateUserStyle,
-  validateUserCSSStyle,
-  validateExportData,
-  mergeSettings,
-  createUserStyle,
   createUserCSSStyle,
+  createUserStyle,
+  DEFAULT_SETTINGS,
+  mergeSettings,
+  STORAGE_KEYS,
+  validateExportData,
+  validateSettings,
+  validateUserCSSStyle,
+  validateUserStyle,
 } from "./schema";
 
 /**
@@ -132,19 +132,19 @@ export class EastylesStorageClient implements StorageClient {
       const settings = await this.getSettings();
       this.debugEnabled = settings.isDebuggingEnabled ?? false;
     } catch (error) {
-      console.warn("Failed to initialize debug mode:", error);
+      console.warn("[ea-Storage] Failed to initialize debug mode:", error);
     }
   }
 
   private debug(message: string, ...args: unknown[]): void {
     if (this.debugEnabled) {
-      console.log(`[EastylesStorage] ${message}`, ...args);
+      console.log(`[ea-Storage] ${message}`, ...args);
     }
   }
 
   private debugError(message: string, error: unknown): void {
     if (this.debugEnabled) {
-      console.error(`[EastylesStorage] ${message}`, error);
+      console.error(`[ea-Storage] ${message}`, error);
     }
   }
 
@@ -554,7 +554,9 @@ export class EastylesStorageClient implements StorageClient {
       });
     } catch (error) {
       this.debugError("Failed to setup settings watcher:", error);
-      return () => {}; // Return no-op function
+      return () => {
+        // No-op function for when watcher setup fails
+      };
     }
   }
 
@@ -569,7 +571,9 @@ export class EastylesStorageClient implements StorageClient {
       });
     } catch (error) {
       this.debugError("Failed to setup styles watcher:", error);
-      return () => {}; // Return no-op function
+      return () => {
+        // No-op function for when watcher setup fails
+      };
     }
   }
 
@@ -588,7 +592,9 @@ export class EastylesStorageClient implements StorageClient {
       });
     } catch (error) {
       this.debugError("Failed to setup UserCSS styles watcher:", error);
-      return () => {}; // Return no-op function
+      return () => {
+        // No-op function for when watcher setup fails
+      };
     }
   }
 
@@ -728,24 +734,61 @@ export class EastylesStorageClient implements StorageClient {
     variables: Record<string, unknown>,
   ): Promise<UserCSSStyle> {
     try {
+      this.debug(
+        `[updateUserCSSStyleVariables] Updating variables for style ${id}:`,
+        variables,
+      );
+
       const style = await this.getUserCSSStyle(id);
       if (!style) {
         throw new Error(`UserCSS style with ID "${id}" not found`);
       }
+
+      this.debug(
+        `[updateUserCSSStyleVariables] Found style "${style.name}", current variables:`,
+        style.variables,
+      );
 
       const updatedVariables = { ...style.variables };
 
       // Update only the variables that are provided
       for (const [varName, varValue] of Object.entries(variables)) {
         if (updatedVariables[varName]) {
+          const oldValue = updatedVariables[varName].value;
           updatedVariables[varName] = {
             ...updatedVariables[varName],
             value: String(varValue),
           };
+          this.debug(
+            `[updateUserCSSStyleVariables] Variable "${varName}" changed: "${oldValue}" -> "${varValue}"`,
+          );
+        } else {
+          this.debug(
+            `[updateUserCSSStyleVariables] Variable "${varName}" not found in style, skipping`,
+          );
         }
       }
 
-      return await this.updateUserCSSStyle(id, { variables: updatedVariables });
+      // For variable updates, we DON'T recompile in the background script
+      // Instead, we just update the variable values and let the content script
+      // handle reprocessing when it receives the styleUpdate message
+      // This avoids DOM/processor issues in service worker context
+      this.debug(
+        `[updateUserCSSStyleVariables] Updating variables only, content script will reprocess if needed`,
+      );
+
+      this.debug(
+        `[updateUserCSSStyleVariables] Saving updated variables to storage`,
+      );
+      const result = await this.updateUserCSSStyle(id, {
+        variables: updatedVariables,
+      });
+      this.debug(`[updateUserCSSStyleVariables] Style saved successfully:`, {
+        id,
+        name: result.name,
+        variablesCount: Object.keys(result.variables).length,
+      });
+      return result;
     } catch (error) {
       this.debugError("Failed to update UserCSS style variables:", error);
       throw new Error(`Failed to update UserCSS style variables: ${error}`);

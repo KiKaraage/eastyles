@@ -22,6 +22,10 @@ export interface StyleMeta {
   sourceUrl: string;
   /** License identifier for the style */
   license?: string;
+  /** Homepage URL for the style */
+  homepageURL?: string;
+  /** Support URL for the style */
+  supportURL?: string;
   /** List of domains this style should apply to */
   domains: string[];
   /** Compiled CSS ready for injection */
@@ -36,7 +40,14 @@ export interface VariableDescriptor {
   /** Name of the variable (e.g., '--accent-color') */
   name: string;
   /** Type of the variable for UI rendering */
-  type: "color" | "number" | "text" | "select" | "checkbox" | "unknown";
+  type:
+    | "color"
+    | "number"
+    | "text"
+    | "select"
+    | "checkbox"
+    | "range"
+    | "unknown";
   /** Human-readable label for the variable */
   label?: string;
   /** Default value as defined in the original UserCSS */
@@ -45,8 +56,12 @@ export interface VariableDescriptor {
   min?: number;
   /** Maximum value (for numeric variables) */
   max?: number;
+  /** Step value for numeric variables */
+  step?: number;
+  /** Unit suffix for numeric/range variables */
+  unit?: string;
   /** Available options (for select variables) */
-  options?: Array<{value: string, label: string}>;
+  options?: Array<{ value: string; label: string }>;
   /** CSS snippets for each option (for USO EOT blocks) */
   optionCss?: Record<string, string>;
   /** Current value that may be modified by user */

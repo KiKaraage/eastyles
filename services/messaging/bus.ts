@@ -211,7 +211,7 @@ export class MessageBus {
 
       return response;
     } catch (error: unknown) {
-      console.error("[MessageBus] Error processing message:", error);
+      logError("[MessageBus] Error processing message:", error);
       // Return error response
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
@@ -231,7 +231,7 @@ export class MessageBus {
     message: ReceivedMessages,
     tabId?: number,
   ): Promise<unknown> {
-    console.log(
+    logMessage(
       "[MessageBus] Processing message:",
       message.type,
       "with data:",

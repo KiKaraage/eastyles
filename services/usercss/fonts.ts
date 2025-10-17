@@ -21,56 +21,59 @@ export type FontFace = {
 export function extractFontFaces(css: string): FontFace[] {
   const fontFaces: FontFace[] = [];
   const fontFaceRegex = /@font-face\s*\{([^}]+)\}/gi;
-  let match;
+  let match = fontFaceRegex.exec(css);
 
-  while ((match = fontFaceRegex.exec(css)) !== null) {
+  while (match !== null) {
     const fontFaceContent = match[1];
     const fontFace: FontFace = {};
 
     // Extract properties from @font-face rule
     const propertyRegex = /([a-zA-Z-]+)\s*:\s*([^;]+);?/gi;
-    let propertyMatch;
+    let propertyMatch = propertyRegex.exec(fontFaceContent);
 
-    while ((propertyMatch = propertyRegex.exec(fontFaceContent)) !== null) {
+    while (propertyMatch !== null) {
       const property = propertyMatch[1].trim();
       const value = propertyMatch[2].trim();
 
       // Map CSS properties to our expected property names
       let mappedProperty: string;
       switch (property) {
-        case 'font-family':
-          mappedProperty = 'family';
+        case "font-family":
+          mappedProperty = "family";
           break;
-        case 'font-weight':
-          mappedProperty = 'weight';
+        case "font-weight":
+          mappedProperty = "weight";
           break;
-        case 'font-style':
-          mappedProperty = 'style';
+        case "font-style":
+          mappedProperty = "style";
           break;
-        case 'font-display':
-          mappedProperty = 'display';
+        case "font-display":
+          mappedProperty = "display";
           break;
-        case 'src':
-          mappedProperty = 'src';
+        case "src":
+          mappedProperty = "src";
           break;
         default:
           // For other properties, convert to camelCase
-          mappedProperty = property.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+          mappedProperty = property.replace(/-([a-z])/g, (_, letter: string) =>
+            letter.toUpperCase(),
+          );
       }
 
       // Strip quotes from font-family values
       let processedValue = value;
-      if (mappedProperty === 'family') {
-        processedValue = value.replace(/^["']|["']$/g, '');
+      if (mappedProperty === "family") {
+        processedValue = value.replace(/^["']|["']$/g, "");
       }
 
-       
       (fontFace as Record<string, unknown>)[mappedProperty] = processedValue;
+      propertyMatch = propertyRegex.exec(fontFaceContent);
     }
 
     if (Object.keys(fontFace).length > 0) {
       fontFaces.push(fontFace);
     }
+    match = fontFaceRegex.exec(css);
   }
 
   return fontFaces;
@@ -88,19 +91,22 @@ export function injectFonts(fontFaces: FontFace[], mainCss: string): void {
 
   // Build @font-face CSS
   const fontFaceCss = fontFaces
-    .map(face => {
+    .map((face) => {
       const properties = Object.entries(face)
         .filter(([_key, value]) => value !== undefined)
         .map(([key, value]) => {
           // Convert camelCase back to kebab-case
-          const cssProperty = key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+          const cssProperty = key.replace(
+            /[A-Z]/g,
+            (letter) => `-${letter.toLowerCase()}`,
+          );
           return `  ${cssProperty}: ${value};`;
         })
-        .join('\n');
+        .join("\n");
 
       return `@font-face {\n${properties}\n}`;
     })
-    .join('\n\n');
+    .join("\n\n");
 
   // Combine fonts and main CSS
   const combinedCss = `${fontFaceCss}\n\n${mainCss}`;
@@ -112,26 +118,32 @@ export function injectFonts(fontFaces: FontFace[], mainCss: string): void {
 /**
  * Resolves --font-* variables in CSS with provided values
  */
-export function resolveFontVariables(css: string, variables: Record<string, string>): string {
+export function resolveFontVariables(
+  css: string,
+  variables: Record<string, string>,
+): string {
   let resolvedCss = css;
 
   // Find all --font-* variable usages with more flexible regex
   const fontVarRegex = /var\((--font-[^),]+)(?:,\s*([^)]*))?\)/g;
 
-  resolvedCss = resolvedCss.replace(fontVarRegex, (match, varName: string, fallback?: string) => {
-    const value = variables[varName.trim()];
+  resolvedCss = resolvedCss.replace(
+    fontVarRegex,
+    (match, varName: string, fallback?: string) => {
+      const value = variables[varName.trim()];
 
-    if (value) {
-      // Use the provided variable value, ensuring proper quoting
-      return ensureFontFamilyQuotes(value);
-    } else if (fallback && fallback.trim()) {
-      // Use the fallback value, ensuring proper quoting
-      return ensureFontFamilyQuotes(fallback.trim());
-    } else {
-      // Keep the original var() if no value or fallback
-      return match;
-    }
-  });
+      if (value) {
+        // Use the provided variable value, ensuring proper quoting
+        return ensureFontFamilyQuotes(value);
+      } else if (fallback && fallback.trim()) {
+        // Use the fallback value, ensuring proper quoting
+        return ensureFontFamilyQuotes(fallback.trim());
+      } else {
+        // Keep the original var() if no value or fallback
+        return match;
+      }
+    },
+  );
 
   return resolvedCss;
 }
@@ -141,28 +153,40 @@ export function resolveFontVariables(css: string, variables: Record<string, stri
  */
 function ensureFontFamilyQuotes(value: string): string {
   // If it's already quoted, return as-is
-  if ((value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
     return value;
   }
 
   // If it's a font stack with multiple fonts, add quotes to each font name
-  if (value.includes(',')) {
-    const fonts = value.split(',').map(font => font.trim());
-    const quotedFonts = fonts.map(font => {
+  if (value.includes(",")) {
+    const fonts = value.split(",").map((font) => font.trim());
+    const quotedFonts = fonts.map((font) => {
       // Skip generic font families (serif, sans-serif, monospace, etc.)
-      const genericFamilies = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy'];
+      const genericFamilies = [
+        "serif",
+        "sans-serif",
+        "monospace",
+        "cursive",
+        "fantasy",
+      ];
       if (genericFamilies.includes(font.toLowerCase())) {
         return font;
       }
       // Add quotes to font names that don't have them
-      if (!((font.startsWith('"') && font.endsWith('"')) ||
-            (font.startsWith("'") && font.endsWith("'")))) {
+      if (
+        !(
+          (font.startsWith('"') && font.endsWith('"')) ||
+          (font.startsWith("'") && font.endsWith("'"))
+        )
+      ) {
         return `'${font}'`;
       }
       return font;
     });
-    return quotedFonts.join(', ');
+    return quotedFonts.join(", ");
   }
 
   // Add single quotes for single font names
@@ -173,16 +197,16 @@ function ensureFontFamilyQuotes(value: string): string {
  * Helper function to inject CSS as a style element
  */
 function injectStyleElement(css: string, isFontStyle: boolean): void {
-  if (typeof globalThis.document === 'undefined') {
+  if (typeof globalThis.document === "undefined") {
     // Not in browser environment
     return;
   }
 
-  const style = globalThis.document.createElement('style');
+  const style = globalThis.document.createElement("style");
   style.textContent = css;
 
   if (isFontStyle) {
-    style.setAttribute('data-eastyles-fonts', 'true');
+    style.setAttribute("data-eastyles-fonts", "true");
   }
 
   // Insert at the beginning of head to ensure fonts load before other styles

@@ -235,7 +235,9 @@ export type SaveMessages =
           min?: number;
           max?: number;
           options?: Array<{ value: string; label: string }>;
+          optionCss?: Record<string, string>;
         }>;
+        source?: string;
       };
     }
   | {

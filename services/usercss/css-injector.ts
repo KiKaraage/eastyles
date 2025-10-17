@@ -65,13 +65,13 @@ export class UserCSSInjector implements CSSInjector {
     | "style-element"
     | "constructable-stylesheet"
     | "scripting-api" {
-    console.log("[CSSInjector] Detecting best injection method...");
+    console.log("[ea-CSSInjector] Detecting best injection method...");
 
     // Prioritize style elements for better reliability and performance
     // Style elements are more compatible and have better CSS parsing support
     if (typeof globalThis.document !== "undefined" && globalThis.document) {
       console.log(
-        "[CSSInjector] Document available - using style-element method",
+        "[ea-CSSInjector] Document available - using style-element method",
       );
       return "style-element";
     }
@@ -86,12 +86,12 @@ export class UserCSSInjector implements CSSInjector {
         typeof browser.tabs.query === "function"
       ) {
         console.log(
-          "[CSSInjector] Chrome scripting API available - using scripting-api",
+          "[ea-CSSInjector] Chrome scripting API available - using scripting-api",
         );
         return "scripting-api";
       }
     } catch (error) {
-      console.log("[CSSInjector] Error checking scripting API:", error);
+      console.log("[ea-CSSInjector] Error checking scripting API:", error);
     }
 
     // Check if constructable stylesheets are supported as last resort
@@ -103,19 +103,19 @@ export class UserCSSInjector implements CSSInjector {
         typeof CSSStyleSheet !== "undefined"
       ) {
         console.log(
-          "[CSSInjector] Constructable stylesheets supported - using constructable-stylesheet",
+          "[ea-CSSInjector] Constructable stylesheets supported - using constructable-stylesheet",
         );
         return "constructable-stylesheet";
       }
     } catch (error) {
       console.log(
-        "[CSSInjector] Error checking constructable stylesheets:",
+        "[ea-CSSInjector] Error checking constructable stylesheets:",
         error,
       );
     }
 
     // Ultimate fallback to style element
-    console.log("[CSSInjector] Using fallback method: style-element");
+    console.log("[ea-CSSInjector] Using fallback method: style-element");
     return "style-element";
   }
 
@@ -174,12 +174,12 @@ export class UserCSSInjector implements CSSInjector {
 
       if (duration > this.MAX_BATCH_TIME) {
         console.warn(
-          `CSS injection batch exceeded performance budget: ${duration.toFixed(2)}ms > ${this.MAX_BATCH_TIME}ms`,
+          `[ea-CSSInjector] CSS injection batch exceeded performance budget: ${duration.toFixed(2)}ms > ${this.MAX_BATCH_TIME}ms`,
         );
       }
     } catch (error) {
       // Handle batch-level errors
-      console.error("CSS injection batch failed:", error);
+      console.error("[ea-CSSInjector] CSS injection batch failed:", error);
       // Still re-throw the error so it can be handled by the caller
       throw error;
     }
@@ -187,10 +187,10 @@ export class UserCSSInjector implements CSSInjector {
 
   private async injectImmediate(css: string, styleId: string): Promise<void> {
     console.log(
-      `[CSSInjector] Injecting style ${styleId}, CSS length: ${css.length}`,
+      `[ea-CSSInjector] Injecting style ${styleId}, CSS length: ${css.length}`,
     );
     await this.injectWithCSPHandling(css, styleId);
-    console.log(`[CSSInjector] Successfully injected style ${styleId}`);
+    console.log(`[ea-CSSInjector] Successfully injected style ${styleId}`);
   }
 
   private async injectConstructable(
@@ -198,33 +198,33 @@ export class UserCSSInjector implements CSSInjector {
     styleId: string,
   ): Promise<void> {
     console.log(
-      `[CSSInjector] Injecting via constructable stylesheet for ${styleId}`,
+      `[ea-CSSInjector] Injecting via constructable stylesheet for ${styleId}`,
     );
     if (!("adoptedStyleSheets" in globalThis.document)) {
       console.error(
-        `[CSSInjector] Constructable stylesheets not supported in this environment`,
+        `[ea-CSSInjector] Constructable stylesheets not supported in this environment`,
       );
       throw new Error("Constructable stylesheets not supported");
     }
 
     const sheet = new CSSStyleSheet();
-    console.log(`[CSSInjector] Created CSSStyleSheet for ${styleId}`);
+    console.log(`[ea-CSSInjector] Created CSSStyleSheet for ${styleId}`);
     sheet.replaceSync(css);
     console.log(
-      `[CSSInjector] Replaced CSS content for ${styleId}, length: ${css.length}`,
+      `[ea-CSSInjector] Replaced CSS content for ${styleId}, length: ${css.length}`,
     );
 
     // Log current adoptedStyleSheets state
     const currentSheets = globalThis.document.adoptedStyleSheets || [];
     console.log(
-      `[CSSInjector] Current adoptedStyleSheets count: ${currentSheets.length}`,
+      `[ea-CSSInjector] Current adoptedStyleSheets count: ${currentSheets.length}`,
     );
 
     // Append to adoptedStyleSheets without overwriting existing ones
     globalThis.document.adoptedStyleSheets = [...currentSheets, sheet];
 
     console.log(
-      `[CSSInjector] Added stylesheet to adoptedStyleSheets, new count: ${globalThis.document.adoptedStyleSheets.length}`,
+      `[ea-CSSInjector] Added stylesheet to adoptedStyleSheets, new count: ${globalThis.document.adoptedStyleSheets.length}`,
     );
     this.registry.set(styleId, sheet);
   }
@@ -233,7 +233,7 @@ export class UserCSSInjector implements CSSInjector {
     css: string,
     styleId: string,
   ): Promise<void> {
-    console.log(`[CSSInjector] Injecting via style element for ${styleId}`);
+    console.log(`[ea-CSSInjector] Injecting via style element for ${styleId}`);
 
     const style = globalThis.document.createElement("style");
     style.setAttribute("data-eastyles-id", styleId);
@@ -242,11 +242,12 @@ export class UserCSSInjector implements CSSInjector {
     // Set CSS content
     style.textContent = css;
     console.log(
-      `[CSSInjector] Created style element with CSS length: ${css.length}`,
+      `[ea-CSSInjector] Created style element with CSS length: ${css.length}`,
     );
 
     // Insert at the end of head to ensure proper cascade, but before any existing UserCSS styles
-    const head = globalThis.document.head || globalThis.document.documentElement;
+    const head =
+      globalThis.document.head || globalThis.document.documentElement;
 
     // Find the last existing Eastyles style to maintain order
     const existingStyles = head.querySelectorAll("style[data-eastyles-id]");
@@ -257,14 +258,14 @@ export class UserCSSInjector implements CSSInjector {
       head.appendChild(style);
     }
 
-    console.log(`[CSSInjector] Inserted style element into ${head.tagName}`);
+    console.log(`[ea-CSSInjector] Inserted style element into ${head.tagName}`);
 
     // Verify the style was added and is functional
     const addedStyle = head.querySelector(
       `style[data-eastyles-id="${styleId}"]`,
     ) as HTMLStyleElement;
     console.log(
-      `[CSSInjector] Style element added successfully: ${!!addedStyle}`,
+      `[ea-CSSInjector] Style element added successfully: ${!!addedStyle}`,
     );
 
     if (addedStyle) {
@@ -274,7 +275,7 @@ export class UserCSSInjector implements CSSInjector {
       const sheet = addedStyle.sheet;
       if (sheet) {
         console.log(
-          `[CSSInjector] CSS rules parsed for ${styleId}:`,
+          `[ea-CSSInjector] CSS rules parsed for ${styleId}:`,
           sheet.cssRules.length,
         );
 
@@ -286,14 +287,14 @@ export class UserCSSInjector implements CSSInjector {
             rule.cssText.length > 100
               ? rule.cssText.substring(0, 100) + "..."
               : rule.cssText;
-          console.log(`[CSSInjector] Rule ${i}:`, ruleText);
+          console.log(`[ea-CSSInjector] Rule ${i}:`, ruleText);
         }
       } else {
         console.warn(
-          `[CSSInjector] No CSS sheet found for ${styleId} - CSS may be invalid`,
+          `[ea-CSSInjector] No CSS sheet found for ${styleId} - CSS may be invalid`,
         );
         console.warn(
-          `[CSSInjector] CSS content preview:`,
+          `[ea-CSSInjector] CSS content preview:`,
           css.substring(0, 200),
         );
       }
@@ -348,7 +349,7 @@ export class UserCSSInjector implements CSSInjector {
           return tabs[0].id;
         }
       } catch (error) {
-        console.warn("Failed to query tabs:", error);
+        console.warn("[ea-CSSInjector] Failed to query tabs:", error);
         throw new Error("Failed to query tabs");
       }
     }
@@ -357,22 +358,35 @@ export class UserCSSInjector implements CSSInjector {
 
   async remove(styleId: string): Promise<void> {
     const registered = this.registry.get(styleId);
-    if (!registered) {
-      return; // Already removed or never injected
-    }
 
     try {
-      switch (this.injectionMethod) {
-        case "constructable-stylesheet":
-          await this.removeConstructable(styleId, registered as CSSStyleSheet);
-          break;
-        case "scripting-api":
-          await this.removeScriptingAPI(styleId);
-          break;
-        case "style-element":
-        default:
-          await this.removeStyleElement(registered as HTMLStyleElement);
-          break;
+      if (registered) {
+        switch (this.injectionMethod) {
+          case "constructable-stylesheet":
+            await this.removeConstructable(
+              styleId,
+              registered as CSSStyleSheet,
+            );
+            break;
+          case "scripting-api":
+            await this.removeScriptingAPI(styleId);
+            break;
+          case "style-element":
+          default:
+            await this.removeStyleElement(registered as HTMLStyleElement);
+            break;
+        }
+      } else {
+        // Fallback: try to find and remove the style element directly
+        const styleElement = globalThis.document.querySelector(
+          `style[data-eastyles-id="${styleId}"]`,
+        );
+        if (styleElement && styleElement.parentNode) {
+          styleElement.parentNode.removeChild(styleElement);
+          console.log(
+            `[ea-CSSInjector] Removed style element via direct lookup for ${styleId}`,
+          );
+        }
       }
     } finally {
       this.registry.delete(styleId);
@@ -396,6 +410,20 @@ export class UserCSSInjector implements CSSInjector {
   private async removeStyleElement(style: HTMLStyleElement): Promise<void> {
     if (style.parentNode) {
       style.parentNode.removeChild(style);
+    } else {
+      // Fallback: try to find and remove by ID selector
+      const styleId = style.getAttribute("data-eastyles-id");
+      if (styleId) {
+        const fallbackStyle = globalThis.document.querySelector(
+          `style[data-eastyles-id="${styleId}"]`,
+        );
+        if (fallbackStyle && fallbackStyle.parentNode) {
+          fallbackStyle.parentNode.removeChild(fallbackStyle);
+          console.log(
+            `[ea-CSSInjector] Removed style element via fallback lookup for ${styleId}`,
+          );
+        }
+      }
     }
   }
 
@@ -416,7 +444,7 @@ export class UserCSSInjector implements CSSInjector {
       });
     } catch {
       // Ignore errors during removal - the CSS may already be gone
-      console.warn("Failed to remove CSS via scripting API");
+      console.warn("[ea-CSSInjector] Failed to remove CSS via scripting API");
     }
   }
 
@@ -543,7 +571,7 @@ export class UserCSSInjector implements CSSInjector {
     styleId: string,
   ): Promise<void> {
     console.log(
-      `[CSSInjector] Starting injection for ${styleId} using method: ${this.injectionMethod}`,
+      `[ea-CSSInjector] Starting injection for ${styleId} using method: ${this.injectionMethod}`,
     );
     const originalMethod = this.injectionMethod;
 
@@ -552,20 +580,20 @@ export class UserCSSInjector implements CSSInjector {
       switch (this.injectionMethod) {
         case "constructable-stylesheet":
           console.log(
-            `[CSSInjector] Using constructable stylesheet method for ${styleId}`,
+            `[ea-CSSInjector] Using constructable stylesheet method for ${styleId}`,
           );
           await this.injectConstructable(css, styleId);
           break;
         case "scripting-api":
           console.log(
-            `[CSSInjector] Using scripting API method for ${styleId}`,
+            `[ea-CSSInjector] Using scripting API method for ${styleId}`,
           );
           await this.injectScriptingAPI(css, styleId);
           break;
         case "style-element":
         default:
           console.log(
-            `[CSSInjector] Using style element method for ${styleId}`,
+            `[ea-CSSInjector] Using style element method for ${styleId}`,
           );
           await this.injectStyleElement(css, styleId);
           break;
@@ -576,7 +604,7 @@ export class UserCSSInjector implements CSSInjector {
       if (cspError) {
         // Log CSP error with suggestions
         console.warn(
-          `CSP Error detected: ${cspError.message}`,
+          `[ea-CSSInjector] CSP Error detected: ${cspError.message}`,
           cspError.details,
         );
 

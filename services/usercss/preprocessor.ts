@@ -216,7 +216,11 @@ export class PreprocessorEngine {
    */
   private isDomAvailable(): boolean {
     try {
-      return typeof window !== "undefined" && typeof document !== "undefined";
+      return (
+        typeof globalThis !== "undefined" &&
+        typeof globalThis.window !== "undefined" &&
+        typeof globalThis.document !== "undefined"
+      );
     } catch {
       return false;
     }

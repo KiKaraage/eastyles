@@ -4,10 +4,10 @@
  */
 
 import {
+  DEFAULT_SETTINGS,
+  ExportData,
   SettingsStorage,
   UserStyle,
-  ExportData,
-  DEFAULT_SETTINGS,
 } from "./schema";
 
 /**
@@ -184,7 +184,7 @@ export class StorageFallbacks {
 
       return recovered;
     } catch (error) {
-      console.warn("Failed to recover corrupted style:", error);
+      console.warn("[ea-Storage] Failed to recover corrupted style:", error);
       return null;
     }
   }
@@ -237,7 +237,9 @@ export class StorageFallbacks {
         if (isValidSettings) {
           settings = stored.settings as SettingsStorage;
         } else {
-          console.warn("Settings corruption detected, using fallback");
+          console.warn(
+            "[ea-Storage] Settings corruption detected, using fallback",
+          );
           settings = this.getSettingsFallback(stored.settings);
           hadCorruption = true;
         }
@@ -252,7 +254,9 @@ export class StorageFallbacks {
         if (Array.isArray(stored.styles)) {
           styles = stored.styles as UserStyle[];
         } else {
-          console.warn("Styles corruption detected, attempting recovery");
+          console.warn(
+            "[ea-Storage] Styles corruption detected, attempting recovery",
+          );
           styles = this.getStylesFallback(stored.styles);
           hadCorruption = true;
         }
@@ -261,7 +265,7 @@ export class StorageFallbacks {
       return { settings, styles, hadCorruption };
     } catch (error) {
       console.error(
-        "Storage health check failed, using complete fallback:",
+        "[ea-Storage] Storage health check failed, using complete fallback:",
         error,
       );
       return {
@@ -318,7 +322,9 @@ export class StorageMigrations {
       styles: data.styles,
     };
 
-    console.log(`Migrated storage from v${fromVersion} to v${toVersion}`);
+    console.log(
+      `[ea-Storage] Migrated storage from v${fromVersion} to v${toVersion}`,
+    );
     return migratedData;
   }
 }

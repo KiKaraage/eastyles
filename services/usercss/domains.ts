@@ -29,9 +29,10 @@ export function extractDomains(css: string): DomainRule[] {
   // Find all @-moz-document blocks
   // This regex matches the @-moz-document directive and its conditions
   const mozDocumentRegex = /@-moz-document\s+([^{\n\r]+?)\s*\{/g;
-  let match;
+  let match: RegExpExecArray | null = null;
 
-  while ((match = mozDocumentRegex.exec(css)) !== null) {
+  match = mozDocumentRegex.exec(css);
+  while (match !== null) {
     const conditionList = match[1];
 
     // Process each condition in the condition list
@@ -42,9 +43,10 @@ export function extractDomains(css: string): DomainRule[] {
       for (const [type, regex] of Object.entries(DOMAIN_PATTERNS)) {
         // Create a new regex instance to avoid state issues
         const patternRegex = new RegExp(regex.source, "g");
-        let patternResult;
+        let patternResult: RegExpExecArray | null = null;
 
-        while ((patternResult = patternRegex.exec(condition)) !== null) {
+        patternResult = patternRegex.exec(condition);
+        while (patternResult !== null) {
           const patternValue = patternResult[1];
 
           // Validate regex patterns
@@ -60,18 +62,23 @@ export function extractDomains(css: string): DomainRule[] {
               // Skip invalid regex patterns
               continue;
             }
-           } else {
-             // For domain rules, normalize the pattern; for others, use as-is
-             const finalPattern = type === "domain" ? normalizePattern(patternValue) : patternValue;
-             rules.push({
-               kind: mapType(type) as DomainRule["kind"],
-               pattern: finalPattern,
-               include: true,
-             });
-           }
+          } else {
+            // For domain rules, normalize the pattern; for others, use as-is
+            const finalPattern =
+              type === "domain" ? normalizePattern(patternValue) : patternValue;
+            rules.push({
+              kind: mapType(type) as DomainRule["kind"],
+              pattern: finalPattern,
+              include: true,
+            });
+          }
+
+          patternResult = patternRegex.exec(condition);
         }
       }
     }
+
+    match = mozDocumentRegex.exec(css);
   }
 
   return rules;
@@ -105,8 +112,17 @@ export function normalizePattern(pattern: string): string {
 
     // If it's a full URL, extract just the hostname
     if (normalized.includes("://")) {
-      const url = new URL(normalized);
-      return url.hostname;
+      // Check if URL constructor is available (not in background scripts)
+      if (typeof globalThis.URL !== "undefined") {
+        const url = new URL(normalized);
+        return url.hostname;
+      } else {
+        // Fallback extraction for background scripts
+        const urlMatch = normalized.match(/^[a-zA-Z]+:\/\/([^/:]+)/);
+        if (urlMatch) {
+          return urlMatch[1];
+        }
+      }
     }
 
     // Remove trailing slashes

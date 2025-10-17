@@ -3,7 +3,7 @@
  * Ensures message integrity and prevents runtime errors from malformed messages.
  */
 
-import { ReceivedMessages, ErrorDetails } from "./types";
+import { ErrorDetails, ReceivedMessages } from "./types";
 
 /**
  * Type guard to check if an object is a valid ReceivedMessages type.
@@ -95,10 +95,7 @@ function isApplyMessage(type: string): boolean {
  * Type guard to check if a message type belongs to ContentMessages.
  */
 function isContentMessage(type: string): boolean {
-  return [
-    "QUERY_STYLES_FOR_URL",
-    "FETCH_ASSETS",
-  ].includes(type);
+  return ["QUERY_STYLES_FOR_URL", "FETCH_ASSETS"].includes(type);
 }
 
 /**
@@ -123,15 +120,18 @@ function validatePopupMessage(message: unknown, type: string): boolean {
       const hasResponseId = keys.includes("responseId");
 
       if (!hasType) return false;
-      
+
       if (hasPayload) {
         const payload = (message as { payload?: unknown }).payload;
         if (typeof payload !== "object" || payload === null) return false;
-        
+
         // For OPEN_MANAGER, url must be a non-empty string if present
         if (type === "OPEN_MANAGER") {
           const url = (payload as { url?: unknown }).url;
-          if (url !== undefined && (typeof url !== "string" || url.length === 0)) {
+          if (
+            url !== undefined &&
+            (typeof url !== "string" || url.length === 0)
+          ) {
             return false;
           }
           // If payload exists but url is not present, it's invalid for OPEN_MANAGER
@@ -152,8 +152,11 @@ function validatePopupMessage(message: unknown, type: string): boolean {
           }
         }
       }
-      
-      return !hasResponseId || typeof (message as { responseId?: unknown }).responseId === "string";
+
+      return (
+        !hasResponseId ||
+        typeof (message as { responseId?: unknown }).responseId === "string"
+      );
     }
     return false;
   }
@@ -253,37 +256,39 @@ function validateApplyMessage(message: unknown, type: string): boolean {
         );
       }
       return false;
-     case "CREATE_FONT_STYLE":
-       if (message && typeof message === "object" && "payload" in message) {
-         const payload = (message as { payload: unknown }).payload;
-         return (
-           payload !== null &&
-           typeof payload === "object" &&
-           "fontName" in payload &&
-           typeof (payload as { fontName?: unknown }).fontName === "string" &&
-           (payload as { fontName: string }).fontName.length > 0 &&
-           (!("domain" in payload) || typeof (payload as { domain?: unknown }).domain === "string")
-         );
-       }
-       return false;
-     case "UPDATE_FONT_STYLE":
-       if (message && typeof message === "object" && "payload" in message) {
-         const payload = (message as { payload: unknown }).payload;
-         return (
-           payload !== null &&
-           typeof payload === "object" &&
-           "styleId" in payload &&
-           typeof (payload as { styleId?: unknown }).styleId === "string" &&
-           (payload as { styleId: string }).styleId.length > 0 &&
-           "fontName" in payload &&
-           typeof (payload as { fontName?: unknown }).fontName === "string" &&
-           (payload as { fontName: string }).fontName.length > 0 &&
-           (!("domain" in payload) || typeof (payload as { domain?: unknown }).domain === "string")
-         );
-       }
-       return false;
-     default:
-       return false;
+    case "CREATE_FONT_STYLE":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "fontName" in payload &&
+          typeof (payload as { fontName?: unknown }).fontName === "string" &&
+          (payload as { fontName: string }).fontName.length > 0 &&
+          (!("domain" in payload) ||
+            typeof (payload as { domain?: unknown }).domain === "string")
+        );
+      }
+      return false;
+    case "UPDATE_FONT_STYLE":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "styleId" in payload &&
+          typeof (payload as { styleId?: unknown }).styleId === "string" &&
+          (payload as { styleId: string }).styleId.length > 0 &&
+          "fontName" in payload &&
+          typeof (payload as { fontName?: unknown }).fontName === "string" &&
+          (payload as { fontName: string }).fontName.length > 0 &&
+          (!("domain" in payload) ||
+            typeof (payload as { domain?: unknown }).domain === "string")
+        );
+      }
+      return false;
+    default:
+      return false;
   }
 }
 
