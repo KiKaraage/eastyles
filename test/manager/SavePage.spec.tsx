@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
-import { render } from "../test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ApplyPage from "../../entrypoints/save/App";
 import { useSaveActions } from "../../hooks/useMessage";
+import type { SaveMessageResponses } from "../../services/messaging/types";
+import type { VariableDescriptor } from "../../services/usercss/types";
+import { render } from "../test-utils";
 
 // Mock useI18n hook
 vi.mock("../../hooks/useI18n", () => ({
@@ -33,7 +35,7 @@ vi.mock("../../hooks/useI18n", () => ({
 }));
 
 // Mock browser API
-vi.mock("@wxt-dev/browser", () => ({
+vi.mock("wxt/browser", () => ({
   browser: {
     storage: {
       local: {
@@ -71,7 +73,7 @@ vi.mock("codemirror", () => {
     of: vi.fn().mockReturnValue({}),
     compute: vi.fn(),
     computeN: vi.fn(),
-  } as unknown as (typeof import("@codemirror/view").EditorView)["editable"];
+  } as unknown as typeof import("@codemirror/view").EditorView["editable"];
 
   MockEditorView.theme = vi.fn().mockReturnValue({});
 
@@ -91,8 +93,18 @@ vi.mock("../../hooks/useMessage", () => ({
 }));
 
 describe("ApplyPage Component", () => {
-  const mockParseUserCSS = vi.fn();
-  const mockInstallStyle = vi.fn();
+  type ParseUserCSSFn = (
+    text: string,
+    sourceUrl?: string,
+  ) => Promise<SaveMessageResponses["PARSE_USERCSS"]>;
+  type InstallStyleFn = (
+    meta: NonNullable<SaveMessageResponses["PARSE_USERCSS"]["meta"]>,
+    compiledCss: string,
+    variables: VariableDescriptor[],
+  ) => Promise<SaveMessageResponses["INSTALL_STYLE"]>;
+
+  const mockParseUserCSS = vi.fn<ParseUserCSSFn>();
+  const mockInstallStyle = vi.fn<InstallStyleFn>();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -154,7 +166,12 @@ describe("ApplyPage Component", () => {
   });
 
   it("renders loading state initially", async () => {
-    mockParseUserCSS.mockImplementation(() => new Promise(() => {})); // Never resolves
+    mockParseUserCSS.mockImplementation(
+      () =>
+        new Promise(() => {
+          /* never resolve */
+        }),
+    );
 
     const { container } = render(<ApplyPage />);
     expect(container).toBeTruthy();
@@ -310,7 +327,7 @@ describe("ApplyPage Component", () => {
     });
 
     const installButton = container.querySelector(".btn-primary");
-    fireEvent.click(installButton!);
+    if (installButton) fireEvent.click(installButton);
 
     await waitFor(() => {
       expect(mockInstallStyle).toHaveBeenCalledWith(
@@ -353,7 +370,7 @@ describe("ApplyPage Component", () => {
     });
 
     const installButton = container.querySelector(".btn-primary");
-    fireEvent.click(installButton!);
+    if (installButton) fireEvent.click(installButton);
 
     await waitFor(() => {
       expect(container.textContent).toContain("Storage quota exceeded");
@@ -388,7 +405,7 @@ describe("ApplyPage Component", () => {
     });
 
     const cancelButton = container.querySelectorAll(".btn-ghost")[1];
-    fireEvent.click(cancelButton!);
+    if (cancelButton) fireEvent.click(cancelButton);
 
     expect(window.history.back).toHaveBeenCalled();
   });
@@ -533,7 +550,7 @@ describe("ApplyPage Component", () => {
     });
 
     const installButton = container.querySelector(".btn-primary");
-    fireEvent.click(installButton!);
+    if (installButton) fireEvent.click(installButton);
 
     await waitFor(() => {
       expect(container.textContent).toContain("Installation failed");
@@ -578,7 +595,7 @@ describe("ApplyPage Component", () => {
     await waitFor(() => {
       const installButton = container.querySelector(".btn-primary");
       expect(installButton).toBeTruthy();
-      fireEvent.click(installButton!);
+      if (installButton) fireEvent.click(installButton);
     });
 
     await waitFor(() => {
