@@ -9,7 +9,7 @@
     "dev:crx": "wxt",
     "build": "wxt build -b firefox",
     "build:crx": "wxt build",
-    "builds": "wxt build -b firefox && wxt build",
+    "builds": "wxt build && wxt build -b firefox",
     "zip": "wxt zip -b firefox",
     "zip:crx": "wxt zip",
     "compile": "tsc --noEmit",
@@ -17,7 +17,7 @@
     "lint": "npx biome check --fix .",
     "lint:all": "npx biome check .",
     "lint:fix": "npx biome check --fix .",
-    "test": "vitest",
+    "test:all": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui"

@@ -22,7 +22,7 @@ This file provides comprehensive guidance for developers working with the Eastyl
 - Dev server: `bun dev` or `bun dev:crx`
 - Type checking: `bun compile`
 - Linting: `bun lint`/`bun lint:fix`
-- Testing: `bun test`, `bun test:watch`, `bun test:coverage`
+- Testing: `bun test:all`, `bun test:watch`, `bun test:coverage`
 
 ### Project Structure
 
