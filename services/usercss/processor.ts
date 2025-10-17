@@ -1,3 +1,492 @@
+interface SelectParseResult {
+  options: Array<{ value: string; label: string }>;
+  defaultValue: string;
+  optionCss?: Record<string, string>;
+}
+
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) {
+    return trimmed;
+  }
+  const opening = trimmed[0];
+  const closing = trimmed[trimmed.length - 1];
+  if (
+    (opening === '"' || opening === "'" || opening === "`") &&
+    opening === closing
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parseJsonSafely<T>(input: string): T | null {
+  try {
+    return JSON.parse(input) as T;
+  } catch {
+    return null;
+  }
+}
+
+function parseNumericTuple(
+  raw: string,
+  appendUnitToValue: boolean,
+): {
+  value: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+} | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const ensureString = (num: number | null | undefined, unit?: string) => {
+    if (num === null || num === undefined || Number.isNaN(num)) {
+      return "";
+    }
+    return appendUnitToValue && unit ? `${num}${unit}` : `${num}`;
+  };
+
+  if (trimmed.startsWith("[")) {
+    const parsed = parseJsonSafely<Array<number | string | null>>(trimmed);
+    if (!parsed) {
+      return null;
+    }
+
+    const numericValues: Array<number | null> = [];
+    let unit: string | undefined;
+
+    for (const entry of parsed) {
+      if (typeof entry === "number" || entry === null) {
+        numericValues.push(entry);
+        continue;
+      }
+
+      if (typeof entry === "string") {
+        const numericCandidate = Number(entry);
+        if (
+          !Number.isNaN(numericCandidate) &&
+          entry.trim() === `${numericCandidate}`
+        ) {
+          numericValues.push(numericCandidate);
+        } else if (!unit) {
+          unit = entry;
+        }
+      }
+    }
+
+    const [defaultValue, min, max, step] = numericValues;
+    const normalizedDefault = defaultValue ?? 0;
+
+    return {
+      value: ensureString(normalizedDefault, unit),
+      min: min === null ? undefined : min,
+      max: max === null ? undefined : max,
+      step: step === null ? undefined : step,
+      unit,
+    };
+  }
+
+  const numericValue = Number(trimmed);
+  if (!Number.isNaN(numericValue)) {
+    return {
+      value: ensureString(numericValue),
+    };
+  }
+
+  return null;
+}
+
+function parseEOTBlocks(value: string): SelectParseResult | null {
+  const eotRegex = /([\w*-]+)\s+([^<<<]+?)\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
+
+  const options: Array<{ value: string; label: string }> = [];
+  const optionCss: Record<string, string> = {};
+  let defaultValue = "";
+  let defaultCaptured = false;
+
+  const regexInstance = new RegExp(eotRegex.source, eotRegex.flags);
+  let match: RegExpExecArray | null;
+  while (true) {
+    match = regexInstance.exec(value);
+    if (match === null) break;
+    const [, rawKey, rawLabel, cssContent] = match;
+    const labelWithMarkers = stripWrappingQuotes(rawLabel.trim());
+    const keyClean = rawKey.trim();
+
+    const labelDefault = labelWithMarkers.replace(/\*$/, "");
+    const optionDefault =
+      keyClean.includes("*") || labelWithMarkers.endsWith("*");
+
+    const normalizedLabel = labelDefault;
+    options.push({ value: normalizedLabel, label: normalizedLabel });
+
+    optionCss[normalizedLabel] = cssContent
+      .replace(/^\s*\n/, "")
+      .replace(/\n\s*$/, "")
+      .replace(/\*\\\//g, "*/");
+
+    if (optionDefault && !defaultCaptured) {
+      defaultValue = normalizedLabel;
+      defaultCaptured = true;
+    }
+  }
+
+  if (!options.length) {
+    return null;
+  }
+
+  if (!defaultCaptured) {
+    defaultValue = options[0].value;
+  }
+
+  return {
+    options,
+    optionCss,
+    defaultValue,
+  };
+}
+
+function parseSelectOptions(raw: string): SelectParseResult | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.includes("<<<EOT")) {
+    return parseEOTBlocks(trimmed);
+  }
+
+  if (trimmed.startsWith("{")) {
+    const parsed = parseJsonSafely<Record<string, unknown>>(trimmed);
+    if (!parsed) {
+      return null;
+    }
+
+    const options: Array<{ value: string; label: string }> = [];
+    let defaultValue: string | undefined;
+
+    for (const [rawKey, rawVal] of Object.entries(parsed)) {
+      const value = typeof rawVal === "string" ? rawVal : String(rawVal);
+      const [rawName, rawLabelPart] = rawKey.split(":");
+
+      let optionName = rawName.trim();
+      let optionLabel = rawLabelPart?.trim() ?? optionName;
+
+      const labelHasDefault = optionLabel.endsWith("*");
+      const nameHasDefault = optionName.endsWith("*");
+
+      if (labelHasDefault) {
+        optionLabel = optionLabel.slice(0, -1);
+      }
+      if (nameHasDefault) {
+        optionName = optionName.replace(/\*$/, "");
+      }
+
+      options.push({ value, label: optionLabel });
+
+      if ((labelHasDefault || nameHasDefault) && defaultValue === undefined) {
+        defaultValue = value;
+      }
+    }
+
+    if (!options.length) {
+      return null;
+    }
+
+    return {
+      options,
+      defaultValue: defaultValue ?? options[0].value,
+    };
+  }
+
+  if (trimmed.startsWith("[")) {
+    const parsed = parseJsonSafely<Array<string>>(trimmed);
+    if (!parsed) {
+      return null;
+    }
+
+    const options: Array<{ value: string; label: string }> = [];
+    let defaultValue: string | undefined;
+
+    for (const entry of parsed) {
+      const optionEntry = entry.trim();
+      const hasLabel = optionEntry.includes(":");
+      let rawValuePart = optionEntry;
+      let rawLabelPart = optionEntry;
+
+      if (hasLabel) {
+        const [valuePart, labelPart] = optionEntry.split(/:(.+)/);
+        rawValuePart = valuePart.trim();
+        rawLabelPart = labelPart.trim();
+      }
+
+      let isDefault = false;
+
+      if (rawValuePart.endsWith("*")) {
+        isDefault = true;
+        rawValuePart = rawValuePart.slice(0, -1);
+      }
+
+      if (rawLabelPart.endsWith("*")) {
+        isDefault = true;
+        rawLabelPart = rawLabelPart.slice(0, -1);
+      }
+
+      const optionValue = hasLabel ? rawValuePart : rawLabelPart;
+      const optionLabel = hasLabel ? rawLabelPart : rawLabelPart;
+
+      options.push({ value: optionValue, label: optionLabel });
+
+      if (isDefault && defaultValue === undefined) {
+        defaultValue = optionValue;
+      }
+    }
+
+    if (!options.length) {
+      return null;
+    }
+
+    return {
+      options,
+      defaultValue: defaultValue ?? options[0].value,
+    };
+  }
+
+  return null;
+}
+
+class VarDirectiveScanner {
+  private position = 0;
+
+  constructor(private readonly source: string) {}
+
+  private skipWhitespace(): void {
+    while (
+      this.position < this.source.length &&
+      /\s/.test(this.source[this.position]!)
+    ) {
+      this.position += 1;
+    }
+  }
+
+  readWord(): string | null {
+    this.skipWhitespace();
+    const start = this.position;
+    while (
+      this.position < this.source.length &&
+      /[A-Za-z_-]/.test(this.source[this.position]!)
+    ) {
+      this.position += 1;
+    }
+    if (this.position === start) {
+      return null;
+    }
+    return this.source.slice(start, this.position);
+  }
+
+  readIdentifier(): string | null {
+    this.skipWhitespace();
+    const start = this.position;
+    while (
+      this.position < this.source.length &&
+      /[A-Za-z0-9_-]/.test(this.source[this.position]!)
+    ) {
+      this.position += 1;
+    }
+    if (this.position === start) {
+      return null;
+    }
+    return this.source.slice(start, this.position);
+  }
+
+  readLabel(): string | null {
+    this.skipWhitespace();
+    if (this.position >= this.source.length) {
+      return null;
+    }
+
+    const char = this.source[this.position]!;
+    if (char === '"' || char === "'" || char === "`") {
+      const quote = char;
+      this.position += 1;
+      let result = "";
+      while (this.position < this.source.length) {
+        const current = this.source[this.position]!;
+        if (current === "\\" && this.position + 1 < this.source.length) {
+          result += this.source[this.position + 1]!;
+          this.position += 2;
+          continue;
+        }
+        if (current === quote) {
+          this.position += 1;
+          break;
+        }
+        result += current;
+        this.position += 1;
+      }
+      return result;
+    }
+
+    const start = this.position;
+    while (
+      this.position < this.source.length &&
+      !/[\s{]/.test(this.source[this.position]!)
+    ) {
+      this.position += 1;
+    }
+    if (this.position === start) {
+      return null;
+    }
+    return this.source.slice(start, this.position);
+  }
+
+  readRest(): string {
+    this.skipWhitespace();
+    if (this.position >= this.source.length) {
+      return "";
+    }
+    return this.source.slice(this.position).trim();
+  }
+}
+
+function parseVarDirective(value: string): VariableDescriptor | null {
+  if (!value) {
+    return null;
+  }
+
+  let trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  if (trimmedValue.endsWith('"') && !trimmedValue.endsWith('\\"')) {
+    const quoteCount = (trimmedValue.match(/"/g) || []).length;
+    if (quoteCount % 2 === 1) {
+      trimmedValue = trimmedValue.slice(0, -1);
+    }
+  }
+
+  const scanner = new VarDirectiveScanner(trimmedValue);
+  const rawType = scanner.readWord();
+  if (!rawType) {
+    return null;
+  }
+
+  const normalizedType = rawType.toLowerCase();
+  const name = scanner.readIdentifier();
+  if (!name) {
+    return null;
+  }
+
+  const label = scanner.readLabel() ?? name;
+  const remainder = scanner.readRest();
+
+  if (normalizedType === "dropdown" || normalizedType === "image") {
+    const selectFromDropdown = parseEOTBlocks(remainder);
+    if (!selectFromDropdown) {
+      return null;
+    }
+    return {
+      name,
+      type: "select",
+      label,
+      default: selectFromDropdown.defaultValue,
+      value: selectFromDropdown.defaultValue,
+      options: selectFromDropdown.options,
+      optionCss: selectFromDropdown.optionCss,
+    };
+  }
+
+  if (normalizedType === "select") {
+    const parsedSelect = parseSelectOptions(remainder);
+    if (!parsedSelect) {
+      return null;
+    }
+    return {
+      name,
+      type: "select",
+      label,
+      default: parsedSelect.defaultValue,
+      value: parsedSelect.defaultValue,
+      options: parsedSelect.options,
+      optionCss: parsedSelect.optionCss,
+    };
+  }
+
+  if (normalizedType === "number" || normalizedType === "range") {
+    const numeric = parseNumericTuple(remainder, normalizedType === "range");
+    const fallbackValue = stripWrappingQuotes(remainder);
+    const resolvedValue = numeric?.value || fallbackValue;
+
+    const descriptor: VariableDescriptor = {
+      name,
+      type: normalizedType === "range" ? "range" : "number",
+      label,
+      default: resolvedValue,
+      value: resolvedValue,
+    };
+
+    if (numeric) {
+      descriptor.min = numeric.min;
+      descriptor.max = numeric.max;
+      descriptor.step = numeric.step;
+      descriptor.unit = numeric.unit;
+    }
+
+    return descriptor;
+  }
+
+  const cleanedDefault = stripWrappingQuotes(remainder);
+
+  if (normalizedType === "checkbox") {
+    const normalized = cleanedDefault
+      ? cleanedDefault === "true" || cleanedDefault === "1"
+        ? "1"
+        : "0"
+      : "0";
+    return {
+      name,
+      type: "checkbox",
+      label,
+      default: normalized,
+      value: normalized,
+    };
+  }
+
+  if (normalizedType === "color") {
+    return {
+      name,
+      type: "color",
+      label,
+      default: cleanedDefault,
+      value: cleanedDefault,
+    };
+  }
+
+  if (normalizedType === "text") {
+    return {
+      name,
+      type: "text",
+      label,
+      default: cleanedDefault,
+      value: cleanedDefault,
+    };
+  }
+
+  // Unknown types fall back to text handling to avoid data loss
+  return {
+    name,
+    type: "unknown",
+    label,
+    default: cleanedDefault,
+    value: cleanedDefault,
+  };
+}
+
 /**
  * UserCSS Processor
  *
@@ -5,123 +494,14 @@
  * and preparing CSS content for preprocessing and injection.
  */
 
+import { extractDomains } from "./domains";
 import {
-  StyleMeta,
   ParseResult,
   PreprocessorResult,
+  StyleMeta,
   VariableDescriptor,
 } from "./types";
 import { resolveVariables } from "./variables";
-import { extractDomains } from "./domains";
-
-/**
- * Supported preprocessor types
- */
-type PreprocessorType = "none" | "less" | "stylus" | "uso";
-
-/**
- * Detection result for preprocessor type
- */
-interface PreprocessorDetection {
-  type: PreprocessorType;
-  source?: "metadata" | "heuristic"; // How we detected it
-  confidence: number; // 0-1 confidence score
-}
-
-/**
- * Detects the preprocessor type by checking for explicit metadata directives
- * or using syntax heuristics
- *
- * @param text The CSS text to analyze
- * @returns PreprocessorDetection object with type, source, and confidence
- */
-function detectPreprocessor(text: string): PreprocessorDetection {
-  // First, check for explicit @preprocessor directive anywhere in the text
-  const preprocessorMatch = text.match(/@preprocessor\s+([a-zA-Z]+)/);
-  if (preprocessorMatch) {
-    const preprocessor = preprocessorMatch[1].toLowerCase();
-
-    switch (preprocessor) {
-      case "less":
-        return { type: "less", source: "metadata", confidence: 1.0 };
-      case "stylus":
-        return { type: "stylus", source: "metadata", confidence: 1.0 };
-      case "uso":
-        return { type: "uso", source: "metadata", confidence: 1.0 };
-      default:
-        return { type: "none", source: "metadata", confidence: 0.5 };
-    }
-  }
-
-  // Check for USO-specific patterns (high priority)
-  let usoScore = 0;
-  if (text.includes("@advanced")) usoScore += 2;
-  if (text.includes("<<<EOT")) usoScore += 2;
-  if (text.includes("EOT;")) usoScore += 2;
-  if (text.includes("dropdown")) usoScore += 1;
-  if (text.includes("UserStyle")) usoScore += 1;
-
-  if (usoScore >= 3) {
-    return {
-      type: "uso",
-      source: "heuristic",
-      confidence: Math.min(usoScore / 6, 0.9),
-    };
-  }
-
-  // Heuristic detection based on syntax patterns
-  let lessScore = 0;
-  let stylusScore = 0;
-
-  // Less patterns
-  if (text.includes("@import")) lessScore += 1;
-  if (text.includes("@extend")) lessScore += 1;
-  if (text.includes("@mixin")) lessScore += 1;
-  if (text.includes(".(")) lessScore += 1; // Less mixins
-  if (text.includes("when ")) lessScore += 1; // Less guards
-  if (text.includes(")")) lessScore += 1; // Less mixin calls like .btn()
-
-  // Stylus patterns
-  if (text.includes("&")) stylusScore += 1; // Parent selector
-  if (text.includes("//")) stylusScore += 1; // Single line comments
-  if (text.includes("->")) stylusScore += 1; // Property access
-  if (text.includes("colors.")) stylusScore += 1; // Dot notation like colors.red
-  if (text.includes("unless ")) stylusScore += 1; // Stylus unless
-  if (text.includes("if ")) stylusScore += 1; // Stylus if
-
-  // Handle cases where multiple preprocessors might match
-  // USO has highest priority due to specific patterns
-  if (usoScore > 0 && usoScore >= Math.max(lessScore, stylusScore)) {
-    return {
-      type: "uso",
-      source: "heuristic",
-      confidence: Math.min(usoScore / 6, 0.9),
-    };
-  }
-
-  // Handle cases where both might match (prioritize less when scores are equal or close)
-  if (
-    lessScore >= 1 &&
-    (lessScore >= stylusScore || stylusScore - lessScore <= 1)
-  ) {
-    return {
-      type: "less",
-      source: "heuristic",
-      confidence: Math.min(lessScore / 4, 0.8),
-    };
-  }
-
-  if (stylusScore > lessScore && stylusScore > 0) {
-    return {
-      type: "stylus",
-      source: "heuristic",
-      confidence: Math.min(stylusScore / 4, 0.8),
-    };
-  }
-
-  // No preprocessor detected
-  return { type: "none", source: undefined, confidence: 0 };
-}
 
 /**
  * Regular expression to match UserCSS metadata block
@@ -175,7 +555,9 @@ function extractDomainsFromRegexp(pattern: string): string[] {
     const domainRegex =
       /\b([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)?)\b/g;
     let match;
-    while ((match = domainRegex.exec(parts)) !== null) {
+    while (true) {
+      match = domainRegex.exec(parts);
+      if (match === null) break;
       const potentialDomain = match[1];
       // Basic validation - should have at least one dot and be reasonable length
       if (
@@ -188,325 +570,32 @@ function extractDomainsFromRegexp(pattern: string): string[] {
     }
   } catch (error) {
     // If parsing fails, try fallback methods
-    console.warn("Failed to parse regexp pattern for domains:", pattern, error);
+    console.warn(
+      "[ea-Processor] Failed to parse regexp pattern for domains:",
+      pattern,
+      error,
+    );
   }
 
   return domains;
 }
 
-/**
- * Helper function to process variable matches and create VariableDescriptor
- */
-function processVariableMatch(
-  type: string,
-  name: string,
-  label: string,
-  defaultValue: string,
-): VariableDescriptor | null {
-  let varType: VariableDescriptor["type"] = "unknown";
-  if (type === "checkbox") {
-    varType = "checkbox";
-  } else if (type === "color") {
-    varType = "color";
-  } else if (type === "number") {
-    varType = "number";
-  } else if (type === "text") {
-    varType = "text";
-  } else if (type === "select") {
-    varType = "select";
-  } else if (type === "dropdown") {
-    // USO-specific dropdown type
-    varType = "select";
-  }
-
-  const variable: VariableDescriptor = {
-    name,
-    type: varType,
-    label,
-    default: defaultValue || "",
-    value: defaultValue || "",
-  };
-
-  // Handle number type with min/max/step
-  if (type === "number" && defaultValue) {
-    const parts = defaultValue.trim().split(/\s+/);
-    if (parts.length >= 4) {
-      // Format: default min max step
-      variable.default = parts[0];
-      variable.value = parts[0];
-      variable.min = parseFloat(parts[1]);
-      variable.max = parseFloat(parts[2]);
-      // step is parts[3] but we don't use it in the UI
-    }
-  }
-
-  if ((type === "select" || type === "dropdown") && defaultValue) {
-    // Check if this is a USO EOT block format
-    if (defaultValue.includes("<<<EOT")) {
-      const eotResult = parseEOTBlocks(defaultValue);
-      if (eotResult) {
-        variable.options = eotResult.options.map((opt) => ({
-          value: opt,
-          label: opt,
-        }));
-        variable.optionCss = eotResult.optionCss;
-        variable.default = eotResult.defaultValue;
-        variable.value = eotResult.defaultValue;
-      }
-    } else if (defaultValue.startsWith("{")) {
-      try {
-        const optionsObj = JSON.parse(defaultValue);
-        variable.options = Object.entries(optionsObj).map(([key, val]) => {
-          const parts = key.split(":");
-          const label = parts[1] || parts[0];
-          return { value: val as string, label };
-        });
-        if (variable.options.length > 0) {
-          variable.value = variable.options[0].value;
-        }
-      } catch {
-        console.warn("Failed to parse select options:", defaultValue);
-      }
-    } else {
-       // Parse select options from format like ["option1","option2","option3"]
-       try {
-         const optionsMatch = defaultValue.match(/^\[([^\]]*)\]$/);
-         if (optionsMatch) {
-           const optionsString = optionsMatch[1];
-           const options = optionsString.split(",").map((opt) => {
-             const clean = opt.trim().replace(/^["']|["']$/g, "");
-             const parts = clean.split(':');
-             const value = clean;
-             const label = parts[1] ? parts[1].replace(/\*$/, '') : clean.replace(/\*$/, '');
-             return { value, label };
-           });
-           variable.options = options;
-           // Find default option (one with * in value)
-           const defaultOption = options.find(opt => opt.value.includes('*'));
-           if (defaultOption) {
-             variable.default = defaultOption.label;
-             variable.value = defaultOption.value;
-           } else if (options.length > 0) {
-             variable.default = options[0].label;
-             variable.value = options[0].value;
-           }
-         }
-       } catch {
-         console.warn("Failed to parse select options:", defaultValue);
-       }
-    }
-  }
-
-  return variable;
-}
-
-  /**
-  * Parses USO EOT blocks to extract dropdown options and CSS snippets
-  */
-  function parseEOTBlocks(value: string): {
-    options: string[];
-    optionCss: Record<string, string>;
-    defaultValue: string;
-  } | null {
-    // Regular expression to match EOT blocks
-    // Format: [optionKey] "Display Label*" <<<EOT css content EOT;
-    // or tab-separated: optionKey<TAB>Display Label* <<<EOT css content EOT;
-    // Default can be marked with * in optionKey or display label
-    const eotRegex = /([\w*-]+)\s+([^<<<]+?)\s*<<<EOT\s*([\s\S]*?)\s*EOT;/g;
-
-    const options: string[] = [];
-    const optionCss: Record<string, string> = {};
-    let defaultValue = "";
-    let hasDefault = false;
-
-    // Use a separate regex instance to avoid potential state issues in JS engines
-    const regexInstance = new RegExp(eotRegex.source, eotRegex.flags);
-    let match: RegExpExecArray | null;
-    while ((match = regexInstance.exec(value)) !== null) {
-      // Create a local copy to avoid potential hoisting issues
-      const currentMatch = [...match] as RegExpExecArray;
-      const [ , optionKey, displayLabel, cssContent] = currentMatch;
-
-      // Trim and clean the display label
-      const trimmedLabel = displayLabel.trim();
-      // Remove surrounding quotes if present
-      const unquotedLabel = trimmedLabel.replace(/^"(.*)"$/, '$1');
-      const isDefault = optionKey.includes("*") || unquotedLabel.includes("*");
-      const cleanDisplayLabel = unquotedLabel.replace(/\*$/, "");
-
-      options.push(cleanDisplayLabel);
-      // Preserve indentation but remove leading/trailing whitespace
-      optionCss[cleanDisplayLabel] = cssContent
-        .replace(/^\s*\n/, "")
-        .replace(/\n\s*$/, "");
-
-      if (isDefault && !hasDefault) {
-        defaultValue = cleanDisplayLabel;
-        hasDefault = true;
-      }
+function isDomAvailable(): boolean {
+  try {
+    if (typeof globalThis === "undefined") {
+      return false;
     }
 
-    // If no default was found, use the first option's label as default
-    if (!hasDefault && options.length > 0) {
-      defaultValue = options[0];
+    if (!Object.hasOwn(globalThis, "document")) {
+      return false;
     }
 
-    return options.length > 0 ? { options, optionCss, defaultValue } : null;
+    const doc = (globalThis as typeof globalThis & { document?: unknown })
+      .document;
+    return typeof doc !== "undefined" && doc !== null;
+  } catch {
+    return false;
   }
-
-/**
- * Parses a @var directive value into a VariableDescriptor
- */
-function parseVarDirective(value: string): VariableDescriptor | null {
-  // Remove trailing quote if present (bug from DIRECTIVE_REGEX)
-  let trimmedValue = value.trim();
-  if (trimmedValue.endsWith('"') && !trimmedValue.endsWith('\\"')) {
-    trimmedValue = trimmedValue.slice(0, -1);
-  }
-
-  // Handle @advanced dropdown format first
-  if (trimmedValue.startsWith("dropdown")) {
-    // Manual parsing approach for dropdown format
-    let pos = 0;
-
-    // Skip "dropdown" and whitespace
-    while (pos < trimmedValue.length && /\w/.test(trimmedValue[pos])) pos++; // skip "dropdown"
-    while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) pos++; // skip whitespace
-
-    // Parse name (allow hyphens and underscores)
-    const nameStart = pos;
-    while (pos < trimmedValue.length && /[\w\-_]/.test(trimmedValue[pos]))
-      pos++;
-    const name = trimmedValue.substring(nameStart, pos);
-
-    // Skip whitespace
-    while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) pos++;
-
-    // Parse label (quoted)
-    if (pos < trimmedValue.length && trimmedValue[pos] === '"') {
-      pos++; // Skip opening quote
-      const labelStart = pos;
-      while (pos < trimmedValue.length && trimmedValue[pos] !== '"') pos++;
-      const label = trimmedValue.substring(labelStart, pos);
-      if (pos < trimmedValue.length) pos++; // Skip closing quote
-
-      // Skip whitespace
-      while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) pos++;
-
-      // Find the opening brace
-      if (pos < trimmedValue.length && trimmedValue[pos] === "{") {
-        pos++; // Skip opening brace
-        const optionsStart = pos;
-
-        // Find the matching closing brace
-        let braceCount = 1;
-        while (pos < trimmedValue.length && braceCount > 0) {
-          if (trimmedValue[pos] === "{") braceCount++;
-          else if (trimmedValue[pos] === "}") braceCount--;
-          pos++;
-        }
-
-        if (braceCount === 0) {
-          const optionsBlock = trimmedValue
-            .substring(optionsStart, pos - 1)
-            .trim();
-          const eotResult = parseEOTBlocks(optionsBlock);
-          if (eotResult) {
-            return {
-              name,
-              type: "select",
-              label,
-              default: eotResult.defaultValue,
-              value: eotResult.defaultValue,
-              options: eotResult.options.map((opt) => ({
-                value: opt,
-                label: opt,
-              })),
-              optionCss: eotResult.optionCss,
-            };
-          }
-        }
-      }
-    }
-
-    return null;
-  }
-
-  // Manual parsing approach for complex cases with quoted strings
-  let pos = 0;
-
-  // Skip whitespace
-  while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
-    pos++;
-  }
-
-  // Parse type
-  const typeStart = pos;
-  while (pos < trimmedValue.length && /\w/.test(trimmedValue[pos])) {
-    pos++;
-  }
-  const type = trimmedValue.substring(typeStart, pos);
-
-  // Skip whitespace
-  while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
-    pos++;
-  }
-
-  // Parse name (allow hyphens and underscores)
-  const nameStart = pos;
-  while (pos < trimmedValue.length && /[\w\-_]/.test(trimmedValue[pos])) {
-    pos++;
-  }
-  const name = trimmedValue.substring(nameStart, pos);
-
-  // Skip whitespace
-  while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
-    pos++;
-  }
-
-  // Parse label (quoted)
-  if (pos < trimmedValue.length && trimmedValue[pos] === '"') {
-    pos++; // Skip opening quote
-    const labelStart = pos;
-    while (pos < trimmedValue.length && trimmedValue[pos] !== '"') {
-      pos++;
-    }
-    const label = trimmedValue.substring(labelStart, pos);
-    if (pos < trimmedValue.length) {
-      pos++; // Skip closing quote
-    }
-
-    // Skip whitespace
-    while (pos < trimmedValue.length && /\s/.test(trimmedValue[pos])) {
-      pos++;
-    }
-
-    // Parse default value
-    let defaultValue = "";
-    if (pos < trimmedValue.length) {
-      if (trimmedValue[pos] === '"') {
-        // Quoted default value
-        pos++; // Skip opening quote
-        const defaultStart = pos;
-        while (pos < trimmedValue.length && trimmedValue[pos] !== '"') {
-          pos++;
-        }
-        defaultValue = trimmedValue.substring(defaultStart, pos);
-        if (pos < trimmedValue.length) {
-          pos++; // Skip closing quote
-        }
-      } else {
-        // Unquoted default value
-        const defaultStart = pos;
-        pos = trimmedValue.length; // Take rest
-        defaultValue = trimmedValue.substring(defaultStart, pos);
-      }
-    }
-
-    return processVariableMatch(type, name, label, defaultValue);
-  }
-
-  return null;
 }
 
 /**
@@ -520,29 +609,6 @@ export function parseUserCSS(
   raw: string,
   variableOverrides?: Record<string, string>,
 ): ParseResult {
-  console.log("[parseUserCSS] Function called, checking environment...");
-
-  // Safely check for document availability without triggering ReferenceError
-  let documentType: string;
-  try {
-    console.log("[parseUserCSS] About to check typeof document...");
-    documentType = typeof globalThis.document;
-    console.log(
-      "[parseUserCSS] typeof document check successful:",
-      documentType,
-    );
-  } catch (error) {
-    console.log("[parseUserCSS] typeof document check failed:", error);
-    documentType = "undefined (not available)";
-  }
-
-  console.log("[parseUserCSS] typeof document:", documentType);
-  console.log("[parseUserCSS] typeof window:", typeof globalThis.window);
-  console.log(
-    "[parseUserCSS] 'document' in globalThis:",
-    "document" in globalThis,
-  );
-
   const warnings: string[] = [];
   const errors: string[] = [];
   let css = raw;
@@ -551,31 +617,21 @@ export function parseUserCSS(
   const domains: string[] = [];
 
   try {
-    console.log("[parseUserCSS] Starting metadata extraction...");
-    console.log("[parseUserCSS] Matching metadata block...");
     const metadataBlockMatch = raw.match(METADATA_BLOCK_REGEX);
 
     let metadataContent = "";
     if (metadataBlockMatch) {
-      console.log("[parseUserCSS] Metadata block found");
       metadataBlock = metadataBlockMatch[0];
       metadataContent = metadataBlockMatch[1];
       css = raw.replace(metadataBlockMatch[0], "").trim();
     } else {
-      console.log(
-        "[parseUserCSS] No ==UserStyle== metadata block found, checking for general comment",
-      );
       // Try to find a general comment block at the start
       const generalCommentMatch = raw.match(/^\/\*\*([\s\S]*?)\*\//);
       if (generalCommentMatch) {
-        console.log("[parseUserCSS] Found general comment block");
         metadataBlock = generalCommentMatch[0];
         metadataContent = generalCommentMatch[1];
         css = raw.replace(generalCommentMatch[0], "").trim();
       } else {
-        console.log(
-          "[parseUserCSS] No metadata block found, proceeding without metadata",
-        );
         meta = {
           id: "",
           name: "",
@@ -601,7 +657,6 @@ export function parseUserCSS(
       }
     }
 
-    console.log("[parseUserCSS] Processing metadata content...");
     const lineStart =
       (
         raw
@@ -652,7 +707,9 @@ export function parseUserCSS(
     let match: RegExpExecArray | null;
     let currentLine = lineStart;
 
-    while ((match = DIRECTIVE_REGEX.exec(metadataContent)) !== null) {
+    while (true) {
+      match = DIRECTIVE_REGEX.exec(metadataContent);
+      if (match === null) break;
       const [fullMatch, directive, value] = match;
       const directiveLine =
         currentLine +
@@ -895,6 +952,8 @@ export function parseUserCSS(
         directives.updateURL ||
         "",
       license: directives.license,
+      homepageURL: directives.homepageURL,
+      supportURL: directives.supportURL,
       domains,
       compiledCss: "", // Will be filled in by preprocessing step
       variables: variables || {},
@@ -969,17 +1028,12 @@ export async function processUserCSS(
   }
 
   // Step 2: Detect preprocessor using the raw content to find @preprocessor directive
+  const { detectPreprocessor } = await import("./preprocessor");
   const preprocessorDetection = detectPreprocessor(raw);
   const preprocessorType = preprocessorDetection.type;
 
   // Check if we're in a context where DOM APIs are available
-  let hasDom = false;
-  try {
-    hasDom = typeof globalThis.document !== "undefined";
-  } catch {
-    // If accessing document throws, we definitely don't have DOM access
-    hasDom = false;
-  }
+  const hasDom = isDomAvailable();
 
   // If we're in a background context where DOM is not available,
   // and we need a preprocessor other than USO, return the parsed result without preprocessing
@@ -1008,7 +1062,7 @@ export async function processUserCSS(
       );
       // Check if we have DOM access before trying to resolve variables
       if (hasDom) {
-        cssToProcess = resolveVariables(
+        cssToProcess = await resolveVariables(
           cssToProcess,
           variableValues,
           parseResult.meta.variables,
