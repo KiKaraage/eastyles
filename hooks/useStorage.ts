@@ -96,12 +96,15 @@ export function useStorage<T>(
     setIsDirty(false);
   }, [key, defaultValue]);
 
-  // Check if data has changed
+  // Check if data has changed (optimized dirty checking)
   useEffect(() => {
     if (previousDataRef.current && data) {
-      const hasChanged =
-        JSON.stringify(previousDataRef.current) !== JSON.stringify(data);
-      setIsDirty(hasChanged);
+      // Simple reference check first, then deep comparison if needed
+      if (previousDataRef.current !== data) {
+        const hasChanged =
+          JSON.stringify(previousDataRef.current) !== JSON.stringify(data);
+        setIsDirty(hasChanged);
+      }
     }
   }, [data]);
 
@@ -196,7 +199,7 @@ export function useSettings() {
     await loadSettings();
   }, [loadSettings]);
 
-  // Load settings on mount
+  // Initialize settings on mount
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);

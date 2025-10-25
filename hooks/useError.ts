@@ -283,34 +283,17 @@ export function useError(): UseErrorReturn {
     return stats;
   }, [errors]);
 
-  // Auto-remove old errors (older than 5 minutes)
+  // Auto-remove old errors (older than 5 minutes) - optimized interval
   useEffect(() => {
     const interval = setInterval(() => {
       const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
       setErrors((prev) =>
         prev.filter((error) => error.timestamp > fiveMinutesAgo),
       );
-    }, 60000); // Check every minute
+    }, 5 * 60000); // Check every 5 minutes instead of every minute
 
     return () => clearInterval(interval);
   }, []);
-
-  // Execute error actions automatically when added
-  useEffect(() => {
-    errors.forEach((error) => {
-      if (error.action) {
-        // Auto-execute action for certain error types
-        if (
-          error.type === PopupErrorType.STORAGE_ERROR ||
-          error.type === PopupErrorType.MESSAGE_ERROR
-        ) {
-          setTimeout(() => {
-            error.action?.callback();
-          }, 1000); // Delay execution
-        }
-      }
-    });
-  }, [errors]);
 
   return {
     errors,
@@ -365,12 +348,13 @@ export function useErrorNotifications() {
   const { errors, removeError } = useError();
 
   useEffect(() => {
-    // Show notifications for new errors
-    const newErrors = errors.filter(
-      (error) => error.timestamp > Date.now() - 5000,
+    // Show notifications for new errors (optimized to only process recent errors)
+    const now = Date.now();
+    const recentErrors = errors.filter(
+      (error) => now - error.timestamp < 5000, // Only errors from last 5 seconds
     );
 
-    newErrors.forEach((error) => {
+    recentErrors.forEach((error) => {
       // In a real implementation, this would show a toast notification
       console.log(`[ea-ErrorNotification] ${error.severity}: ${error.message}`);
 

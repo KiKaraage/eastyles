@@ -370,23 +370,8 @@ export function useMessageAnalytics() {
  * Hook for popup-specific actions
  */
 export function usePopupActions() {
-  const { sendMessage } = useMessage();
+  const { sendMessage, isConnected } = useMessage();
   const { trackMessage } = useMessageAnalytics();
-  const [dynamicIsConnected, setDynamicIsConnected] = useState(false);
-
-  // Update connection status
-  useEffect(() => {
-    const updateConnectionStatus = () => {
-      setDynamicIsConnected(!!browser.runtime?.id);
-    };
-
-    updateConnectionStatus();
-    browser?.runtime?.onConnect?.addListener(updateConnectionStatus);
-
-    return () => {
-      browser?.runtime?.onConnect?.removeListener(updateConnectionStatus);
-    };
-  }, []);
 
   const openManager = useCallback(async () => {
     try {
@@ -466,7 +451,7 @@ export function usePopupActions() {
     addStyle,
     getStyles,
     toggleStyle,
-    isConnected: dynamicIsConnected,
+    isConnected,
   };
 }
 

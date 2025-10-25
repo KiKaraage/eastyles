@@ -241,13 +241,6 @@ export function useErrorHandling(
 
   const isFatal = errorState.error?.isFatal() || false;
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      setRetryCallback(null);
-    };
-  }, []);
-
   return {
     error: errorState.error,
     isLoading: errorState.isLoading,

@@ -120,10 +120,13 @@ export function useTheme(): UseThemeReturn {
     }
   };
 
-  // Watch for system preference changes
+  // Load initial theme on mount
   useEffect(() => {
     loadTheme();
+  }, [loadTheme]);
 
+  // Watch for system preference changes
+  useEffect(() => {
     if (themeMode === "system") {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = (e: MediaQueryListEvent) => {
@@ -135,7 +138,7 @@ export function useTheme(): UseThemeReturn {
 
       return () => mediaQuery.removeEventListener("change", handleChange);
     }
-  }, [loadTheme, themeMode, applyTheme]);
+  }, [themeMode, applyTheme]);
 
   // Theme update functions
   const setThemeModeHandler = async (mode: ThemeMode) => {
