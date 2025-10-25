@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BrowserAPIError,
   DataCorruptedError,
@@ -14,58 +13,55 @@ import {
   PreprocessorCompileError,
   StorageInvalidDataError,
   StorageQuotaExceededError,
-} from "../../../services/errors/service";
-import { i18nService } from "../../../services/i18n/service";
+} from "@services/errors/service";
+import { i18nService } from "@services/i18n/service";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock browser APIs
-const mockGetUILanguage = vi.fn(() => "en");
-const mockGetMessage = vi.fn(
-  (key: string, substitutions?: string | string[]) => {
-    const messages: Record<string, string> = {
-      ERR_STORAGE_QUOTA:
-        "Storage quota exceeded. Please remove some styles to free up space.",
-      ERR_STORAGE_INVALID_DATA: "Invalid storage data: $1",
-      ERR_MESSAGE_TIMEOUT:
-        "Message timeout after $1 attempts for message type: $2",
-      ERR_MESSAGE_INVALID: "Invalid message: $1",
-      ERR_FILE_FORMAT_INVALID: "Invalid file format. Expected $1, got $2",
-      ERR_DATA_CORRUPTED: "Data corrupted: $1",
-      ERR_BROWSER_API: "Browser API error in $1.$2: $3",
-      ERR_PERMISSION_DENIED: "Permission denied: $1",
-      ERR_PERMISSION_REQUIRED: "Permission required: $1",
-      ERR_PARSE_METADATA: "Failed to parse style metadata",
-      ERR_PREPROCESSOR_COMPILE: "Failed to compile preprocessor code",
-      ERR_INJECTION_CSP: "Content Security Policy blocked style injection",
-      ERR_FONT_LOAD: "Failed to load font: $1",
-    };
-
-    let message = messages[key] || key;
-
-    // Perform placeholder substitution like browser.i18n does
-    if (substitutions) {
-      const subsArray = Array.isArray(substitutions)
-        ? substitutions
-        : [substitutions];
-      subsArray.forEach((sub, index) => {
-        message = message.replace(
-          new RegExp(`\\$${index + 1}`, "g"),
-          sub || "",
-        );
-      });
-    }
-
-    return message;
-  },
-);
-
-// Mock the browser global before each test
 beforeEach(() => {
-  (global as Record<string, unknown>).browser = {
-    i18n: {
-      getUILanguage: mockGetUILanguage,
-      getMessage: mockGetMessage,
+  // Get the mocks from global.browser
+  const mockGetMessage = vi.mocked(browser.i18n.getMessage);
+  const mockGetUILanguage = vi.mocked(browser.i18n.getUILanguage);
+
+  // Reset implementations for error localization tests
+  mockGetUILanguage.mockReturnValue("en");
+  mockGetMessage.mockImplementation(
+    (key: string, substitutions?: string | string[]) => {
+      const messages: Record<string, string> = {
+        ERR_STORAGE_QUOTA:
+          "Storage quota exceeded. Please remove some styles to free up space.",
+        ERR_STORAGE_INVALID_DATA: "Invalid storage data: $1",
+        ERR_MESSAGE_TIMEOUT:
+          "Message timeout after $1 attempts for message type: $2",
+        ERR_MESSAGE_INVALID: "Invalid message: $1",
+        ERR_FILE_FORMAT_INVALID: "Invalid file format. Expected $1, got $2",
+        ERR_DATA_CORRUPTED: "Data corrupted: $1",
+        ERR_BROWSER_API: "Browser API error in $1.$2: $3",
+        ERR_PERMISSION_DENIED: "Permission denied: $1",
+        ERR_PERMISSION_REQUIRED: "Permission required: $1",
+        ERR_PARSE_METADATA: "Failed to parse style metadata",
+        ERR_PREPROCESSOR_COMPILE: "Failed to compile preprocessor code",
+        ERR_INJECTION_CSP: "Content Security Policy blocked style injection",
+        ERR_FONT_LOAD: "Failed to load font: $1",
+      };
+
+      let message = messages[key] || key;
+
+      // Perform placeholder substitution like browser.i18n does
+      if (substitutions) {
+        const subsArray = Array.isArray(substitutions)
+          ? substitutions
+          : [substitutions];
+        subsArray.forEach((sub, index) => {
+          message = message.replace(
+            new RegExp(`\\$${index + 1}`, "g"),
+            sub || "",
+          );
+        });
+      }
+
+      return message;
     },
-  };
+  );
 
   // Clear all mocks to ensure test isolation
   vi.clearAllMocks();

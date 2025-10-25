@@ -1,13 +1,13 @@
+import { errorService } from "@services/errors/service";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ErrorBoundary, {
   ErrorFallbackProps,
   withErrorBoundary,
-} from "../../../components/ui/ErrorBoundary";
-import { errorService } from "../../../services/errors/service";
+} from "../../components/ui/ErrorBoundary";
 
 // Mock the errorService to prevent logging during tests
-vi.mock("../../../services/errors/service", () => ({
+vi.mock("../../services/errors/service", () => ({
   errorService: {
     handleError: vi.fn(),
   },

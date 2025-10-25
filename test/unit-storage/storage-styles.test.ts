@@ -3,12 +3,12 @@
  * Covers CRUD operations, migrations, and import/export round trips
  */
 
+import type { UserCSSStyle } from "@services/storage/schema";
+import { createUserCSSStyle } from "@services/storage/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UserCSSStyle } from "../../services/storage/schema";
-import { createUserCSSStyle } from "../../services/storage/schema";
 
 // Mock the storage client
-vi.mock("../../services/storage/client", () => {
+vi.mock("@services/storage/client", () => {
   const mockClient = {
     getSettings: vi.fn().mockResolvedValue({
       lastUsed: Date.now(),
@@ -39,7 +39,7 @@ vi.mock("../../services/storage/client", () => {
   };
 });
 
-import { EastylesStorageClient } from "../../services/storage/client";
+import { EastylesStorageClient } from "@services/storage/client";
 
 describe("UserCSS Style Storage", () => {
   let client: EastylesStorageClient;

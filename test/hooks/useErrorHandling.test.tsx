@@ -1,19 +1,19 @@
+import {
+  ErrorSeverity,
+  ErrorSource,
+  errorService,
+  RuntimeError,
+} from "@services/errors/service";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   useErrorAnalytics,
   useErrorBoundary,
   useErrorHandling,
-} from "../../../hooks/useErrorHandling";
-import {
-  ErrorSeverity,
-  ErrorSource,
-  errorService,
-  RuntimeError,
-} from "../../../services/errors/service";
+} from "../../hooks/useErrorHandling";
 
 // Mock the error service
-vi.mock("../../../services/errors/service", () => {
+vi.mock("@services/errors/service", () => {
   class MockExtensionError extends Error {
     public severity: ErrorSeverity;
     public source: ErrorSource;

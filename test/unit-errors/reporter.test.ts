@@ -1,17 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   createDevelopmentReporter,
   createProductionReporter,
   ErrorReporter,
   reporter,
-} from "../../../services/errors/reporter";
+} from "@services/errors/reporter";
 import {
   ErrorSeverity,
   ErrorSource,
   MessageError,
   RuntimeError,
   StorageError,
-} from "../../../services/errors/service";
+} from "@services/errors/service";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // Mock navigator.userAgent
 Object.defineProperty(navigator, "userAgent", {
@@ -20,7 +20,7 @@ Object.defineProperty(navigator, "userAgent", {
 });
 
 // Mock logger to avoid console output during tests
-vi.mock("../../../services/errors/logger", () => ({
+vi.mock("@services/errors/logger", () => ({
   logger: {
     debug: vi.fn(),
     info: vi.fn(),

@@ -3,11 +3,10 @@
  * Tests CRUD operations, error handling, and fallback mechanisms
  */
 
-import { describe, expect, it, vi } from "vitest";
 import {
   StorageFallbacks,
   StorageMigrations,
-} from "../services/storage/defaults";
+} from "@services/storage/defaults";
 import {
   createUserStyle,
   DEFAULT_SETTINGS,
@@ -17,7 +16,8 @@ import {
   validateExportData,
   validateSettings,
   validateUserStyle,
-} from "../services/storage/schema";
+} from "@services/storage/schema";
+import { describe, expect, it, vi } from "vitest";
 
 describe("Storage Schema", () => {
   describe("validateSettings", () => {

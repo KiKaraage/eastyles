@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+// Mock i18n service to return the key as the value for testing
+vi.mock("@services/i18n/service", () => ({
+  i18nService: {
+    t: (key: string) => key,
+  },
+}));
+
 // Unmock the service to test the actual implementation
 vi.unmock("@services/errors/service");
 

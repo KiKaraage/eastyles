@@ -1,25 +1,21 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useI18n } from "../../../hooks/useI18n";
-
-// Mock browser APIs
-const mockGetUILanguage = vi.fn(() => "en");
-const mockGetMessage = vi.fn((key: string) => {
-  const messages: Record<string, string> = {
-    appName: "Eastyles",
-    loading: "Loading...",
-    saveButton: "Save Style",
-  };
-  return messages[key] || key;
-});
+import { useI18n } from "../../hooks/useI18n";
 
 beforeEach(() => {
-  (global as { browser?: unknown }).browser = {
-    i18n: {
-      getUILanguage: mockGetUILanguage,
-      getMessage: mockGetMessage,
-    },
-  };
+  // Get mocks from global.browser and reset implementations
+  const mockGetMessage = vi.mocked(browser.i18n.getMessage);
+  const mockGetUILanguage = vi.mocked(browser.i18n.getUILanguage);
+
+  mockGetUILanguage.mockReturnValue("en");
+  mockGetMessage.mockImplementation((key: string) => {
+    const messages: Record<string, string> = {
+      appName: "Eastyles",
+      loading: "Loading...",
+      saveButton: "Save Style",
+    };
+    return messages[key] || key;
+  });
 });
 
 // Test component that uses the i18n hook

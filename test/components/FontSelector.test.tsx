@@ -2,26 +2,26 @@
  * FontSelector Component Tests
  */
 
+import { fontRegistry } from "@services/usercss/font-registry";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FontSelector } from "../../../components/features/FontSelector";
-import { fontRegistry } from "../../../services/usercss/font-registry";
+import { FontSelector } from "../../components/features/FontSelector";
 
 // Mock the hooks
-vi.mock("../../../hooks/useI18n", () => ({
+vi.mock("../../hooks/useI18n", () => ({
   useI18n: () => ({
     t: (key: string) => key, // Simple mock that returns the key
   }),
 }));
 
-vi.mock("../../../hooks/useMessage", () => ({
+vi.mock("../../hooks/useMessage", () => ({
   useMessage: () => ({
     sendMessage: vi.fn(),
   }),
 }));
 
 // Mock font registry
-vi.mock("../../../services/usercss/font-registry", () => ({
+vi.mock("../../services/usercss/font-registry", () => ({
   fontRegistry: {
     getBuiltInFonts: vi.fn(),
     getBuiltInFontsByCategory: vi.fn(),
@@ -232,14 +232,14 @@ describe("FontSelector", () => {
   it("should call onClose when cancel button is clicked", () => {
     render(<FontSelector {...mockProps} />);
 
-    fireEvent.click(screen.getByText("common.cancel"));
+    fireEvent.click(screen.getByText("cancelButton"));
     expect(mockProps.onClose).toHaveBeenCalled();
   });
 
   it("should call onClose when close button is clicked", () => {
     render(<FontSelector {...mockProps} />);
 
-    const closeButton = screen.getByLabelText("common.close");
+    const closeButton = screen.getByLabelText("closeButton");
     fireEvent.click(closeButton);
     expect(mockProps.onClose).toHaveBeenCalled();
   });

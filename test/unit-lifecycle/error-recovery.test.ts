@@ -4,13 +4,13 @@
  * error conditions during installation, migration, and other lifecycle events.
  */
 
+import { logger } from "@services/errors/logger";
+import { ErrorSource } from "@services/errors/service";
+import { installerService } from "@services/lifecycle/installer";
+import { migrationService } from "@services/lifecycle/migrations";
+import { storageClient } from "@services/storage/client";
+import { DEFAULT_SETTINGS } from "@services/storage/schema";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { logger } from "../../services/errors/logger";
-import { ErrorSource } from "../../services/errors/service";
-import { installerService } from "../../services/lifecycle/installer";
-import { migrationService } from "../../services/lifecycle/migrations";
-import { storageClient } from "../../services/storage/client";
-import { DEFAULT_SETTINGS } from "../../services/storage/schema";
 
 // Mock dependencies
 vi.mock("../../services/storage/client", () => ({

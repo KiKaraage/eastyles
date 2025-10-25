@@ -5,10 +5,10 @@
  * min/max clamping, and select options.
  */
 
+import { VariableDescriptor } from "@services/usercss/types";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { VariableControls } from "../../../components/features/VariableControls";
-import { VariableDescriptor } from "../../../services/usercss/types";
+import { VariableControls } from "../../components/features/VariableControls";
 
 describe("VariableControls", () => {
   const mockOnChange = vi.fn();
@@ -53,7 +53,7 @@ describe("VariableControls", () => {
       );
 
       expect(screen.getByText("Variable Configuration")).toBeTruthy();
-      expect(screen.getByTitle("Color picker for --color")).toBeTruthy();
+      expect(screen.getByTitle("Color: #ff0000")).toBeTruthy();
     });
   });
 
@@ -70,9 +70,9 @@ describe("VariableControls", () => {
         <VariableControls variables={variables} onChange={mockOnChange} />,
       );
 
-      const colorInput = screen.getByTitle("Color picker for --accent-color");
+      const colorInput = screen.getByTitle("Accent Color: #ff0000");
       expect(colorInput.getAttribute("type")).toBe("color");
-      expect(screen.getByText("accent-color")).toBeTruthy();
+      expect(screen.getByText("Accent Color")).toBeTruthy();
     });
 
     it("calls onChange when color value changes", () => {
@@ -83,7 +83,7 @@ describe("VariableControls", () => {
         <VariableControls variables={variables} onChange={mockOnChange} />,
       );
 
-      const colorInput = screen.getByTitle("Color picker for --color");
+      const colorInput = screen.getByTitle("Color: #ff0000");
       fireEvent.change(colorInput, { target: { value: "#00ff00" } });
 
       expect(mockOnChange).toHaveBeenCalledWith("--color", "#00ff00");
@@ -109,7 +109,7 @@ describe("VariableControls", () => {
       expect(numberInput.getAttribute("type")).toBe("number");
       expect(numberInput.getAttribute("min")).toBe("8");
       expect(numberInput.getAttribute("max")).toBe("72");
-      expect(screen.getByText("font-size")).toBeTruthy();
+      expect(screen.getByText("Font Size")).toBeTruthy();
     });
 
     it("calls onChange when number value changes", () => {
@@ -161,7 +161,7 @@ describe("VariableControls", () => {
 
       const textInput = screen.getByDisplayValue("Arial");
       expect(textInput.getAttribute("type")).toBe("text");
-      expect(screen.getByText("font-family")).toBeTruthy();
+      expect(screen.getByText("Font Family")).toBeTruthy();
     });
 
     it("calls onChange when text value changes", () => {
@@ -216,7 +216,7 @@ describe("VariableControls", () => {
 
       const selectElement = screen.getByDisplayValue("dark");
       expect(selectElement.tagName).toBe("SELECT");
-      expect(screen.getByText("theme")).toBeTruthy();
+      expect(screen.getByText("Theme")).toBeTruthy();
 
       // Check options are rendered
       expect(screen.getByText("light")).toBeTruthy();
@@ -259,9 +259,7 @@ describe("VariableControls", () => {
         <VariableControls variables={variables} onChange={mockOnChange} />,
       );
 
-      const selectElement = screen.getByTitle(
-        "Select option for --empty-select",
-      );
+      const selectElement = screen.getByTitle("Empty Select");
       expect(selectElement.tagName).toBe("SELECT");
     });
   });
@@ -281,7 +279,7 @@ describe("VariableControls", () => {
 
       const textInput = screen.getByDisplayValue("fallback");
       expect(textInput.getAttribute("type")).toBe("text");
-      expect(screen.getByText("unknown")).toBeTruthy();
+      expect(screen.getByText("Unknown")).toBeTruthy();
     });
   });
 
@@ -305,7 +303,7 @@ describe("VariableControls", () => {
         <VariableControls variables={variables} onChange={mockOnChange} />,
       );
 
-      expect(screen.getByTitle("Color picker for --color")).toBeTruthy();
+      expect(screen.getByTitle("Color: #ff0000")).toBeTruthy();
       expect(screen.getByDisplayValue("16")).toBeTruthy();
       expect(screen.getByDisplayValue("hello")).toBeTruthy();
       expect(screen.getByDisplayValue("dark")).toBeTruthy();
@@ -356,10 +354,10 @@ describe("VariableControls", () => {
         <VariableControls variables={variables} onChange={mockOnChange} />,
       );
 
-      const colorInput = screen.getByTitle("Color value for --test");
-      expect(colorInput.className).toContain("input");
-      expect(colorInput.className).toContain("input-bordered");
-      expect(colorInput.className).toContain("input-xs");
+      const colorInput = screen.getByTitle("Test: #000000");
+      expect(colorInput.className).toContain("w-10");
+      expect(colorInput.className).toContain("border-2");
+      expect(colorInput.className).toContain("border-base-300");
     });
   });
 
@@ -372,7 +370,7 @@ describe("VariableControls", () => {
         <VariableControls variables={variables} onChange={mockOnChange} />,
       );
 
-      expect(screen.getByText("my-variable")).toBeTruthy();
+      expect(screen.getByText("My Variable")).toBeTruthy();
       expect(screen.queryByText("--my-variable")).toBeNull();
     });
 
@@ -382,7 +380,7 @@ describe("VariableControls", () => {
         <VariableControls variables={variables} onChange={mockOnChange} />,
       );
 
-      expect(screen.getByText("simple-name")).toBeTruthy();
+      expect(screen.getByText("Simple Name")).toBeTruthy();
     });
   });
 });

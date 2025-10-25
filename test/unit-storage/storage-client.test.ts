@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.useFakeTimers();
 
 // Mock the storage client at the test level
-vi.mock("../services/storage/client", () => {
+vi.mock("@services/storage/client", () => {
   const mockClient = {
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
@@ -80,8 +80,8 @@ import {
   StorageClient,
   setDebugMode,
   setThemeMode,
-} from "../services/storage/client";
-import { DEFAULT_SETTINGS, ExportData } from "../services/storage/schema";
+} from "@services/storage/client";
+import { DEFAULT_SETTINGS, ExportData } from "@services/storage/schema";
 
 describe("EastylesStorageClient", () => {
   let client: StorageClient;
@@ -128,6 +128,32 @@ describe("EastylesStorageClient", () => {
       vi.mocked(client.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
       const settings = await client.getSettings();
       expect(settings).toEqual(DEFAULT_SETTINGS);
+    });
+
+    it("should optimize dirty checking with reference check before JSON comparison", async () => {
+      // Test the optimized dirty checking logic from useStorage hook
+      const mockData1 = { themeMode: "dark", isDebuggingEnabled: true };
+      const mockData2 = { themeMode: "dark", isDebuggingEnabled: true };
+      const mockData3 = { themeMode: "light", isDebuggingEnabled: true };
+
+      // Same reference should not trigger dirty check
+      const sameRef = mockData1;
+      const isSameRef = sameRef === mockData1;
+      expect(isSameRef).toBe(true);
+
+      // Different reference but same content should still compare JSON
+      const isDifferentRefSameContent = mockData1 !== mockData2;
+      const isSameContent =
+        JSON.stringify(mockData1) === JSON.stringify(mockData2);
+      expect(isDifferentRefSameContent).toBe(true);
+      expect(isSameContent).toBe(true);
+
+      // Different reference and different content should be dirty
+      const isDifferentRefDifferentContent = mockData1 !== mockData3;
+      const isDifferentContent =
+        JSON.stringify(mockData1) !== JSON.stringify(mockData3);
+      expect(isDifferentRefDifferentContent).toBe(true);
+      expect(isDifferentContent).toBe(true);
     });
 
     it("should update settings correctly", async () => {

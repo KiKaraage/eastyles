@@ -4,12 +4,12 @@
  * and data transformations between different extension versions.
  */
 
+import { logger } from "@services/errors/logger";
+import { ErrorSource } from "@services/errors/service";
+import { migrationService } from "@services/lifecycle/migrations";
+import { storageClient } from "@services/storage/client";
+import { DEFAULT_SETTINGS } from "@services/storage/schema";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { logger } from "../../services/errors/logger";
-import { ErrorSource } from "../../services/errors/service";
-import { migrationService } from "../../services/lifecycle/migrations";
-import { storageClient } from "../../services/storage/client";
-import { DEFAULT_SETTINGS } from "../../services/storage/schema";
 
 // Mock dependencies
 vi.mock("../../services/storage/client", () => ({

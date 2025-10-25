@@ -1,36 +1,32 @@
+import { I18nService } from "@services/i18n/service";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { I18nService } from "../../../services/i18n/service";
-
-// Mock browser APIs
-const mockGetUILanguage = vi.fn(() => "en");
-const mockGetMessage = vi.fn(
-  (key: string, _substitutions?: string | string[]) => {
-    const messages: Record<string, string> = {
-      saveButton: "Save Style",
-      cancelButton: "Cancel",
-      appName: "Eastyles",
-      styleInstalled: "Style installed successfully",
-      missingKey: "",
-    };
-
-    return messages[key] || "";
-  },
-);
-
-// Mock the browser global before each test
-beforeEach(() => {
-  (global as { browser?: unknown }).browser = {
-    i18n: {
-      getUILanguage: mockGetUILanguage,
-      getMessage: mockGetMessage,
-    },
-  };
-});
 
 describe("I18nService", () => {
   let i18nService: I18nService;
+  let mockGetMessage: ReturnType<typeof vi.fn>;
+  let mockGetUILanguage: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    // Get the existing mocks from global.browser set up in setup.ts
+    mockGetUILanguage = vi.mocked(browser.i18n.getUILanguage);
+    mockGetMessage = vi.mocked(browser.i18n.getMessage);
+
+    // Reset mock implementations
+    mockGetUILanguage.mockReturnValue("en");
+    mockGetMessage.mockImplementation(
+      (key: string, _substitutions?: string | string[]) => {
+        const messages: Record<string, string> = {
+          saveButton: "Save Style",
+          cancelButton: "Cancel",
+          appName: "Eastyles",
+          styleInstalled: "Style installed successfully",
+          missingKey: "",
+        };
+
+        return messages[key] || "";
+      },
+    );
+
     i18nService = new I18nService();
     i18nService.clearCache();
     vi.clearAllMocks();
