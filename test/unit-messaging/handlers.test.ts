@@ -3,18 +3,15 @@
  * Tests the error handling and propagation mechanisms in message handlers.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   handleGetCurrentTab,
   handleOpenManager,
   handleRequestImport,
   MessageHandlerService,
   withErrorHandling,
-} from "../../services/messaging/handlers";
-import type {
-  ErrorDetails,
-  ReceivedMessages,
-} from "../../services/messaging/types";
+} from "@services/messaging/handlers";
+import type { ErrorDetails, ReceivedMessages } from "@services/messaging/types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the browser API
 
@@ -113,14 +110,18 @@ describe("withErrorHandling wrapper", () => {
       // Expected to throw
     }
 
-    expect(consoleSpy).toHaveBeenCalledWith("Message handler error:", {
-      messageType: "REQUEST_EXPORT",
-      error: expect.objectContaining({
-        message: "Test error",
-        source: "background",
-      }),
-      tabId: 123,
-    });
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[ea-Handlers] Message handler error:",
+      {
+        messageType: "REQUEST_EXPORT",
+        error: expect.objectContaining({
+          message: "Test error",
+          source: "background",
+          severity: "notify",
+        }),
+        tabId: 123,
+      },
+    );
 
     consoleSpy.mockRestore();
   });

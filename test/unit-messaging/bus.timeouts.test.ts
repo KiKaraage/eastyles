@@ -3,8 +3,8 @@
  * Tests basic method availability without complex scenarios.
  */
 
+import { MessageBus } from "@services/messaging/bus";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MessageBus } from "../../services/messaging/bus";
 
 // Mock the browser API
 vi.mock("wxt/browser", () => ({

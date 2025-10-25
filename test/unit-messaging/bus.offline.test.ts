@@ -3,9 +3,9 @@
  * Tests offline message queuing, processing, and cleanup operations.
  */
 
+import { MessageBus } from "@services/messaging/bus";
+import type { ReceivedMessages } from "@services/messaging/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MessageBus } from "../../services/messaging/bus";
-import type { ReceivedMessages } from "../../services/messaging/types";
 
 // Mock the browser API
 vi.mock("wxt/browser", () => ({

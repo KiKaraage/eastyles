@@ -5,6 +5,10 @@
  * and CSS injection in the content script context.
  */
 
+import { UserCSSStyle } from "@services/storage/schema";
+import { UserCSSContentController } from "@services/usercss/content-controller";
+import { cssInjector } from "@services/usercss/css-injector";
+import { domainDetector } from "@services/usercss/domain-detector";
 import {
   afterEach,
   beforeEach,
@@ -15,10 +19,6 @@ import {
   vi,
 } from "vitest";
 import { browser } from "wxt/browser";
-import { UserCSSStyle } from "../../../services/storage/schema";
-import { UserCSSContentController } from "../../../services/usercss/content-controller";
-import { cssInjector } from "../../../services/usercss/css-injector";
-import { domainDetector } from "../../../services/usercss/domain-detector";
 
 // Mock the dependencies at module level
 vi.mock("wxt/browser", () => ({
@@ -30,13 +30,13 @@ vi.mock("wxt/browser", () => ({
   },
 }));
 
-vi.mock("../../../services/usercss/domain-detector", () => ({
+vi.mock("@services/usercss/domain-detector", () => ({
   domainDetector: {
     matches: vi.fn(() => true),
   },
 }));
 
-vi.mock("../../../services/usercss/css-injector", () => ({
+vi.mock("@services/usercss/css-injector", () => ({
   cssInjector: {
     inject: vi.fn(() => Promise.resolve()),
     remove: vi.fn(() => Promise.resolve()),
@@ -44,7 +44,7 @@ vi.mock("../../../services/usercss/css-injector", () => ({
 }));
 
 // Mock logger
-vi.mock("../../../services/errors/logger", () => ({
+vi.mock("@services/errors/logger", () => ({
   logger: {
     error: vi.fn(),
   },
@@ -366,7 +366,7 @@ describe("UserCSS Content Controller Integration", () => {
         source: "/* updated */",
       };
 
-      vi.mocked(domainDetector).matches.mockReturnValue(true);
+      vi.mocked(domainDetector.matches).mockReturnValue(true);
 
       await controller.onStyleUpdate("style1", updatedStyle);
 

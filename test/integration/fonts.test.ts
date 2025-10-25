@@ -4,9 +4,9 @@
  * Tests the complete flow: generation → install → injection verification
  */
 
+import { FontUserCSSGenerator } from "@services/usercss/font-usercss-generator";
+import { FontUserCSSManager } from "@services/usercss/font-usercss-manager";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FontUserCSSGenerator } from "../../../services/usercss/font-usercss-generator";
-import { FontUserCSSManager } from "../../../services/usercss/font-usercss-manager";
 
 describe("Font UserCSS Round-trip Integration", () => {
   let manager: FontUserCSSManager;
@@ -43,13 +43,17 @@ describe("Font UserCSS Round-trip Integration", () => {
       expect(generatedUserCSS.userCSS).toContain("@font-face");
       expect(generatedUserCSS.userCSS).toContain("font-family:");
       expect(generatedUserCSS.meta.name).toBe("Eastyles Font: Instrument Sans");
-      expect(generatedUserCSS.meta.id).toMatch(/^font-builtin-instrument-sans-/);
+      expect(generatedUserCSS.meta.id).toMatch(
+        /^font-builtin-instrument-sans-/,
+      );
 
       // Step 2: Install the font style
       const installation = await manager.installFontStyle(fontApplication);
 
       // Verify installation
-      expect(installation.installationId).toMatch(/^font-builtin-inter-/);
+      expect(installation.installationId).toMatch(
+        /^font-builtin-instrument-sans-/,
+      );
       expect(installation.isActive).toBe(true);
       expect(installation.fontApplication).toEqual(fontApplication);
       expect(installation.generatedUserCSS.userCSS).toBe(

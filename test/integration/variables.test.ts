@@ -5,12 +5,12 @@
  * change value → background save → content re-injection without refresh
  */
 
+import { messageBus } from "@services/messaging/bus";
+import { storageClient } from "@services/storage/client";
+import { UserCSSStyle } from "@services/storage/schema";
+import { VariableDescriptor } from "@services/usercss/types";
+import { variablePersistenceService } from "@services/usercss/variable-service";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { messageBus } from "../../../services/messaging/bus";
-import { storageClient } from "../../../services/storage/client";
-import { UserCSSStyle } from "../../../services/storage/schema";
-import { VariableDescriptor } from "../../../services/usercss/types";
-import { variablePersistenceService } from "../../../services/usercss/variable-service";
 
 // Mock browser APIs
 const mockBrowser = {
@@ -35,18 +35,18 @@ const mockContentController = {
 };
 
 // Mock modules
-vi.mock("../../../services/usercss/content-controller", () => ({
+vi.mock("@services/usercss/content-controller", () => ({
   contentController: mockContentController,
 }));
 
-vi.mock("../../../services/messaging/bus", () => ({
+vi.mock("@services/messaging/bus", () => ({
   messageBus: {
     send: vi.fn().mockResolvedValue({ success: true }),
     broadcast: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
-vi.mock("../../../services/storage/client", () => ({
+vi.mock("@services/storage/client", () => ({
   storageClient: {
     addUserCSSStyle: vi.fn().mockResolvedValue({ id: "test-style-123" }),
     getUserCSSStyle: vi.fn(),

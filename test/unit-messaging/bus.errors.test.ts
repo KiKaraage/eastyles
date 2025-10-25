@@ -3,9 +3,9 @@
  * Tests invalid message handling, browser API failures, and error recovery scenarios.
  */
 
+import { MessageBus } from "@services/messaging/bus";
+import type { ReceivedMessages } from "@services/messaging/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MessageBus } from "../../services/messaging/bus";
-import type { ReceivedMessages } from "../../services/messaging/types";
 
 // Mock the browser API
 vi.mock("wxt/browser", () => ({
