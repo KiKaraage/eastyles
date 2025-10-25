@@ -2,11 +2,11 @@
  * Unit tests for export utility
  */
 
+import { logger } from "@services/errors/logger";
+import { storageClient } from "@services/storage/client";
+import type { ExportData } from "@services/storage/schema";
+import { DEFAULT_SETTINGS } from "@services/storage/schema";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { logger } from "../../services/errors/logger";
-import { storageClient } from "../../services/storage/client";
-import type { ExportData } from "../../services/storage/schema";
-import { DEFAULT_SETTINGS } from "../../services/storage/schema";
 import { CompressionUtils, ExportService } from "../../utils/export-service";
 
 // Mock dependencies

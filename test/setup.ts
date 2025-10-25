@@ -83,6 +83,17 @@ export function resetStorage(): void {
 }
 
 beforeAll(() => {
+  // Don't mock document object - let jsdom provide real DOM
+  // Only mock specific properties that jsdom doesn't provide
+  if (typeof document !== "undefined") {
+    Object.defineProperty(document, "title", {
+      value: "",
+      writable: true,
+    });
+  }
+
+  // Don't mock window object completely - let jsdom provide it
+
   // Mock browser.storage.local with actual implementation
   const mockStorageArea: MockBrowserStorageArea = {
     get: vi.fn(async (keys?: string | string[] | object | null) => {
@@ -366,6 +377,14 @@ beforeAll(() => {
     value: mockMatchMedia,
   });
 
+  // Also ensure window.matchMedia is mocked if window exists
+  if (typeof global.window !== "undefined") {
+    Object.defineProperty(global.window, "matchMedia", {
+      writable: true,
+      value: mockMatchMedia,
+    });
+  }
+
   // Mock the wxt/utils/storage module
   vi.mock("wxt/utils/storage", () => {
     const storage = {
@@ -609,142 +628,7 @@ vi.mock("@services/errors/service", async () => {
   };
 });
 
-// Mock the i18n service
-vi.mock("@services/i18n/service", () => {
-  const mockI18nService = {
-    t: vi
-      .fn()
-      .mockImplementation((key: string, substitutions?: string | string[]) => {
-        // Return actual translations from en.json
-        const translations: Record<string, string> = {
-          manager_addUserCss: "Add UserCSS File",
-          font_createFontStyle: "Create Font Style",
-          font_editStyle: "Edit Font Style",
-          applyButton: "Apply",
-          appName: "Eastyles",
-          appDescription: "Easy web styling for everyone",
-          stylesFor: "Styles for",
-          manageStyles: "Manage Styles",
-          settings: "Settings",
-          addNewStyle: "Add New Style",
-          saveButton: "Save Style",
-          cancelButton: "Cancel",
-          closeButton: "Close",
-          applying: "Applying...",
-          applyToSiteButton: "Apply to Site",
-          removeButton: "Remove Style",
-          configureButton: "Configure",
-          deleteButton: "Delete",
-          loading: "Loading...",
-          error: "Error",
-          success: "Success",
-          styleInstalled: "Style saved successfully",
-          styleRemoved: "Style removed successfully",
-          styleDeleted: "Style deleted successfully",
-          noStylesFound: "No styles found",
-          dragDropHint: "Drag and drop .user.css file here",
-          orClickToBrowse: "or click to browse",
-          styleName: "Style Name",
-          styleDescription: "Description",
-          author: "Author",
-          version: "Version",
-          domains: "Domains",
-          variables: "Variables",
-          enabled: "Enabled",
-          disabled: "Disabled",
-          lastUpdated: "Last Updated",
-          installDate: "Install Date",
-          font_apply: "Apply Font",
-          font_tabs_builtin: "Built-in Fonts",
-          font_tabs_custom: "Custom Font",
-          font_builtin_description:
-            "Choose from our collection of carefully selected fonts",
-          font_custom_description:
-            "Enter the name of a font installed on your system",
-          font_custom_inputLabel: "Font Name",
-          font_custom_placeholder:
-            "e.g., Arial, Times New Roman, Comic Sans MS",
-          font_custom_checkButton: "Check",
-          font_custom_previewLabel: "Preview",
-          font_custom_available: "Font is available and ready to use",
-          font_custom_notAvailable: "Font not found on your system",
-          font_categories_sans_serif: "Sans Serif",
-          font_categories_serif: "Serif",
-          font_categories_monospace: "Monospace",
-          font_categories_display: "Display",
-          font_categories_handwriting: "Handwriting",
-          font_error_emptyName: "Please enter a font name",
-          font_error_selectFont: "Please select a font",
-          font_error_notAvailable: "Font '$1' is not available on your system",
-          font_error_checkFailed: "Failed to check font availability",
-          font_error_parseFailed: "Failed to process font style",
-          font_error_installFailed: "Failed to install font style",
-          font_error_applyFailed: "Failed to apply font",
-          font_applied: "Font '$1' applied successfully",
-          font_selectLabel: "Select Font",
-          font_selectPlaceholder: "Choose a font...",
-          font_applyButton: "Apply Font",
-          colors_apply: "Apply Colors",
-          ERR_STORAGE_QUOTA:
-            "Storage capacity exceeded. Please remove some styles to free up space.",
-          ERR_STORAGE_INVALID_DATA: "Invalid storage data: $1",
-          ERR_MESSAGE_TIMEOUT: "Message timed out after $1 attempts: $2",
-          ERR_MESSAGE_INVALID: "Invalid message: $1",
-          ERR_FILE_FORMAT_INVALID:
-            "Invalid file format: $2. Only $1 formats can be accepted",
-          ERR_DATA_CORRUPTED: "Data corrupted: $1",
-          ERR_BROWSER_API: "Browser API error in $1.$2: $3",
-          ERR_PERMISSION_DENIED: "Permission denied: $1",
-          ERR_PARSE_METADATA: "Failed to parse style metadata",
-          ERR_PREPROCESSOR_COMPILE: "Failed to compile preprocessor code",
-          ERR_INJECTION_CSP: "Content Security Policy blocked style injection",
-          ERR_PERMISSION_REQUIRED: "Permission required: $1",
-          ERR_FONT_LOAD: "Failed to load font: $1",
-          noUserCssContentOrUrl: "No UserCSS content or URL provided",
-          loadingUserCss: "Loading UserCSS...",
-          failedToLoadUserCss: "Failed to load UserCSS",
-          installSuccess: "Style '$1' installed successfully",
-          saveUserCss: "Save UserCSS",
-          previewAndInstall: "Preview and install UserCSS styles",
-          styleInformation: "Style Information",
-          targetDomains: "Target Domains",
-          noSpecificDomains: "No specific domains detected",
-          codePreview: "Code Preview",
-          codePreviewDescription:
-            "Shows the complete UserCSS content including metadata block with variables and CSS rules.",
-          installationError: "Installation Error",
-          addingToEastyles: "Add to Eastyles",
-          installing: "Installing...",
-        };
 
-        // Handle substitutions
-        if (substitutions) {
-          let message = translations[key] || key;
-          if (typeof substitutions === "string") {
-            message = message.replace("$1", substitutions);
-          } else if (Array.isArray(substitutions)) {
-            substitutions.forEach((sub, index) => {
-              message = message.replace(`$${index + 1}`, sub);
-            });
-          }
-          return message;
-        }
-
-        return translations[key] || key;
-      }),
-    hasMessage: vi.fn().mockReturnValue(true),
-    clearCache: vi.fn(),
-    getCurrentLocale: vi.fn().mockReturnValue("en"),
-    getAvailableLocales: vi.fn().mockReturnValue(["en", "id"]),
-  };
-
-  const I18nService = vi.fn().mockImplementation(() => mockI18nService);
-
-  return {
-    I18nService,
-    i18nService: mockI18nService,
-  };
-});
 
 // Mock iconoir-react icons
 vi.mock("iconoir-react", () => ({
