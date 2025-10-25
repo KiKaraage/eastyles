@@ -4,12 +4,12 @@
  * subdomains, URL prefixes, and regular expressions.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
 import {
   DomainDetector,
   UserCSSDomainDetector,
-} from "../../../services/usercss/domain-detector";
-import { DomainRule } from "../../../services/usercss/types";
+} from "@services/usercss/domain-detector";
+import { DomainRule } from "@services/usercss/types";
+import { beforeEach, describe, expect, it } from "vitest";
 
 describe("DomainDetector", () => {
   let detector: DomainDetector;

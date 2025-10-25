@@ -5,8 +5,6 @@
  * and provide informative error messages when validation fails.
  */
 
-import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import {
   AssetSchema,
   DomainRuleSchema,
@@ -19,7 +17,9 @@ import {
   validateDomainRules,
   validateStyleMeta,
   validateVariables,
-} from "../../../services/usercss/validators";
+} from "@services/usercss/validators";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 describe("UserCSS Type Validation", () => {
   describe("StyleMetaSchema", () => {

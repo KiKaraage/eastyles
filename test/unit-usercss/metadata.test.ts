@@ -5,12 +5,12 @@
  * including various edge cases and error conditions.
  */
 
-import { describe, expect, it } from "vitest";
 import {
   extractMetadataBlock,
   getPositionFromIndex,
   parseUserCSS,
-} from "../../../services/usercss/processor";
+} from "@services/usercss/processor";
+import { describe, expect, it } from "vitest";
 
 describe("UserCSS Metadata Parser", () => {
   describe("parseUserCSS", () => {

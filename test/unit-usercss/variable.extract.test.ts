@@ -100,7 +100,11 @@ describe("UserCSS Variable Extraction", () => {
           type: "select",
           default: "Arial",
           value: "Arial",
-          options: ["Arial", "Helvetica", "sans-serif"],
+          options: [
+            { value: "Arial", label: "Arial" },
+            { value: "Helvetica", label: "Helvetica" },
+            { value: "sans-serif", label: "sans-serif" },
+          ],
         },
       ]);
     });
@@ -180,7 +184,7 @@ describe("UserCSS Variable Extraction", () => {
   });
 
   describe("resolveVariables", () => {
-    it("should resolve variables with provided values", () => {
+    it("should resolve variables with provided values", async () => {
       const css = `
         body {
           background-color: /*[[--bg-color]]*/ #ffffff;
@@ -193,12 +197,12 @@ describe("UserCSS Variable Extraction", () => {
         "--text-color": "#ffffff",
       };
 
-      const result = resolveVariables(css, values);
+      const result = await resolveVariables(css, values);
       expect(result).toContain("#ff0000");
       expect(result).toContain("#ffffff");
     });
 
-    it("should use default values when no value is provided", () => {
+    it("should use default values when no value is provided", async () => {
       const css = `
         body {
           font-size: /*[[--font-size|number|16]]*/ 16px;
@@ -207,11 +211,11 @@ describe("UserCSS Variable Extraction", () => {
 
       const values = {};
 
-      const result = resolveVariables(css, values);
+      const result = await resolveVariables(css, values);
       expect(result).toContain("16");
     });
 
-    it("should preserve placeholder when no value or default is available", () => {
+    it("should preserve placeholder when no value or default is available", async () => {
       const css = `
         body {
           background-color: /*[[--bg-color]]*/ #ffffff;
@@ -220,7 +224,7 @@ describe("UserCSS Variable Extraction", () => {
 
       const values = {};
 
-      const result = resolveVariables(css, values);
+      const result = await resolveVariables(css, values);
       expect(result).toContain("/*[[--bg-color]]*/");
     });
   });

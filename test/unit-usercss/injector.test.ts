@@ -4,15 +4,20 @@
  * Tests all injection methods and fallback behavior
  */
 
+import { CSPError, UserCSSInjector } from "@services/usercss/css-injector";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browser } from "wxt/browser";
-import {
-  CSPError,
-  UserCSSInjector,
-} from "../../../services/usercss/css-injector";
 
 // Make CSPError available globally for instanceof checks
 (global as Record<string, unknown>).CSPError = CSPError;
+
+// Type helper for testing private injectionMethod
+type InjectorWithPrivateMethod = {
+  injectionMethod:
+    | "style-element"
+    | "constructable-stylesheet"
+    | "scripting-api";
+};
 
 // Mock browser API
 vi.mock("wxt/browser", () => ({
@@ -36,9 +41,13 @@ describe("UserCSSInjector", () => {
     documentElement: HTMLElement;
     adoptedStyleSheets?: CSSStyleSheet[];
     createElement: ReturnType<typeof vi.fn>;
+    querySelector: ReturnType<typeof vi.fn>;
   };
   let mockHead: {
     appendChild: ReturnType<typeof vi.fn>;
+    insertBefore: ReturnType<typeof vi.fn>;
+    querySelector: ReturnType<typeof vi.fn>;
+    querySelectorAll: ReturnType<typeof vi.fn>;
   };
 
   // Store original globals to restore them
@@ -56,6 +65,9 @@ describe("UserCSSInjector", () => {
     // Setup mock head element
     mockHead = {
       appendChild: vi.fn(),
+      insertBefore: vi.fn(),
+      querySelectorAll: vi.fn().mockReturnValue([]),
+      querySelector: vi.fn().mockReturnValue(null),
     };
 
     // Setup document mock with proper typing
@@ -63,6 +75,7 @@ describe("UserCSSInjector", () => {
       head: mockHead as unknown as HTMLElement,
       documentElement: mockHead as unknown as HTMLElement,
       adoptedStyleSheets: [],
+      querySelector: vi.fn().mockReturnValue(null),
       createElement: vi.fn().mockImplementation((tag: string) => {
         if (tag === "style") {
           return {
@@ -95,7 +108,7 @@ describe("UserCSSInjector", () => {
     } as unknown as CSSStyleSheet;
 
     // Set global mocks
-    Object.defineProperty(global, "document", {
+    Object.defineProperty(globalThis, "document", {
       value: mockDocument,
       writable: true,
       configurable: true,
@@ -114,7 +127,7 @@ describe("UserCSSInjector", () => {
 
   afterEach(() => {
     // Restore original globals
-    Object.defineProperty(global, "document", {
+    Object.defineProperty(globalThis, "document", {
       value: originalDocument,
       writable: true,
       configurable: true,
@@ -129,38 +142,27 @@ describe("UserCSSInjector", () => {
   });
 
   describe("Method Detection", () => {
-    it("should prefer constructable stylesheets when available", () => {
-      expect(injector.getInjectionMethod()).toBe("constructable-stylesheet");
+    it("should prefer style elements when document is available", () => {
+      expect(injector.getInjectionMethod()).toBe("style-element");
     });
 
-    it("should fallback to scripting API when constructable not available", () => {
-      // Remove adoptedStyleSheets support
-      const globalWithDocument = global as typeof global & {
-        document: { adoptedStyleSheets?: unknown[] };
-      };
-      delete (globalWithDocument.document as { adoptedStyleSheets?: unknown[] })
-        .adoptedStyleSheets;
+    it("should fallback to scripting API when document not available", () => {
+      // Remove document support
+      (global as unknown as { document: Document | null }).document = null;
 
       const injector = new UserCSSInjector();
       expect(injector.getInjectionMethod()).toBe("scripting-api");
     });
 
     it("should fallback to style element when no other methods available", () => {
-      // Remove adoptedStyleSheets and make browser unavailable
-      const globalWithDocument = global as typeof global & {
-        document: { adoptedStyleSheets?: unknown[] };
-      };
-      delete (globalWithDocument.document as { adoptedStyleSheets?: unknown[] })
-        .adoptedStyleSheets;
+      // Make document available, make browser unavailable
       const globalWithBrowser = global as typeof global & {
         browser?: unknown;
       };
       globalWithBrowser.browser = undefined;
 
       const injector = new UserCSSInjector();
-      // Since we have a mocked browser object, it will detect scripting API
-      // In real scenarios without browser, it would fallback to style-element
-      expect(injector.getInjectionMethod()).toBe("scripting-api");
+      expect(injector.getInjectionMethod()).toBe("style-element");
     });
   });
 
@@ -168,6 +170,10 @@ describe("UserCSSInjector", () => {
     it("should inject CSS using constructable stylesheets", async () => {
       const css = "body { color: red; }";
       const styleId = "test-style";
+
+      // Force constructable method for this test
+      (injector as unknown as InjectorWithPrivateMethod).injectionMethod =
+        "constructable-stylesheet";
 
       await injector.inject(css, styleId);
 
@@ -250,6 +256,10 @@ describe("UserCSSInjector", () => {
 
       injector = new UserCSSInjector();
 
+      // Force scripting API method for this test
+      (injector as unknown as InjectorWithPrivateMethod).injectionMethod =
+        "scripting-api";
+
       // Restore CSSStyleSheet after injector creation
       Object.defineProperty(global, "CSSStyleSheet", {
         value: originalCSSStyleSheet,
@@ -294,6 +304,10 @@ describe("UserCSSInjector", () => {
       const css = "body { color: red; }";
       const styleId = "test-style";
 
+      // Force constructable method for this test
+      (injector as unknown as InjectorWithPrivateMethod).injectionMethod =
+        "constructable-stylesheet";
+
       await injector.inject(css, styleId);
       await injector.remove(styleId);
 
@@ -335,6 +349,10 @@ describe("UserCSSInjector", () => {
       const css2 = "body { color: blue; }";
       const styleId = "test-style";
 
+      // Force constructable method for this test
+      (injector as unknown as InjectorWithPrivateMethod).injectionMethod =
+        "constructable-stylesheet";
+
       await injector.inject(css1, styleId);
       await injector.update(styleId, css2);
 
@@ -373,7 +391,7 @@ describe("UserCSSInjector", () => {
 
       await injector.update(styleId, css);
 
-      expect(mockDocument.adoptedStyleSheets).toHaveLength(1);
+      expect(mockDocument.createElement).toHaveBeenCalledWith("style");
     });
   });
 
@@ -392,6 +410,10 @@ describe("UserCSSInjector", () => {
       const css2 = "body { color: blue; }";
       const styleId1 = "test-style-1";
       const styleId2 = "test-style-2";
+
+      // Force constructable method for this test
+      (injector as unknown as InjectorWithPrivateMethod).injectionMethod =
+        "constructable-stylesheet";
 
       // Start multiple injections
       const promise1 = injector.inject(css1, styleId1);
@@ -424,7 +446,7 @@ describe("UserCSSInjector", () => {
       performanceSpy.mockImplementation(() => {
         callCount++;
         if (callCount === 1) return 0; // Start time
-        if (callCount === 2) return 250; // End time - exceeds 200ms budget
+        if (callCount === 2) return 1500; // End time - exceeds 1000ms budget
         return callCount * 50;
       });
 
@@ -475,6 +497,10 @@ describe("UserCSSInjector", () => {
       const css2 = "body { color: blue; }";
       const styleId = "test-style";
 
+      // Force constructable method for this test
+      (injector as unknown as InjectorWithPrivateMethod).injectionMethod =
+        "constructable-stylesheet";
+
       // Start an injection (will be batched)
       injector.inject(css1, styleId);
 
@@ -491,6 +517,10 @@ describe("UserCSSInjector", () => {
     it("should allow manual batch flushing", async () => {
       const css = "body { color: red; }";
       const styleId = "test-style";
+
+      // Force constructable method for this test
+      (injector as unknown as InjectorWithPrivateMethod).injectionMethod =
+        "constructable-stylesheet";
 
       // Start an injection (will be batched)
       const promise = injector.inject(css, styleId);

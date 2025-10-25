@@ -1,5 +1,5 @@
+import { detectPreprocessor } from "@services/usercss/preprocessor";
 import { describe, expect, it } from "vitest";
-import { detectPreprocessor } from "../../../services/usercss/preprocessor";
 
 describe("detectPreprocessor", () => {
   describe("explicit metadata tag", () => {

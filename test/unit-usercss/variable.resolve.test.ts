@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 describe("UserCSS Variable Resolution", () => {
   describe("resolveVariables", () => {
-    it("should resolve variables with provided values", () => {
+    it("should resolve variables with provided values", async () => {
       const css = `
         body {
           background-color: /*[[--bg-color]]*/ #ffffff;
@@ -22,13 +22,13 @@ describe("UserCSS Variable Resolution", () => {
         "--text-color": "#ffffff",
       };
 
-      const result = resolveVariables(css, values);
+      const result = await resolveVariables(css, values);
       expect(result).not.toContain("/*[[");
       expect(result).toContain("#ff0000");
       expect(result).toContain("#ffffff");
     });
 
-    it("should use default values from annotations when no value is provided", () => {
+    it("should use default values from annotations when no value is provided", async () => {
       const css = `
         body {
           font-size: /*[[--font-size|number|16]]*/ 16px;
@@ -37,12 +37,12 @@ describe("UserCSS Variable Resolution", () => {
 
       const values = {};
 
-      const result = resolveVariables(css, values);
+      const result = await resolveVariables(css, values);
       expect(result).toContain("16");
       expect(result).not.toContain("/*[[");
     });
 
-    it("should preserve placeholder when no value or default is available", () => {
+    it("should preserve placeholder when no value or default is available", async () => {
       const css = `
         body {
           background-color: /*[[--bg-color]]*/ #ffffff;
@@ -51,7 +51,7 @@ describe("UserCSS Variable Resolution", () => {
 
       const values = {};
 
-      const result = resolveVariables(css, values);
+      const result = await resolveVariables(css, values);
       expect(result).toContain("/*[[--bg-color]]*/");
     });
 
@@ -89,7 +89,7 @@ describe("UserCSS Variable Resolution", () => {
       expect(result1).toEqual(result2);
     });
 
-    it("should only replace touched variables when doing scoped regeneration", () => {
+    it("should only replace touched variables when doing scoped regeneration", async () => {
       // This test verifies that we could implement efficient partial updates
       const css = `
         body {
@@ -104,7 +104,7 @@ describe("UserCSS Variable Resolution", () => {
         // --text-color not provided, should remain as placeholder
       };
 
-      const result = resolveVariables(css, values);
+      const result = await resolveVariables(css, values);
       expect(result).toContain("#ff0000");
       expect(result).toContain("/*[[--text-color]]*/");
     });

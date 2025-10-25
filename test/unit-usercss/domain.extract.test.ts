@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 /**
  * UserCSS Domain Rule Extraction Tests
  *
