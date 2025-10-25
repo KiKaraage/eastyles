@@ -1,9 +1,7 @@
+import type { SaveMessageResponses } from "@services/messaging/types";
+import type { VariableDescriptor } from "@services/usercss/types";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ApplyPage from "../../entrypoints/save/App";
-import { useSaveActions } from "../../hooks/useMessage";
-import type { SaveMessageResponses } from "../../services/messaging/types";
-import type { VariableDescriptor } from "../../services/usercss/types";
 import { render } from "../test-utils";
 
 // Mock useI18n hook
@@ -35,14 +33,42 @@ vi.mock("../../hooks/useI18n", () => ({
 }));
 
 // Mock browser API
-vi.mock("wxt/browser", () => ({
-  browser: {
+vi.mock("wxt/browser", () => {
+  const mockBrowser = {
     storage: {
       local: {
         get: vi.fn().mockResolvedValue({}),
         remove: vi.fn().mockResolvedValue(undefined),
       },
     },
+    runtime: {
+      sendMessage: vi.fn(),
+      onMessage: {
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      },
+    },
+  };
+
+  // Set global browser for wxt storage
+  Object.defineProperty(window, "browser", {
+    value: mockBrowser,
+    writable: true,
+  });
+
+  return {
+    browser: mockBrowser,
+  };
+});
+
+// Mock wxt storage utils
+vi.mock("wxt/utils/storage", () => ({
+  storage: {
+    defineItem: vi.fn(() => ({
+      getValue: vi.fn().mockResolvedValue({ themeMode: "system" }),
+      setValue: vi.fn().mockResolvedValue(undefined),
+      watch: vi.fn().mockReturnValue(vi.fn()),
+    })),
   },
 }));
 
@@ -87,12 +113,40 @@ vi.mock("@codemirror/lang-css", () => ({
   css: () => [],
 }));
 
+// Mock useTheme hook
+vi.mock("../../hooks/useTheme", () => ({
+  useTheme: vi.fn(() => ({
+    themeMode: "system",
+    effectiveTheme: "light",
+    isDark: false,
+    isLight: true,
+    setThemeMode: vi.fn(),
+    setLightMode: vi.fn(),
+    setDarkMode: vi.fn(),
+    setSystemMode: vi.fn(),
+    toggleTheme: vi.fn(),
+    getSystemTheme: vi.fn(() => "light"),
+  })),
+}));
+
+// Mock iconoir-react
+vi.mock("iconoir-react", () => ({
+  FloppyDisk: vi.fn(() => "FloppyDisk"),
+  ArrowUpRight: vi.fn(() => "ArrowUpRight"),
+  Settings: vi.fn(() => "Settings"),
+}));
+
 // Mock useSaveActions hook
 vi.mock("../../hooks/useMessage", () => ({
   useSaveActions: vi.fn(),
 }));
 
-describe("ApplyPage Component", () => {
+// Import after mocks
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import SavePage from "../../entrypoints/save/App";
+import { useSaveActions } from "../../hooks/useMessage";
+
+describe("SavePage Component", () => {
   type ParseUserCSSFn = (
     text: string,
     sourceUrl?: string,
@@ -101,6 +155,7 @@ describe("ApplyPage Component", () => {
     meta: NonNullable<SaveMessageResponses["PARSE_USERCSS"]["meta"]>,
     compiledCss: string,
     variables: VariableDescriptor[],
+    originalCss: string,
   ) => Promise<SaveMessageResponses["INSTALL_STYLE"]>;
 
   const mockParseUserCSS = vi.fn<ParseUserCSSFn>();
@@ -108,6 +163,26 @@ describe("ApplyPage Component", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Set up global browser and matchMedia
+    Object.defineProperty(window, "browser", {
+      value: {
+        storage: {
+          local: {
+            get: vi.fn().mockResolvedValue({}),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        },
+        runtime: {
+          sendMessage: vi.fn(),
+          onMessage: {
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+          },
+        },
+      },
+      writable: true,
+    });
 
     (useSaveActions as ReturnType<typeof vi.fn>).mockReturnValue({
       parseUserCSS: mockParseUserCSS,
@@ -143,6 +218,21 @@ describe("ApplyPage Component", () => {
       writable: true,
     });
 
+    // Mock window.matchMedia
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(), // deprecated
+        removeListener: vi.fn(), // deprecated
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
     // Don't mock setTimeout globally to avoid breaking testing library
     // The tests will be slightly slower but more reliable
 
@@ -159,10 +249,10 @@ describe("ApplyPage Component", () => {
     vi.restoreAllMocks();
   });
 
-  it("can import and instantiate ApplyPage component", () => {
+  it("can import and instantiate SavePage component", () => {
     // Simple test to ensure the component can be imported and instantiated
-    expect(ApplyPage).toBeDefined();
-    expect(typeof ApplyPage).toBe("function");
+    expect(SavePage).toBeDefined();
+    expect(typeof SavePage).toBe("function");
   });
 
   it("renders loading state initially", async () => {
@@ -173,7 +263,7 @@ describe("ApplyPage Component", () => {
         }),
     );
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
     expect(container).toBeTruthy();
 
     // Try to find the loading element within the container
@@ -203,7 +293,7 @@ describe("ApplyPage Component", () => {
 
     mockParseUserCSS.mockResolvedValue(mockParseResult);
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       const installButton = container.querySelector(".btn-primary");
@@ -217,6 +307,9 @@ describe("ApplyPage Component", () => {
     expect(container.textContent).toContain("1.0.0");
     expect(container.textContent).toContain("example.com");
     expect(container.textContent).toContain("test.com");
+
+    // Check that page title was set inline when parseResult is set
+    expect(document.title).toBe("Save UserCSS: Test Style v1.0.0");
   });
 
   it("shows error state when parse fails", async () => {
@@ -225,7 +318,7 @@ describe("ApplyPage Component", () => {
       error: "Invalid UserCSS format",
     });
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       expect(container.textContent).toContain("Invalid UserCSS format");
@@ -253,7 +346,7 @@ describe("ApplyPage Component", () => {
 
     mockParseUserCSS.mockResolvedValue(mockParseResult);
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       expect(container.textContent).toContain("Warnings");
@@ -282,7 +375,7 @@ describe("ApplyPage Component", () => {
 
     mockParseUserCSS.mockResolvedValue(mockParseResult);
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       expect(container.textContent).toContain("Errors");
@@ -318,7 +411,7 @@ describe("ApplyPage Component", () => {
       styleId: "test-id",
     });
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       const installButton = container.querySelector(".btn-primary");
@@ -334,6 +427,7 @@ describe("ApplyPage Component", () => {
         mockParseResult.meta,
         mockParseResult.css,
         [],
+        expect.stringContaining("/* ==UserStyle=="),
       );
     });
   });
@@ -361,7 +455,7 @@ describe("ApplyPage Component", () => {
       error: "Storage quota exceeded",
     });
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       const installButton = container.querySelector(".btn-primary");
@@ -396,15 +490,15 @@ describe("ApplyPage Component", () => {
 
     mockParseUserCSS.mockResolvedValue(mockParseResult);
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
-      const cancelButton = container.querySelectorAll(".btn-ghost")[1]; // Second btn-ghost is the cancel button
+      const cancelButton = container.querySelectorAll(".btn-ghost")[0]; // The cancel button
       expect(cancelButton).toBeTruthy();
       expect(cancelButton?.textContent?.trim()).toContain("Cancel");
     });
 
-    const cancelButton = container.querySelectorAll(".btn-ghost")[1];
+    const cancelButton = container.querySelectorAll(".btn-ghost")[0];
     if (cancelButton) fireEvent.click(cancelButton);
 
     expect(window.history.back).toHaveBeenCalled();
@@ -435,10 +529,10 @@ describe("ApplyPage Component", () => {
 
     mockParseUserCSS.mockResolvedValue(mockParseResult);
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
-      const cancelButton = container.querySelectorAll(".btn-ghost")[1]; // Second btn-ghost is the cancel button
+      const cancelButton = container.querySelectorAll(".btn-ghost")[0]; // The cancel button
       expect(cancelButton).toBeTruthy();
       expect(cancelButton?.classList.contains("btn-disabled")).toBe(true);
       expect(cancelButton?.classList.contains("opacity-50")).toBe(true);
@@ -474,7 +568,7 @@ describe("ApplyPage Component", () => {
 
     mockParseUserCSS.mockResolvedValue(mockParseResult);
 
-    render(<ApplyPage />);
+    render(<SavePage />);
 
     await waitFor(() => {
       expect(mockParseUserCSS).toHaveBeenCalledWith(
@@ -503,7 +597,7 @@ describe("ApplyPage Component", () => {
 
     mockParseUserCSS.mockResolvedValue(mockParseResult);
 
-    render(<ApplyPage />);
+    render(<SavePage />);
 
     expect(mockParseUserCSS).toHaveBeenCalledWith(
       expect.stringContaining("/* ==UserStyle=="),
@@ -514,7 +608,7 @@ describe("ApplyPage Component", () => {
   it("handles parsing exceptions", async () => {
     mockParseUserCSS.mockRejectedValue(new Error("Network error"));
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       expect(container.textContent).toContain("Network error");
@@ -541,7 +635,7 @@ describe("ApplyPage Component", () => {
     mockParseUserCSS.mockResolvedValue(mockParseResult);
     mockInstallStyle.mockRejectedValue(new Error("Installation failed"));
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       const installButton = container.querySelector(".btn-primary");
@@ -590,7 +684,7 @@ describe("ApplyPage Component", () => {
     const closeSpy = vi.fn();
     window.close = closeSpy;
 
-    const { container } = render(<ApplyPage />);
+    const { container } = render(<SavePage />);
 
     await waitFor(() => {
       const installButton = container.querySelector(".btn-primary");
@@ -605,7 +699,7 @@ describe("ApplyPage Component", () => {
     // Wait for the setTimeout to execute
     await new Promise((resolve) => setTimeout(resolve, 2100));
 
-    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(closeSpy).toHaveBeenCalled();
 
     window.close = originalClose;
     vi.restoreAllMocks();

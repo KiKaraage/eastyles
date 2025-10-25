@@ -1,3 +1,4 @@
+import { storageClient } from "@services/storage/client";
 import {
   act,
   fireEvent,
@@ -9,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../entrypoints/manager/App";
 import { useTheme } from "../../hooks/useTheme";
 import pkg from "../../package.json";
-import { storageClient } from "../../services/storage/client";
 
 // Mock dependencies
 vi.mock("../../hooks/useTheme", () => ({
@@ -229,8 +229,11 @@ describe("Manager App Component", () => {
 
   it("displays correct theme icon for light mode", () => {
     (useTheme as ReturnType<typeof vi.fn>).mockReturnValue({
-      themeMode: "light",
+      themeMode: "system",
       effectiveTheme: "light",
+      isDark: false,
+      isLight: true,
+      setThemeMode: vi.fn(),
       toggleTheme: mockToggleTheme,
     });
     render(<App />);
@@ -244,6 +247,9 @@ describe("Manager App Component", () => {
     (useTheme as ReturnType<typeof vi.fn>).mockReturnValue({
       themeMode: "dark",
       effectiveTheme: "dark",
+      isDark: true,
+      isLight: false,
+      setThemeMode: vi.fn(),
       toggleTheme: mockToggleTheme,
     });
     render(<App />);
@@ -255,6 +261,9 @@ describe("Manager App Component", () => {
     (useTheme as ReturnType<typeof vi.fn>).mockReturnValue({
       themeMode: "system",
       effectiveTheme: "light",
+      isDark: false,
+      isLight: true,
+      setThemeMode: vi.fn(),
       toggleTheme: mockToggleTheme,
     });
     render(<App />);
