@@ -6,7 +6,10 @@
     "useIgnoreFile": true,
     "defaultBranch": "main"
   },
-  "files": { "ignoreUnknown": false },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": ["**", "!.ai/**"]
+  },
   "formatter": { "enabled": true, "indentStyle": "space" },
   "linter": {
     "enabled": true,

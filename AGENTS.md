@@ -63,6 +63,49 @@ This project uses Biome for comprehensive linting. Key rules include:
 - Use optional chaining (`?.`)
 - Exhaustive dependencies in React hooks
 
+## React Performance Guidelines
+
+### useEffect Optimization
+- **Eliminate redundant useEffects**: Combine related side effects or move them inline
+- **Split complex useEffects**: Separate initialization from ongoing watching
+- **Optimize dependency arrays**: Only include truly necessary dependencies
+- **Prefer computed values**: Calculate values during render instead of useEffect + state
+- **Move inline operations**: Simple side effects don't need useEffect
+
+### Common useEffect Patterns
+❌ **AVOID**: useEffect for simple value calculations
+```typescript
+useEffect(() => {
+  setComputedValue(a + b);
+}, [a, b]);
+```
+
+✅ **PREFER**: Direct computation during render
+```typescript
+const computedValue = a + b;
+```
+
+❌ **AVOID**: Redundant initialization effects
+```typescript
+useEffect(() => {
+  loadData();
+}, [loadData]);
+```
+
+✅ **PREFER**: Direct call or optimized initialization
+```typescript
+useEffect(() => {
+  loadData();
+}, []); // Remove dependency if stable
+```
+
+### useEffect Testing
+- Test effect cleanup functions
+- Mock timers for interval-based effects
+- Verify dependency array correctness
+- Test effect runs only when expected
+- Use `vi.advanceTimersByTime()` for time-based effects
+
 ## Common Pitfalls
 
 1. Keep `entrypoints/` flat
@@ -70,6 +113,24 @@ This project uses Biome for comprehensive linting. Key rules include:
 3. Use type guards for storage reads
 4. Be aware of CSP restrictions for CSS injection
 5. Handle non-persistent background script initialization
+6. **useEffect overuse**: Not every side effect needs useEffect
+7. **Dependency array bloat**: Including stable functions causes unnecessary re-runs
+8. **Missing cleanup**: Forgetting to return cleanup functions
+9. **Infinite loops**: Effects that trigger their own dependencies
+10. **Regex state issues**: Avoid using `regex.exec()` in loops with global flags, as it maintains internal state that can cause infinite loops or missed matches
+
+## Performance Monitoring
+
+Enable React DevTools Profiler to identify:
+- Unnecessary re-renders
+- Expensive render operations
+- useEffect frequency analysis
+- Component mount/unmount patterns
+
+Use debug mode with React profiling:
+```bash
+NODE_ENV=development REACT_DEBUG=true bun dev
+```
 
 ## Debugging
 
@@ -86,7 +147,8 @@ This enables verbose logging, error reporting, performance monitoring, and messa
 3. Set up global `browser` object
 4. Mock async operations in `useEffect`
 5. Account for timing issues in loading states
-6. Maintain Type Safety in Test Environments
+6. **Async/Await Testing**: Always make test functions `async` when calling async functions, and use `await` to get resolved values instead of checking Promise objects
+7. Maintain Type Safety in Test Environments
    - Provide module declarations for mocked external dependencies (e.g., `wxt/browser`, `wxt/utils/storage`) to prevent TypeScript resolution errors.
    - Use explicit types (`unknown` with guards) instead of `any` for mock parameters and async operations to maintain strict type checking.
    - Ensure mock implementations avoid linting violations, such as adding comments to empty blocks in arrow functions to satisfy rules like `suspicious/noEmptyBlock`.
@@ -141,6 +203,53 @@ while (true) {
   if (match === null) break;
   // process match...
 }
+```
+
+🔢 **BETTER**: Use `matchAll()` for modern, safer regex iteration
+```typescript
+// Using matchAll() - no state management required
+for (const match of text.matchAll(regex)) {
+  // process match...
+}
+
+// Or convert to array for multiple passes
+const matches = Array.from(text.matchAll(regex));
+```
+
+#### regex/avoidGlobalExec - Regex State Management
+**Rule**: Avoid using `regex.exec()` with global flags in loops as it maintains internal state.
+
+❌ BAD:
+```typescript
+const regex = /pattern/g;
+let match = regex.exec(text);
+while (match !== null) {
+  // Can cause infinite loops or miss matches
+  match = regex.exec(text);
+}
+```
+
+✅ PREFER:
+```typescript
+// Method 1: Using matchAll() (recommended)
+for (const match of text.matchAll(/pattern/g)) {
+  // Process match
+}
+
+// Method 2: Traditional while loop without global flag
+const regex = /pattern/;
+let match = regex.exec(text);
+while (match !== null) {
+  // Process match
+  regex.lastIndex = 0; // Reset state
+  match = regex.exec(text);
+}
+
+// Method 3: Convert to array
+const matches = Array.from(text.matchAll(/pattern/g));
+matches.forEach(match => {
+  // Process match
+});
 ```
 
 #### style/useTemplate - Template Literals
