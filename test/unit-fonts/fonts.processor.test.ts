@@ -1,10 +1,10 @@
-import type { Mock } from "vitest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   extractFontFaces,
   injectFonts,
   resolveFontVariables,
-} from "../../../services/usercss/fonts";
+} from "@services/usercss/fonts";
+import type { Mock } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Font Processing", () => {
   describe("extractFontFaces", () => {

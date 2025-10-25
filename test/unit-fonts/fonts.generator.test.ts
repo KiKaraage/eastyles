@@ -2,8 +2,8 @@
  * Font UserCSS Generator Tests
  */
 
+import { FontUserCSSGenerator } from "@services/usercss/font-usercss-generator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FontUserCSSGenerator } from "../../../services/usercss/font-usercss-generator";
 
 describe("FontUserCSSGenerator", () => {
   let generator: FontUserCSSGenerator;

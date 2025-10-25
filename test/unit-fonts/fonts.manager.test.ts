@@ -2,8 +2,8 @@
  * Font UserCSS Manager Tests
  */
 
+import { FontUserCSSManager } from "@services/usercss/font-usercss-manager";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FontUserCSSManager } from "../../../services/usercss/font-usercss-manager";
 
 describe("FontUserCSSManager", () => {
   let manager: FontUserCSSManager;
