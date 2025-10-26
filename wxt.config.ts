@@ -4,8 +4,14 @@ import { defineConfig } from "wxt";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: ["@wxt-dev/module-react", "@wxt-dev/webextension-polyfill"],
+  modules: [
+    "@wxt-dev/module-react",
+    "@wxt-dev/webextension-polyfill",
+    "@wxt-dev/i18n/module",
+  ],
   manifest: {
+    name: "__MSG_appName__",
+    description: "__MSG_appDescription__",
     permissions: ["storage", "contextMenus", "tabs"],
     default_locale: "en",
     browser_specific_settings: {
@@ -15,14 +21,14 @@ export default defineConfig({
     },
     commands: {
       "open-manager": {
-        description: "Open style manager",
+        description: "__MSG_manageStyles__",
       },
     },
     options_ui: {
       page: "/manager.html",
     },
     action: {
-      default_title: "Apply styles to this site",
+      default_title: "__MSG_appName__",
       default_popup: "popup.html",
       default_icon: {
         "16": "icon/16.png",

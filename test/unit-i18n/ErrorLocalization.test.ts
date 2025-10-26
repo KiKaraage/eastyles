@@ -14,8 +14,18 @@ import {
   StorageInvalidDataError,
   StorageQuotaExceededError,
 } from "@services/errors/service";
-import { i18nService } from "@services/i18n/service";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Create a mock function that can be hoisted
+const mockI18nT = vi.hoisted(() => vi.fn());
+
+// Mock the @wxt-dev/i18n module BEFORE importing I18nService
+vi.mock("@wxt-dev/i18n", () => ({
+  createI18n: vi.fn(() => ({
+    t: mockI18nT,
+  })),
+}));
+import { i18nService } from "@services/i18n/service";
 
 beforeEach(() => {
   // Get the mocks from global.browser
@@ -60,6 +70,17 @@ beforeEach(() => {
       }
 
       return message;
+    },
+  );
+
+  // Set up the i18n.t mock to return the same as browser.i18n.getMessage
+  mockI18nT.mockImplementation(
+    (
+      key: string,
+      substitutions?: string | string[] | number,
+      _options?: Record<string, unknown>,
+    ) => {
+      return mockGetMessage(key, substitutions as string | string[]);
     },
   );
 

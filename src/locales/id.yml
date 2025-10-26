@@ -1,0 +1,108 @@
+# App Information
+appName: Eastyles
+appDescription: Atur gaya webmu dengan mudah
+
+# UI Labels
+stylesFor: Gaya untuk
+manageStyles: Kelola Gaya
+settings: Pengaturan
+addNewStyle: Tambah Gaya Baru
+saveButton: Simpan Gaya
+cancelButton: Batal
+closeButton: Tutup
+applyButton: Terapkan
+applying: Menerapkan...
+applyToSiteButton: Terapkan ke Situs
+removeButton: Hapus Gaya
+configureButton: Atur
+deleteButton: Hapus
+loading: Memuat...
+
+# Status Messages
+warning: Peringatan
+error: Gagal
+success: Berhasil
+styleInstalled: Gaya berhasil disimpan
+styleRemoved: Gaya berhasil hapus
+styleDeleted: Gaya berhasil hapus
+noStylesFound: Tidak ada gaya tersedia
+dragDropHint: SerET dan lepas file .user.css di sini
+orClickToBrowse: atau klik untuk menelusuri
+
+# Style Information
+styleName: Nama Gaya
+styleDescription: Deskripsi
+author: Pencipta
+version: Versi
+domains: Domain
+variables: Variabel
+enabled: Aktif
+disabled: Tidak Aktif
+lastUpdated: Terakhir Diperbarui
+installDate: Tanggal Pemasangan
+
+# Font Management
+font_apply: Terapkan Font
+font_tabs_builtin: Font Bawaan
+font_tabs_custom: Font Kustom
+font_builtin_description: Pilih dari koleksi font yang telah dipilih dengan hati-hati
+font_custom_description: Masukkan nama font yang terinstall di sistem Anda
+font_custom_inputLabel: Nama Font
+font_custom_placeholder: "contoh: Arial, Times New Roman, Comic Sans MS"
+font_custom_checkButton: Periksa
+font_custom_previewLabel: Pratinjau
+font_custom_available: Font tersedia dan siap digunakan
+font_custom_notAvailable: Font tidak ditemukan di sistem Anda
+font_categories_sans_serif: Sans Serif
+font_categories_serif: Serif
+font_categories_monospace: Monospace
+font_categories_display: Display
+font_categories_handwriting: Tulisan Tangan
+font_error_emptyName: Silakan masukkan nama font
+font_error_selectFont: Silakan pilih font
+font_error_notAvailable: "Font '$1' tidak tersedia di sistem Anda"
+font_error_checkFailed: Gagal memeriksa ketersediaan font
+font_error_parseFailed: Gagal memproses gaya font
+font_error_installFailed: Gagal menginstall gaya font
+font_error_applyFailed: Gagal menerapkan font
+font_applied: "Font '$1' berhasil diterapkan"
+font_createFontStyle: Buat Gaya Font
+font_editStyle: Ubah Gaya Font
+font_selectLabel: Pilih Font
+font_selectPlaceholder: Pilih font...
+font_applyButton: Terapkan Font
+
+# Color Management
+colors_apply: Terapkan Warna
+
+# Style Manager
+manager_addUserCss: Tambahkan UserCSS
+
+# Installation
+installSuccess: "Gaya '$1' berhasil diinstall"
+installing: Menginstall...
+savingToEastyles: Simpan ke Eastyles
+styleInformation: Informasi Gaya
+targetDomains: Domain Target
+noSpecificDomains: Tidak ada domain spesifik yang terdeteksi
+codePreview: Pratinjau Kode
+codePreviewDescription: Menampilkan konten UserCSS lengkap termasuk metadata blok dengan variabel dan aturan CSS.
+installationError: Kesalahan Instalasi
+noUserCssContentOrUrl: Tidak ada konten UserCSS atau URL yang diberikan
+loadingUserCss: Memuat UserCSS...
+failedToLoadUserCss: Gagal memuat UserCSS
+
+# Errors
+ERR_STORAGE_QUOTA: Kapasitas penyimpanan terlampaui. Silakan hapus beberapa gaya untuk membebaskan ruang.
+ERR_STORAGE_INVALID_DATA: "Data penyimpanan tidak valid: $1"
+ERR_MESSAGE_TIMEOUT: "Waktu tunggu habis setelah $1 percobaan: $2"
+ERR_MESSAGE_INVALID: "Pesan tidak valid: $1"
+ERR_FILE_FORMAT_INVALID: "Format file $2 tidak valid. Hanya file berformat $1 yang dapat diterima"
+ERR_DATA_CORRUPTED: "Data rusak: $1"
+ERR_BROWSER_API: "Kesalahan API browser di $1.$2: $3"
+ERR_PERMISSION_DENIED: "Izin ditolak: $1"
+ERR_PARSE_METADATA: Gagal mengurai metadata gaya
+ERR_PREPROCESSOR_COMPILE: Gagal mengkompilasi kode preprosesor
+ERR_INJECTION_CSP: Kebijakan Keamanan Konten (CSP) memblokir injeksi gaya
+ERR_PERMISSION_REQUIRED: "Izin diperlukan: $1"
+ERR_FONT_LOAD: "Gagal memuat font: $1"

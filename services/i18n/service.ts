@@ -1,7 +1,11 @@
 /**
  * Internationalization service for Eastyles
- * Uses browser.i18n API for localization
+ * Uses @wxt-dev/i18n module with browser.i18n API for localization
  */
+
+import { createI18n } from "@wxt-dev/i18n";
+
+export const i18n = createI18n();
 
 export interface I18nMessage {
   message: string;
@@ -28,7 +32,7 @@ export class I18nService {
   }
 
   /**
-   * Get a localized message by key
+   * Get a localized message by key using @wxt-dev/i18n
    */
   t(key: string, substitutions?: string | string[]): string {
     // Check cache first
@@ -38,17 +42,48 @@ export class I18nService {
     }
 
     try {
-      // Use browser.i18n API
-      const message = browser.i18n.getMessage(key, substitutions);
+      // Use the new @wxt-dev/i18n module
+      // The second argument can be a count or array of substitutions
+      let message: string;
 
-      // If message is empty, try fallback
-      if (!message) {
-        const fallbackMessage = browser.i18n.getMessage(key, substitutions);
-        if (fallbackMessage) {
-          this.cache.set(cacheKey, fallbackMessage);
-          return fallbackMessage;
+      if (Array.isArray(substitutions)) {
+        // Handle array substitutions based on length to match expected tuple types
+        if (substitutions.length === 1) {
+          message = i18n.t(key, [substitutions[0]]);
+        } else if (substitutions.length === 2) {
+          message = i18n.t(key, [substitutions[0], substitutions[1]]);
+        } else if (substitutions.length === 3) {
+          message = i18n.t(key, [
+            substitutions[0],
+            substitutions[1],
+            substitutions[2],
+          ]);
+        } else if (substitutions.length === 9) {
+          message = i18n.t(key, [
+            substitutions[0],
+            substitutions[1],
+            substitutions[2],
+            substitutions[3],
+            substitutions[4],
+            substitutions[5],
+            substitutions[6],
+            substitutions[7],
+            substitutions[8],
+          ]);
+        } else {
+          // For other lengths, pass the first substitution separately
+          message = i18n.t(key, [substitutions[0]]);
         }
-        // Return key as fallback if no translation found
+      } else if (typeof substitutions === "number") {
+        message = i18n.t(key, substitutions);
+      } else if (substitutions) {
+        message = i18n.t(key, [substitutions]);
+      } else {
+        message = i18n.t(key);
+      }
+
+      // If message equals the key, translation might be missing
+      if (message === key) {
         console.warn(`[ea-i18n] Missing translation for key: ${key}`);
         return key;
       }
@@ -65,12 +100,13 @@ export class I18nService {
   }
 
   /**
-   * Check if a message exists for the given key
+   * Check if a message exists for the given key using @wxt-dev/i18n
    */
   hasMessage(key: string): boolean {
     try {
-      const message = browser.i18n.getMessage(key);
-      return Boolean(message);
+      const message = i18n.t(key);
+      // If the translation equals the key, it's likely missing
+      return message !== key || key === "";
     } catch {
       return false;
     }

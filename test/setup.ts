@@ -628,8 +628,6 @@ vi.mock("@services/errors/service", async () => {
   };
 });
 
-
-
 // Mock iconoir-react icons
 vi.mock("iconoir-react", () => ({
   SunLight: () => React.createElement("div", { "data-testid": "sun-icon" }),
@@ -649,10 +647,14 @@ vi.mock("iconoir-react", () => ({
     React.createElement("div", { "data-testid": "text-size-icon" }),
   ArrowLeft: () =>
     React.createElement("div", { "data-testid": "arrow-left-icon" }),
+  ArrowUpRight: () =>
+    React.createElement("div", { "data-testid": "arrow-up-right-icon" }),
   Check: () => React.createElement("div", { "data-testid": "check-icon" }),
   Palette: () => React.createElement("div", { "data-testid": "palette-icon" }),
   ViewGrid: () =>
     React.createElement("div", { "data-testid": "view-grid-icon" }),
+  FloppyDisk: () =>
+    React.createElement("div", { "data-testid": "floppy-disk-icon" }),
 }));
 
 // Mock the wxt/browser module
