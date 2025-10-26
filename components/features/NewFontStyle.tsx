@@ -22,20 +22,9 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
   const allBuiltInFonts = fontRegistry.getBuiltInFonts();
   const isCustomFont =
     selectedFont && !allBuiltInFonts.some((font) => font.name === selectedFont);
-  const [customFontName, setCustomFontName] = useState(
-    isCustomFont ? selectedFont : "",
-  );
+  // Calculate customFontName during rendering instead of using useEffect
+  const customFontName = isCustomFont ? selectedFont : "";
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  // Clear custom font name when switching to built-in font
-  useEffect(() => {
-    if (
-      selectedFont &&
-      allBuiltInFonts.some((font) => font.name === selectedFont)
-    ) {
-      setCustomFontName("");
-    }
-  }, [selectedFont, allBuiltInFonts]);
 
   // Load font CSS for preview
   useEffect(() => {
