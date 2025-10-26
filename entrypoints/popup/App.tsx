@@ -121,7 +121,7 @@ const App = () => {
         console.error("[ea-Popup] Failed to get styles:", error);
       }
     },
-    [state.currentTab?.url, sendMessage],
+    [sendMessage, state.currentTab?.url],
   );
 
   // Load styles and current tab info on popup open
@@ -189,6 +189,7 @@ const App = () => {
     };
 
     loadPopupData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadStyles]);
 
   // Helper function to close popup
@@ -210,6 +211,7 @@ const App = () => {
 
   const handleOpenFontSelector = () => {
     setState((prev) => ({ ...prev, currentPage: "newFontStyle" }));
+    setFontDomain(getCurrentDomain());
   };
 
   const handleCloseFontSelector = () => {
@@ -267,7 +269,7 @@ const App = () => {
   };
 
   // Extract current domain for auto-filling
-  const getCurrentDomain = useCallback((): string => {
+  const getCurrentDomain = (): string => {
     if (!state.currentTab?.url) return "";
     try {
       if (
@@ -281,7 +283,7 @@ const App = () => {
     } catch {
       return "";
     }
-  }, [state.currentTab]);
+  };
 
   // Font style creation state
   const [fontDomain, setFontDomain] = useState("");
@@ -307,13 +309,6 @@ const App = () => {
         state.currentTab.url.startsWith("about:") ||
         state.currentTab.url.startsWith("chrome-extension://")),
   );
-
-  // Update font domain when current tab changes or when switching to font page
-  useEffect(() => {
-    if (state.currentPage === "newFontStyle") {
-      setFontDomain(getCurrentDomain());
-    }
-  }, [state.currentPage, getCurrentDomain]);
 
   // Helper function to format style names with badges for font styles
   const formatStyleName = (name: string) => {
