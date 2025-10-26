@@ -4,11 +4,7 @@ import { defineConfig } from "wxt";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: [
-    "@wxt-dev/module-react",
-    "@wxt-dev/webextension-polyfill",
-    "@wxt-dev/i18n/module",
-  ],
+  modules: ["@wxt-dev/module-react", "@wxt-dev/webextension-polyfill"],
   manifest: {
     permissions: ["storage", "contextMenus", "tabs"],
     default_locale: "en",
@@ -60,13 +56,33 @@ export default defineConfig({
     build: {
       rollupOptions: {
         onwarn(warning, warn) {
-          // Suppress Stylus-related externalization warnings
+          // Suppress various warnings including daisyUI @property warnings
+          const message =
+            "message" in warning ? (warning.message as string) || "" : "";
+          const warningString = typeof warning === "string" ? warning : "";
+
           if (
             warning.code === "MODULE_LEVEL_DIRECTIVE" ||
-            (warning.message &&
-              warning.message.includes(
-                "has been externalized for browser compatibility",
-              ))
+            message.includes(
+              "has been externalized for browser compatibility",
+            ) ||
+            message.includes("Unknown at rule") ||
+            message.includes("@property") ||
+            message.includes("radialprogress") ||
+            ("loc" in warning &&
+              warning.loc?.file?.includes(".css") &&
+              message.includes("Unknown at rule")) ||
+            // Also suppress plugin-related warnings that might not have specific codes
+            warningString.includes("@property") ||
+            ("plugin" in warning &&
+              warning.plugin?.includes("css") &&
+              message.includes("Unknown")) ||
+            // Suppress Vite CSS optimization warnings
+            (message.includes("optimizing generated CSS") &&
+              message.includes("Unknown")) ||
+            (message.includes("Found") &&
+              message.includes("warning") &&
+              message.includes("optimizing"))
           ) {
             return;
           }
@@ -74,12 +90,14 @@ export default defineConfig({
         },
       },
     },
+    logLevel: "warn",
     css: {
       preprocessorOptions: {
         stylus: {
           // Stylus options can be configured here if needed
         },
       },
+      devSourcemap: false,
     },
   }),
   imports: {
