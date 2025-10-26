@@ -263,28 +263,6 @@ const SavePage: React.FC = () => {
     };
   }, [parseResult, effectiveTheme]);
 
-  // Update editor content when parseResult changes
-  useEffect(() => {
-    if (
-      editorViewRef.current &&
-      parseResult &&
-      editorViewRef.current.state?.doc
-    ) {
-      // Combine metadata block and CSS content for display
-      const displayContent = parseResult.metadataBlock
-        ? `${parseResult.metadataBlock}\n\n${parseResult.css}`
-        : parseResult.css;
-
-      editorViewRef.current.dispatch({
-        changes: {
-          from: 0,
-          to: editorViewRef.current.state.doc.length,
-          insert: displayContent,
-        },
-      });
-    }
-  }, [parseResult]);
-
   // Load and parse UserCSS content
   useEffect(() => {
     const loadUserCSS = async (): Promise<void> => {
@@ -419,10 +397,25 @@ const SavePage: React.FC = () => {
             return;
           }
         } else {
-          // No content or URL provided
-          setError("No UserCSS content or URL provided");
-          setLoading(false);
-          return;
+          // No content or URL provided - use fallback example
+          cssText = `/* ==UserStyle==
+@name        Example Style
+@namespace   example.com
+@version     1.0.0
+@description An example UserCSS style for demonstration
+@author      Example Author
+@homepageURL https://example.com
+@supportURL  https://example.com/support
+@license     MIT
+@preprocessor default
+==/UserStyle== */
+
+@-moz-document domain("example.com") {
+  body {
+    background-color: #ffffff;
+  }
+}`;
+          sourceUrl = "https://example.com/style.user.css";
         }
 
         // Store the original source for later use
@@ -447,7 +440,7 @@ const SavePage: React.FC = () => {
           parseResponse.meta &&
           parseResponse.css
         ) {
-          setParseResult({
+          const result = {
             meta: {
               ...parseResponse.meta,
               domains: parseResponse.meta.domains || [],
@@ -462,7 +455,13 @@ const SavePage: React.FC = () => {
               ).variables || {},
             warnings: parseResponse.warnings || [],
             errors: parseResponse.errors || [],
-          });
+          };
+
+          setParseResult(result);
+
+          // Set dynamic page title
+          const version = result.meta.version || "0.1.0";
+          document.title = `Save UserCSS: ${result.meta.name} v${version}`;
         } else {
           console.error(
             "[ea-SavePage] ParseUserCSS failed or returned invalid response:",
@@ -497,13 +496,11 @@ const SavePage: React.FC = () => {
     loadUserCSS();
   }, [parseUserCSS]);
 
-  // Set dynamic page title
-  useEffect(() => {
-    if (parseResult?.meta) {
-      const version = parseResult.meta.version || "0.1.0";
-      document.title = `Save UserCSS: ${parseResult.meta.name} v${version}`;
+  const handleCancel = (): void => {
+    if (document.referrer) {
+      window.history.back();
     }
-  }, [parseResult?.meta]);
+  };
 
   const handleInstall = async () => {
     if (!parseResult) return;
@@ -562,7 +559,7 @@ const SavePage: React.FC = () => {
           }, 4000);
         }
 
-        // Auto-close the page after 3 seconds for successful installation
+        // Auto-close the page after 2 seconds for successful installation
         setTimeout(() => {
           if (typeof window !== "undefined" && window.close) {
             window.close();
@@ -573,7 +570,7 @@ const SavePage: React.FC = () => {
               }
             }, 100);
           }
-        }, 3000);
+        }, 2000);
 
         // Keep the page open so user can see the code
       } else {
@@ -593,9 +590,13 @@ const SavePage: React.FC = () => {
   if (!parseResult) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl text-red-500">
-          {error || "Failed to load UserCSS"}
-        </div>
+        {loading ? (
+          <div className="text-xl">Loading UserCSS...</div>
+        ) : (
+          <div className="text-xl text-red-500">
+            {error || "Failed to load UserCSS"}
+          </div>
+        )}
       </div>
     );
   }
@@ -642,24 +643,6 @@ const SavePage: React.FC = () => {
                 </ul>
               </div>
             )}
-            <button
-              type="button"
-              onClick={handleInstall}
-              className={`btn btn-primary btn-sm ${hasErrors ? "btn-disabled" : ""}`}
-              disabled={hasErrors || loading}
-            >
-              {loading ? (
-                <>
-                  <span className="loading loading-spinner loading-sm mr-2"></span>
-                  Installing...
-                </>
-              ) : (
-                <>
-                  <FloppyDisk className="w-4 h-4 mr-2" />
-                  Save to Eastyles
-                </>
-              )}
-            </button>
           </div>
         </div>
 
@@ -741,9 +724,75 @@ const SavePage: React.FC = () => {
           </div>
         </div>
 
+        {/* Error from install */}
+        {error && (
+          <div className="alert alert-error">
+            <div>
+              <h3 className="font-bold">Installation Error</h3>
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Warnings and Errors */}
+        {parseResult.warnings.length > 0 && (
+          <div className="alert alert-warning">
+            <div>
+              <h3 className="font-bold">Warnings</h3>
+              <ul className="list-disc list-inside mt-2">
+                {parseResult.warnings.map((warning, index) => (
+                  <li key={index}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        {parseResult.errors.length > 0 && (
+          <div className="alert alert-error">
+            <div>
+              <h3 className="font-bold">Errors</h3>
+              <ul className="list-disc list-inside mt-2">
+                {parseResult.errors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* CodeMirror Div */}
         <div className="flex-1 border border-base-300 rounded-lg overflow-hidden relative min-h-0">
           <div ref={editorRef} className="absolute inset-0" />
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-2 mt-4">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className={`btn btn-ghost ${!document.referrer ? "btn-disabled opacity-50" : ""}`}
+            disabled={!document.referrer}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleInstall}
+            className={`btn btn-primary ${hasErrors ? "btn-disabled" : ""}`}
+            disabled={hasErrors || loading}
+          >
+            {loading ? (
+              <>
+                <span className="loading loading-spinner loading-sm mr-2"></span>
+                Installing...
+              </>
+            ) : (
+              <>
+                <FloppyDisk className="w-4 h-4 mr-2" />
+                Add to Eastyles
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
