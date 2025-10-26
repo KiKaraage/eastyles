@@ -25,8 +25,10 @@ export function extractVariables(css: string): VariableDescriptor[] {
   // /*[[variable-name|type|default|options:opt1,opt2,opt3]]*/
   const variableRegex = /\/\*\[\[([^\]]+)\]\]\*\//g;
 
-  let match = variableRegex.exec(css);
-  while (match !== null) {
+  // Use matchAll to avoid regex state issues
+  const matches = Array.from(css.matchAll(variableRegex));
+
+  for (const match of matches) {
     const variableString = match[1];
 
     try {
@@ -38,7 +40,6 @@ export function extractVariables(css: string): VariableDescriptor[] {
       // Skip malformed variable declarations
       continue;
     }
-    match = variableRegex.exec(css);
   }
 
   return variables;
@@ -168,23 +169,13 @@ export async function resolveVariables(
   values: Record<string, string>,
   variables?: Record<string, VariableDescriptor>,
 ): Promise<string> {
-  // Find all variable placeholders
+  // Find all variable placeholders using matchAll to avoid regex state issues
   const variableRegex = /\/\*\[\[([^\]]+)\]\]\*\//g;
-  const matches: Array<{
-    match: string;
-    variableString: string;
-    index: number;
-  }> = [];
-  let match = variableRegex.exec(css);
-
-  while (match !== null) {
-    matches.push({
-      match: match[0],
-      variableString: match[1],
-      index: match.index,
-    });
-    match = variableRegex.exec(css);
-  }
+  const matches = Array.from(css.matchAll(variableRegex)).map((match) => ({
+    match: match[0],
+    variableString: match[1],
+    index: match.index,
+  }));
 
   if (matches.length === 0) {
     return css;
@@ -227,7 +218,7 @@ export async function resolveVariables(
         }
       }
 
-      // Replace in the CSS
+      // Replace in the CSS using string replacement
       processedCss = processedCss.replace(originalMatch, replacement);
     }
 

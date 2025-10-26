@@ -227,13 +227,12 @@ export class UserCSSDomainDetector implements DomainDetector {
    * Extract domain from URL
    */
   extractDomain(url: string): string {
-    // Use regex to extract hostname to avoid URL constructor dependencies
-    const urlRegex = new RegExp("^https?://([^/]+)", "i");
-    const match = url.match(urlRegex);
-    if (match) {
-      return match[1].toLowerCase();
-    } else {
-      return url; // Fallback to original URL if parsing fails
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname.toLowerCase();
+    } catch {
+      // Fallback to original URL if parsing fails
+      return url.toLowerCase();
     }
   }
 
@@ -241,33 +240,22 @@ export class UserCSSDomainDetector implements DomainDetector {
    * Normalize URL for consistent processing
    */
   normalizeURL(url: string): string {
-    // Use regex-based normalization to avoid URL constructor dependencies
     try {
-      // Check if it's already a valid URL with protocol
-      if (url.match(new RegExp("^[a-zA-Z][a-zA-Z0-9+.-]*://"))) {
-        // Simple normalization: lowercase protocol and hostname, remove trailing slash
-        let normalized = url.replace(
-          new RegExp("^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/"),
-          (match, protocol) => protocol.toLowerCase() + "://",
-        );
-
-        // Extract and lowercase hostname (rough approximation)
-        normalized = normalized.replace(
-          new RegExp(":\\/\\/([^/]+)"),
-          (match, hostname) => "://" + hostname.toLowerCase(),
-        );
-
-        return normalized.replace(/\/$/, ""); // Remove trailing slash
+      let urlObj: URL;
+      if (url.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//)) {
+        urlObj = new URL(url);
+      } else {
+        // For URLs without protocol, assume https://
+        urlObj = new URL(`https://${url}`);
       }
-
-      // For URLs without protocol, assume https://
-      const urlWithProtocol = `https://${url}`;
-      // Simple normalization
-      const normalized = urlWithProtocol.replace(
-        new RegExp(":\\/\\/([^/]+)"),
-        (match, hostname) => "://" + hostname.toLowerCase(),
-      );
-      return normalized.replace(/\/$/, "");
+      // Remove default ports
+      if (
+        (urlObj.protocol === "https:" && urlObj.port === "443") ||
+        (urlObj.protocol === "http:" && urlObj.port === "80")
+      ) {
+        urlObj.port = "";
+      }
+      return urlObj.toString().replace(/\/$/, ""); // Remove trailing slash
     } catch (error) {
       this.debug(`Failed to normalize URL: ${url}`, error);
       return url; // Return original URL if parsing fails

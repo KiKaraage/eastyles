@@ -5,9 +5,9 @@
  * Integrates with StorageClient for persistence and MessageBus for real-time updates.
  */
 
-import { messageBus } from "../messaging/bus";
 import { storageClient } from "../storage/client";
 import { VariableDescriptor } from "../usercss/types";
+import { type BroadcastService, broadcastService } from "./broadcast-service";
 // NOTE: Don't import processUserCSS at module level - it accesses DOM
 // We'll import it dynamically when needed
 
@@ -25,6 +25,11 @@ export interface VariableChangeCallback {
  */
 export class VariablePersistenceService {
   private watchers = new Set<VariableChangeCallback>();
+  private broadcastService: BroadcastService;
+
+  constructor(broadcastServiceInstance: BroadcastService = broadcastService) {
+    this.broadcastService = broadcastServiceInstance;
+  }
 
   /**
    * Update variables for a specific UserCSS style
@@ -92,13 +97,10 @@ export class VariablePersistenceService {
             }
 
             // Notify content scripts to reapply the style
-            await messageBus.broadcast({
-              type: "STYLE_REAPPLY_REQUEST",
-              payload: {
-                styleId,
-                reason: "variables_updated",
-                timestamp: Date.now(),
-              },
+            await this.broadcastService.broadcastStyleReapply({
+              styleId,
+              reason: "variables_updated",
+              timestamp: Date.now(),
             });
           } else {
             console.warn(
@@ -130,13 +132,9 @@ export class VariablePersistenceService {
       console.log(
         "[VariablePersistenceService] Broadcasting VARIABLES_UPDATED message to content scripts",
       );
-      await messageBus.broadcast({
-        type: "VARIABLES_UPDATED",
-        payload: {
-          styleId,
-          variables,
-          timestamp: Date.now(),
-        },
+      await this.broadcastService.broadcastVariableUpdate({
+        styleId,
+        variables,
       });
 
       console.log(

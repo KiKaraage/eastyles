@@ -26,13 +26,12 @@ const DOMAIN_PATTERNS = {
 export function extractDomains(css: string): DomainRule[] {
   const rules: DomainRule[] = [];
 
-  // Find all @-moz-document blocks
+  // Find all @-moz-document blocks using matchAll to avoid regex state issues
   // This regex matches the @-moz-document directive and its conditions
-  const mozDocumentRegex = /@-moz-document\s+([^{\n\r]+?)\s*\{/g;
-  let match: RegExpExecArray | null = null;
+  const mozDocumentRegex = /@-moz-document\s+([^}]+?)\s*\{/g;
+  const matches = Array.from(css.matchAll(mozDocumentRegex));
 
-  match = mozDocumentRegex.exec(css);
-  while (match !== null) {
+  for (const match of matches) {
     const conditionList = match[1];
 
     // Process each condition in the condition list
@@ -41,12 +40,11 @@ export function extractDomains(css: string): DomainRule[] {
     for (const condition of conditions) {
       // Check each pattern type
       for (const [type, regex] of Object.entries(DOMAIN_PATTERNS)) {
-        // Create a new regex instance to avoid state issues
+        // Use matchAll to avoid regex state issues
         const patternRegex = new RegExp(regex.source, "g");
-        let patternResult: RegExpExecArray | null = null;
+        const patternMatches = Array.from(condition.matchAll(patternRegex));
 
-        patternResult = patternRegex.exec(condition);
-        while (patternResult !== null) {
+        for (const patternResult of patternMatches) {
           const patternValue = patternResult[1];
 
           // Validate regex patterns
@@ -72,13 +70,9 @@ export function extractDomains(css: string): DomainRule[] {
               include: true,
             });
           }
-
-          patternResult = patternRegex.exec(condition);
         }
       }
     }
-
-    match = mozDocumentRegex.exec(css);
   }
 
   return rules;

@@ -108,11 +108,10 @@ function parseEOTBlocks(value: string): SelectParseResult | null {
   let defaultValue = "";
   let defaultCaptured = false;
 
-  const regexInstance = new RegExp(eotRegex.source, eotRegex.flags);
-  let match: RegExpExecArray | null;
-  while (true) {
-    match = regexInstance.exec(value);
-    if (match === null) break;
+  // Use matchAll to avoid regex state issues
+  const matches = Array.from(value.matchAll(eotRegex));
+
+  for (const match of matches) {
     const [, rawKey, rawLabel, cssContent] = match;
     const labelWithMarkers = stripWrappingQuotes(rawLabel.trim());
     const keyClean = rawKey.trim();

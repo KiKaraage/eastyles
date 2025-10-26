@@ -693,7 +693,11 @@ export class UserCSSContentController implements ContentController {
       if (matches) {
         // For style updates (including variable changes), we need to reprocess from source
         // to ensure variables are properly resolved
-        if (style.source && style.variables) {
+        if (
+          style.source &&
+          style.variables &&
+          Object.keys(style.variables).length > 0
+        ) {
           // Create values object from current variable values
           const values: Record<string, string> = {};
           for (const [name, variable] of Object.entries(style.variables)) {
