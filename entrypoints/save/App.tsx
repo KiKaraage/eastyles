@@ -519,6 +519,10 @@ const SavePage: React.FC = () => {
           }))
         : [];
 
+      console.log(
+        "[ea-SavePage] Installing style with source length:",
+        originalSource?.length || 0,
+      );
       const response = await installStyle(
         parseResult.meta,
         parseResult.css,

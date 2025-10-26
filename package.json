@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "wxt -b firefox",
     "dev:crx": "wxt",
-    "build": "wxt build -b firefox",
-    "build:crx": "wxt build",
+    "buildf": "wxt build -b firefox",
+    "buildc": "wxt build",
     "builds": "wxt build 2>/dev/null && wxt build -b firefox 2>/dev/null",
     "zip": "wxt zip -b firefox",
     "zip:crx": "wxt zip",
