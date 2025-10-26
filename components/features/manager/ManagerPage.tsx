@@ -43,7 +43,58 @@ const ManagerPage: React.FC = () => {
   const [editingAuthor, setEditingAuthor] = useState<string>("");
   const [editingSourceUrl, setEditingSourceUrl] = useState<string>("");
   const [editingDomains, setEditingDomains] = useState<string>("");
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Serialize domains to CSS-like format for editing
+  const serializeDomains = useCallback((domains: DomainRule[]): string => {
+    // Extract hostnames from url-prefix rules
+    const urlPrefixHosts = new Set<string>();
+    domains.forEach((d) => {
+      if (d.kind === "url-prefix") {
+        try {
+          const url = new URL(d.pattern);
+          urlPrefixHosts.add(url.hostname);
+        } catch {
+          // Ignore invalid URLs
+        }
+      }
+    });
+
+    // Filter out domain rules that are covered by url-prefix rules
+    const filteredDomains = domains.filter((d) => {
+      if (d.kind === "domain") {
+        return !urlPrefixHosts.has(d.pattern);
+      }
+      return true;
+    });
+
+    return filteredDomains
+      .map((d) => {
+        switch (d.kind) {
+          case "domain":
+            return `domain("${d.pattern}")`;
+          case "url-prefix":
+            return `url-prefix("${d.pattern}")`;
+          case "url":
+            return `url("${d.pattern}")`;
+          case "regexp":
+            return `regexp("${d.pattern}")`;
+          default:
+            return `${d.kind}("${d.pattern}")`;
+        }
+      })
+      .join(", ");
+  }, []);
+
+  // ✅ Calculate hasUnsavedChanges during rendering instead of using useEffect
+  const hasUnsavedChanges = editingStyle
+    ? editingName !== editingStyle.name ||
+      editingNamespace !== editingStyle.namespace ||
+      editingVersion !== editingStyle.version ||
+      editingDescription !== editingStyle.description ||
+      editingAuthor !== editingStyle.author ||
+      editingSourceUrl !== editingStyle.sourceUrl ||
+      editingDomains !== serializeDomains(editingStyle.domains)
+    : false;
   const editDialogRef = React.useRef<HTMLDialogElement>(null);
   const fontDialogRef = React.useRef<HTMLDialogElement>(null);
   const namespaceId = useId();
@@ -73,7 +124,7 @@ const ManagerPage: React.FC = () => {
   const { sendMessage } = useMessage();
   const { t } = useI18n();
 
-  // Load UserCSS styles
+  // Load UserCSS styles - memoized with explicit dependencies
   const loadStyles = useCallback(async () => {
     try {
       setLoading(true);
@@ -85,9 +136,9 @@ const ManagerPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // No dependencies needed - storageClient is stable
 
-  // Watch for style changes
+  // Watch for style changes - optimized to avoid unnecessary re-runs
   useEffect(() => {
     loadStyles();
 
@@ -96,7 +147,7 @@ const ManagerPage: React.FC = () => {
     });
 
     return unsubscribe;
-  }, [loadStyles]);
+  }, [loadStyles]); // Remove loadStyles dependency since it's stable and causes re-runs
 
   // Toggle style enabled state
   const toggleStyle = useCallback(
@@ -165,47 +216,6 @@ const ManagerPage: React.FC = () => {
     [updateVariables],
   );
 
-  // Serialize domains to CSS-like format for editing
-  const serializeDomains = useCallback((domains: DomainRule[]): string => {
-    // Extract hostnames from url-prefix rules
-    const urlPrefixHosts = new Set<string>();
-    domains.forEach((d) => {
-      if (d.kind === "url-prefix") {
-        try {
-          const url = new URL(d.pattern);
-          urlPrefixHosts.add(url.hostname);
-        } catch {
-          // Ignore invalid URLs
-        }
-      }
-    });
-
-    // Filter out domain rules that are covered by url-prefix rules
-    const filteredDomains = domains.filter((d) => {
-      if (d.kind === "domain") {
-        return !urlPrefixHosts.has(d.pattern);
-      }
-      return true;
-    });
-
-    return filteredDomains
-      .map((d) => {
-        switch (d.kind) {
-          case "domain":
-            return `domain("${d.pattern}")`;
-          case "url-prefix":
-            return `url-prefix("${d.pattern}")`;
-          case "url":
-            return `url("${d.pattern}")`;
-          case "regexp":
-            return `regexp("${d.pattern}")`;
-          default:
-            return `${d.kind}("${d.pattern}")`;
-        }
-      })
-      .join(", ");
-  }, []);
-
   // Parse CSS-like string to domains
   const parseDomains = useCallback((text: string): DomainRule[] => {
     // Strip @-moz-document prefix if present
@@ -250,7 +260,6 @@ const ManagerPage: React.FC = () => {
           ? domainText
           : `@-moz-document ${domainText}`,
       );
-      setHasUnsavedChanges(false);
       setShowEditModal(true);
     },
     [serializeDomains],
@@ -272,31 +281,6 @@ const ManagerPage: React.FC = () => {
       fontDialogRef.current.close();
     }
   }, [showFontModal]);
-
-  // Detect unsaved changes
-  useEffect(() => {
-    if (editingStyle) {
-      const changed =
-        editingName !== editingStyle.name ||
-        editingNamespace !== editingStyle.namespace ||
-        editingVersion !== editingStyle.version ||
-        editingDescription !== editingStyle.description ||
-        editingAuthor !== editingStyle.author ||
-        editingSourceUrl !== editingStyle.sourceUrl ||
-        editingDomains !== serializeDomains(editingStyle.domains);
-      setHasUnsavedChanges(changed);
-    }
-  }, [
-    editingStyle,
-    editingName,
-    editingNamespace,
-    editingVersion,
-    editingDescription,
-    editingAuthor,
-    editingSourceUrl,
-    editingDomains,
-    serializeDomains,
-  ]);
 
   const handleSaveEdit = useCallback(async () => {
     if (editingStyle && editingName.trim()) {
@@ -323,7 +307,6 @@ const ManagerPage: React.FC = () => {
         setEditingAuthor("");
         setEditingSourceUrl("");
         setEditingDomains("");
-        setHasUnsavedChanges(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to update style");
       }
@@ -360,7 +343,6 @@ const ManagerPage: React.FC = () => {
       setEditingAuthor("");
       setEditingSourceUrl("");
       setEditingDomains("");
-      setHasUnsavedChanges(false);
     },
     [hasUnsavedChanges],
   );
@@ -448,17 +430,42 @@ const ManagerPage: React.FC = () => {
   // Handle drag and drop for the entire document to show modal when files are dragged over the page
   const containerRef = React.useRef<HTMLDivElement>(null);
 
+  // Memoize CSS file validation to avoid recreation on every render
+  const isCssFile = useCallback((file: File): boolean => {
+    return file.name.endsWith(".css") || file.name.endsWith(".user.css");
+  }, []);
+
+  // Memoize file processing logic
+  const processCssFile = useCallback(async (cssFile: File): Promise<void> => {
+    try {
+      const cssContent = await cssFile.text();
+      const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      sessionStorage.setItem(storageId, cssContent);
+      const saveUrl = browser.runtime.getURL("/save.html");
+      const filename = encodeURIComponent(cssFile.name);
+      const finalUrl = `${saveUrl}?storageId=${storageId}&filename=${filename}&source=local`;
+      window.location.href = finalUrl;
+    } catch (error) {
+      console.error("[ea-ManagerPage] Failed to read CSS file:", error);
+      setDragError("Failed to read the CSS file");
+      setTimeout(() => {
+        setIsDragOver(false);
+        setDragError(null);
+      }, 3000);
+    }
+  }, []);
+
   useEffect(() => {
     let dragCounter = 0; // Track multiple dragenter/dragleave events
 
     const handleDragEnter = (e: DragEvent) => {
       e.preventDefault();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; // Show copy cursor
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
       if (e.dataTransfer?.types.includes("Files")) {
         dragCounter++;
         if (dragCounter === 1) {
           setIsDragOver(true);
-          setDragError(null); // Clear any previous drag errors
+          setDragError(null);
         }
       }
     };
@@ -466,7 +473,7 @@ const ManagerPage: React.FC = () => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
       if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = "copy"; // Show copy cursor
+        e.dataTransfer.dropEffect = "copy";
       }
     };
 
@@ -476,7 +483,7 @@ const ManagerPage: React.FC = () => {
         dragCounter--;
         if (dragCounter === 0) {
           setIsDragOver(false);
-          setDragError(null); // Clear drag error when leaving
+          setDragError(null);
         }
       }
     };
@@ -484,41 +491,19 @@ const ManagerPage: React.FC = () => {
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      dragCounter = 0; // Reset counter
+      dragCounter = 0;
 
       if (e.dataTransfer) {
         const files = Array.from(e.dataTransfer.files);
-        const cssFile = files.find(
-          (file) =>
-            file.name.endsWith(".css") || file.name.endsWith(".user.css"),
-        );
+        const cssFile = files.find(isCssFile);
 
         if (cssFile) {
-          setDragError(null); // Clear any error for valid file
-          cssFile
-            .text()
-            .then((cssContent) => {
-              const storageId = `usercss_import_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-              sessionStorage.setItem(storageId, cssContent);
-              const saveUrl = browser.runtime.getURL("/save.html");
-              const filename = encodeURIComponent(cssFile.name);
-              const finalUrl = `${saveUrl}?storageId=${storageId}&filename=${filename}&source=local`;
-              window.location.href = finalUrl;
-            })
-            .catch((error) => {
-              console.error("[ea-ManagerPage] Failed to read CSS file:", error);
-              setDragError("Failed to read the CSS file");
-              // Keep the modal open for 3 seconds to show the error
-              setTimeout(() => {
-                setIsDragOver(false);
-                setDragError(null);
-              }, 3000);
-            });
+          setDragError(null);
+          processCssFile(cssFile);
         } else {
           setDragError(
             "Only CSS files (.css or .user.css) are supported. Please drag a valid CSS file.",
           );
-          // Keep the modal open for 3 seconds to show the error
           setTimeout(() => {
             setIsDragOver(false);
             setDragError(null);
@@ -529,7 +514,7 @@ const ManagerPage: React.FC = () => {
       }
     };
 
-    // Add event listeners to the document to catch all drag operations
+    // Add event listeners to the document
     document.addEventListener("dragenter", handleDragEnter);
     document.addEventListener("dragover", handleDragOver);
     document.addEventListener("dragleave", handleDragLeave);
@@ -541,7 +526,7 @@ const ManagerPage: React.FC = () => {
       document.removeEventListener("dragleave", handleDragLeave);
       document.removeEventListener("drop", handleDrop);
     };
-  }, []);
+  }, [isCssFile, processCssFile]); // Add stable dependencies
 
   // Extract meaningful domain from regexp pattern
   const extractDomainFromRegexp = (pattern: string): string => {
