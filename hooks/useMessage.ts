@@ -35,6 +35,8 @@ export enum SaveMessageType {
   INJECT_FONT = "INJECT_FONT",
   CREATE_FONT_STYLE = "CREATE_FONT_STYLE",
   UPDATE_FONT_STYLE = "UPDATE_FONT_STYLE",
+  GET_STYLE_FOR_EDIT = "GET_STYLE_FOR_EDIT",
+  UPDATE_STYLE = "UPDATE_STYLE",
 }
 
 /**
@@ -116,6 +118,33 @@ export interface SaveMessagePayloads {
     styleId: string;
     domain?: string;
     fontName: string;
+  };
+  [SaveMessageType.GET_STYLE_FOR_EDIT]: {
+    styleId: string;
+  };
+  [SaveMessageType.UPDATE_STYLE]: {
+    styleId: string;
+    name: string;
+    css: string;
+    meta: {
+      name: string;
+      namespace: string;
+      version: string;
+      description: string;
+      author: string;
+      sourceUrl: string;
+      domains: string[];
+    };
+    variables: Array<{
+      name: string;
+      type: string;
+      default: string;
+      min?: number;
+      max?: number;
+      options?: Array<{ value: string; label: string }>;
+      optionCss?: Record<string, string>;
+    }>;
+    source?: string;
   };
 }
 
@@ -538,5 +567,90 @@ export function useSaveActions() {
   return {
     parseUserCSS,
     installStyle,
+  };
+}
+
+/**
+ * Hook for edit-specific actions
+ */
+export function useEditActions() {
+  const { sendMessage } = useMessage();
+  const { trackMessage } = useMessageAnalytics();
+
+  const getStyleForEdit = useCallback(
+    async (styleId: string) => {
+      console.log(
+        "[ea-useEditActions] getStyleForEdit called, styleId:",
+        styleId,
+      );
+      try {
+        const result = await sendMessage(SaveMessageType.GET_STYLE_FOR_EDIT, {
+          styleId,
+        });
+        trackMessage("sent");
+        return result;
+      } catch (error: unknown) {
+        console.error("[ea-useEditActions] getStyleForEdit error:", error);
+        errorService.createMessageError(
+          typeof error === "string" ? error : "Unknown error",
+        );
+        trackMessage("failed");
+        throw error;
+      }
+    },
+    [sendMessage, trackMessage],
+  );
+
+  const updateStyle = useCallback(
+    async (
+      styleId: string,
+      name: string,
+      css: string,
+      meta: {
+        name: string;
+        namespace: string;
+        version: string;
+        description: string;
+        author: string;
+        sourceUrl: string;
+        domains: string[];
+      },
+      variables: Array<{
+        name: string;
+        type: string;
+        default: string;
+        min?: number;
+        max?: number;
+        options?: Array<{ value: string; label: string }>;
+        optionCss?: Record<string, string>;
+      }>,
+      source?: string,
+    ) => {
+      console.log("[ea-useEditActions] updateStyle called, style:", name);
+      try {
+        const result = await sendMessage(SaveMessageType.UPDATE_STYLE, {
+          styleId,
+          name,
+          css,
+          meta,
+          variables,
+          source,
+        });
+        trackMessage("sent");
+        return result;
+      } catch (error: unknown) {
+        errorService.createMessageError(
+          typeof error === "string" ? error : "Unknown error",
+        );
+        trackMessage("failed");
+        throw error;
+      }
+    },
+    [sendMessage, trackMessage],
+  );
+
+  return {
+    getStyleForEdit,
+    updateStyle,
   };
 }

@@ -408,13 +408,33 @@ export class MessageBus {
    * Broadcast a message to all listening components.
    */
   async broadcast(message: SentMessages): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      if (browser.runtime) {
-        browser.runtime.sendMessage(message).then(resolve).catch(reject);
-      } else {
-        reject(new Error("No browser runtime found"));
+    if (!browser.runtime) {
+      throw new Error("No browser runtime found");
+    }
+
+    try {
+      // Send to background script first
+      await browser.runtime.sendMessage(message);
+
+      // Then send to all content scripts in all tabs
+      if (browser.tabs?.query) {
+        const tabs = await browser.tabs.query({});
+        const sendPromises = tabs
+          .filter((tab) => tab.id != null)
+          .map((tab) =>
+            browser.tabs.sendMessage(tab.id!, message).catch(() => {
+              // Ignore errors for tabs that don't have content scripts
+              // This is normal for tabs that haven't loaded the extension
+            }),
+          );
+
+        await Promise.allSettled(sendPromises);
       }
-    });
+    } catch (error) {
+      // Log the error but don't fail the broadcast operation
+      // Some tabs might not be reachable, which is expected
+      logError("[MessageBus] Broadcast error (non-critical):", error);
+    }
   }
 
   /**

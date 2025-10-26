@@ -243,28 +243,6 @@ const ManagerPage: React.FC = () => {
     return domains;
   }, []);
 
-  // Handle editing style
-  const handleEditStyle = useCallback(
-    (style: UserCSSStyle) => {
-      setEditingStyle(style);
-      setEditingName(style.name);
-      setEditingNamespace(style.namespace);
-      setEditingVersion(style.version);
-      setEditingDescription(style.description);
-      setEditingAuthor(style.author);
-      setEditingSourceUrl(style.sourceUrl);
-      const domainText =
-        style.originalDomainCondition || serializeDomains(style.domains);
-      setEditingDomains(
-        domainText.startsWith("@-moz-document")
-          ? domainText
-          : `@-moz-document ${domainText}`,
-      );
-      setShowEditModal(true);
-    },
-    [serializeDomains],
-  );
-
   // Handle dialog open/close
   useEffect(() => {
     if (showEditModal && editDialogRef.current) {
@@ -831,7 +809,9 @@ const ManagerPage: React.FC = () => {
                           setEditingFontStyle(style);
                           setShowFontModal(true);
                         } else {
-                          handleEditStyle(style);
+                          // Navigate to edit page for regular styles
+                          const editUrl = browser.runtime.getURL("/edit.html");
+                          window.location.href = `${editUrl}?styleId=${style.id}`;
                         }
                       }}
                       title="Edit style"

@@ -6,6 +6,7 @@
 import { browser, type PublicPath } from "wxt/browser";
 import { storageClient } from "../storage/client";
 import type { UserCSSStyle } from "../storage/schema";
+import { broadcastService } from "../usercss/broadcast-service";
 import type { BuiltInFont } from "../usercss/font-registry";
 import { fontRegistry } from "../usercss/font-registry";
 import type {
@@ -1240,19 +1241,18 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       };
     };
 
-    // Try using the main processor (with our fixes)
-    console.log(
-      "[ea-handleParseUserCSS] Using main processor (with document safety fixes)...",
-    );
+    // Check if DOM is available for preprocessing
+    const hasDom = typeof globalThis.document !== "undefined";
 
     let parseResult: ParseResult;
+
+    // Always try the main processor first for better parsing
+    console.log("[ea-handleParseUserCSS] Trying main processor...");
 
     try {
       const { parseUserCSS } = await import("../usercss/processor");
       parseResult = parseUserCSS(text);
-      console.log(
-        "[ea-handleParseUserCSS] Main processor execution successful",
-      );
+      console.log("[ea-handleParseUserCSS] Main processor parsing successful");
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       console.error("[ea-handleParseUserCSS] Main processor failed:", err);
@@ -1268,35 +1268,20 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       console.log(
         "[ea-handleParseUserCSS] Falling back to simplified parser...",
       );
-
-      // Use the parseUserCSSUltraMinimal function which has proper variable extraction
       parseResult = parseUserCSSUltraMinimal(text);
     }
-    console.log(
-      "[ea-handleParseUserCSS] Simplified parser result:",
-      parseResult,
-    );
+    console.log("[ea-handleParseUserCSS] Parser result:", parseResult);
 
-    // Only preprocess if we're not in a background context where DOM is not available
-    let compiledCss: string = parseResult.css;
+    // Preprocess CSS if DOM is available and we used the main parser
+
     let preprocessorErrors: string[] = [];
 
     console.log("[ea-handleParseUserCSS] About to check DOM preprocessing...");
     try {
-      // Check if we're in a context where DOM APIs are available
-      let hasDom = false;
-      try {
-        hasDom = typeof globalThis.document !== "undefined";
-      } catch {
-        // If accessing document throws, we definitely don't have DOM access
-        hasDom = false;
-      }
-
       if (hasDom) {
-        // Only preprocess if DOM is available
+        // Only preprocess if DOM is available (and we used main parser)
         const { processUserCSS } = await import("../usercss/processor");
         const fullResult = await processUserCSS(text);
-        compiledCss = fullResult.compiledCss;
         preprocessorErrors = fullResult.preprocessorErrors || [];
       } else {
         // In background context, just use the basic parsed CSS
@@ -1321,7 +1306,7 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         ...parseResult.meta,
         sourceUrl: sourceUrl || parseResult.meta.sourceUrl,
       },
-      css: compiledCss,
+      css: text, // Return the original input text, not compiled CSS
       metadataBlock: parseResult.metadataBlock,
       variables: parseResult.meta.variables || {}, // Include variables from ultra-minimal parser
       warnings: [...parseResult.warnings, ...preprocessorErrors],
@@ -1361,7 +1346,12 @@ const handleInstallStyle: MessageHandler = async (message) => {
     console.log("[ea-handleInstallStyle] Starting installation process...");
     const { meta, compiledCss, variables, source } = installMessage.payload;
     console.log("[ea-handleInstallStyle] Payload extracted successfully");
-    console.log("[ea-handleInstallStyle] Has source:", !!source);
+    console.log(
+      "[ea-handleInstallStyle] Has source:",
+      !!source,
+      "source length:",
+      source?.length || 0,
+    );
 
     // Basic validation
     if (!meta || !meta.name) {
@@ -2399,22 +2389,16 @@ const handleUpdateVariables: MessageHandler = async (message) => {
     });
 
     // Notify other extension contexts about the variable change
-    if (browser.runtime?.sendMessage) {
-      try {
-        await browser.runtime.sendMessage({
-          type: "VARIABLES_UPDATED",
-          payload: {
-            styleId,
-            variables,
-            timestamp: Date.now(),
-          },
-        });
-      } catch (notifyError) {
-        console.warn(
-          "[ea-handleUpdateVariables] Failed to broadcast VARIABLES_UPDATED notification:",
-          notifyError,
-        );
-      }
+    try {
+      await broadcastService.broadcastVariableUpdate({
+        styleId,
+        variables,
+      });
+    } catch (notifyError) {
+      console.warn(
+        "[ea-handleUpdateVariables] Failed to broadcast VARIABLES_UPDATED notification:",
+        notifyError,
+      );
     }
 
     // Notify content scripts to reapply the style with new variables
@@ -2702,6 +2686,155 @@ const handleFetchAssets: MessageHandler = async (message) => {
 };
 
 /**
+ * Handler for GET_STYLE_FOR_EDIT messages.
+ */
+const handleGetStyleForEdit: MessageHandler = async (message) => {
+  console.log("[ea-handleGetStyleForEdit] Processing message:", message);
+  try {
+    const editMessage = message as Extract<
+      ReceivedMessages,
+      { type: "GET_STYLE_FOR_EDIT" }
+    >;
+    const { styleId } = editMessage.payload;
+
+    console.log("[ea-handleGetStyleForEdit] Getting style for edit:", styleId);
+
+    // Get the style from storage
+    const style = await storageClient.getUserCSSStyle(styleId);
+
+    if (!style) {
+      console.log("[ea-handleGetStyleForEdit] Style not found:", styleId);
+      return {
+        success: false,
+        error: `Style with ID '${styleId}' not found`,
+      };
+    }
+
+    console.log(
+      "[ea-handleGetStyleForEdit] Style retrieved successfully, source length:",
+      style.source?.length || 0,
+    );
+
+    // Source is required for editing - cannot edit without the original UserCSS text
+    if (!style.source) {
+      console.error(
+        "[ea-handleGetStyleForEdit] Source is empty, cannot edit style without source",
+      );
+      return {
+        success: false,
+        error:
+          "Style source is missing - this style was corrupted and cannot be edited",
+      };
+    }
+    const cssContent = style.source;
+
+    return {
+      success: true,
+      style: {
+        id: style.id,
+        name: style.name,
+        css: cssContent,
+        meta: {
+          name: style.name,
+          namespace: style.namespace,
+          version: style.version,
+          description: style.description,
+          author: style.author,
+          sourceUrl: style.sourceUrl,
+          domains: style.domains.map((d) => d.pattern), // Convert DomainRule[] to string[]
+          variables: style.variables,
+        },
+        variables: style.variables,
+      },
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("[ea-handleGetStyleForEdit] Error:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
+ * Handler for UPDATE_STYLE messages.
+ */
+const handleUpdateStyle: MessageHandler = async (message) => {
+  console.log("[ea-handleUpdateStyle] Processing message:", message);
+  try {
+    const updateMessage = message as Extract<
+      ReceivedMessages,
+      { type: "UPDATE_STYLE" }
+    >;
+    const { styleId, name, css, meta, variables } = updateMessage.payload;
+
+    console.log("[ea-handleUpdateStyle] Updating style:", styleId);
+
+    // Get the existing style
+    const existingStyle = await storageClient.getUserCSSStyle(styleId);
+    if (!existingStyle) {
+      return {
+        success: false,
+        error: `Style with ID '${styleId}' not found`,
+      };
+    }
+
+    // Map the payload to UserCSSStyle format
+    const updates: Partial<UserCSSStyle> = {
+      name,
+      source: css, // css field contains the source code
+      namespace: meta.namespace,
+      version: meta.version,
+      description: meta.description,
+      author: meta.author,
+      sourceUrl: meta.sourceUrl,
+      domains: meta.domains.map((domain) => ({
+        kind: "domain" as const,
+        pattern: domain,
+        include: true,
+      })), // Convert string[] to DomainRule[]
+      variables: variables
+        ? Object.fromEntries(
+            variables.map((v) => [
+              v.name,
+              {
+                name: v.name,
+                type: v.type,
+                default: v.default,
+                value: existingStyle.variables?.[v.name]?.value || v.default, // Preserve current value or use default
+                min: v.min,
+                max: v.max,
+                options: v.options,
+                optionCss: v.optionCss,
+              } as VariableDescriptor,
+            ]),
+          )
+        : existingStyle.variables,
+    };
+
+    // Update the style
+    await storageClient.updateUserCSSStyle(styleId, updates);
+
+    console.log("[ea-handleUpdateStyle] Style updated successfully");
+
+    return {
+      success: true,
+      styleId,
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("[ea-handleUpdateStyle] Error:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
+/**
  * Registry of all message handlers.
  */
 const handlerRegistry: HandlerRegistry = {
@@ -2726,6 +2859,8 @@ const handlerRegistry: HandlerRegistry = {
   QUERY_STYLES_FOR_URL: withErrorHandling(handleQueryStylesForUrl), // Full version with inline domain matching
   FETCH_ASSETS: withErrorHandling(handleFetchAssets),
   PARSE_USERCSS: withErrorHandling(handleParseUserCSS), // Restored - confirmed not the source of window error
+  GET_STYLE_FOR_EDIT: withErrorHandling(handleGetStyleForEdit),
+  UPDATE_STYLE: withErrorHandling(handleUpdateStyle),
 };
 
 /**
@@ -2873,6 +3008,8 @@ export class MessageHandlerService {
       "INSTALL_STYLE",
       "QUERY_STYLES_FOR_URL", // Restored
       "FETCH_ASSETS",
+      "GET_STYLE_FOR_EDIT",
+      "UPDATE_STYLE",
     ];
 
     const missingHandlers: string[] = [];

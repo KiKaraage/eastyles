@@ -41,6 +41,11 @@ export function isValidReceivedMessage(
     return validateApplyMessage(message, messageType);
   }
 
+  // Validate SaveMessages
+  if (isSaveMessage(messageType)) {
+    return validateSaveMessage(message, messageType);
+  }
+
   // Validate ContentMessages
   if (isContentMessage(messageType)) {
     return validateContentMessage(message, messageType);
@@ -89,6 +94,13 @@ function isApplyMessage(type: string): boolean {
     "CREATE_FONT_STYLE",
     "UPDATE_FONT_STYLE",
   ].includes(type);
+}
+
+/**
+ * Type guard to check if a message type belongs to SaveMessages.
+ */
+function isSaveMessage(type: string): boolean {
+  return ["GET_STYLE_FOR_EDIT", "UPDATE_STYLE"].includes(type);
 }
 
 /**
@@ -284,6 +296,49 @@ function validateApplyMessage(message: unknown, type: string): boolean {
           (payload as { fontName: string }).fontName.length > 0 &&
           (!("domain" in payload) ||
             typeof (payload as { domain?: unknown }).domain === "string")
+        );
+      }
+      return false;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Validates a SaveMessage based on its type and required payload structure.
+ */
+function validateSaveMessage(message: unknown, type: string): boolean {
+  switch (type) {
+    case "GET_STYLE_FOR_EDIT":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "styleId" in payload &&
+          typeof (payload as { styleId?: unknown }).styleId === "string" &&
+          (payload as { styleId: string }).styleId.length > 0
+        );
+      }
+      return false;
+    case "UPDATE_STYLE":
+      if (message && typeof message === "object" && "payload" in message) {
+        const payload = (message as { payload: unknown }).payload;
+        return (
+          payload !== null &&
+          typeof payload === "object" &&
+          "styleId" in payload &&
+          typeof (payload as { styleId?: unknown }).styleId === "string" &&
+          (payload as { styleId: string }).styleId.length > 0 &&
+          "name" in payload &&
+          typeof (payload as { name?: unknown }).name === "string" &&
+          "css" in payload &&
+          typeof (payload as { css?: unknown }).css === "string" &&
+          "meta" in payload &&
+          typeof (payload as { meta?: unknown }).meta === "object" &&
+          (payload as { meta: unknown }).meta !== null &&
+          "variables" in payload &&
+          Array.isArray((payload as { variables?: unknown }).variables)
         );
       }
       return false;

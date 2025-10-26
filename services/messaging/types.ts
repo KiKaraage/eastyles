@@ -54,7 +54,69 @@ export interface SaveMessageResponses {
     error?: string;
     styleId?: string;
   };
-  UPDATE_FONT_STYLE: {
+  UPDATE_FONT_STYLE:
+    | {
+        type: "UPDATE_FONT_STYLE";
+        payload: {
+          styleId: string;
+          domain?: string;
+          fontName: string;
+        };
+      }
+    | {
+        type: "GET_STYLE_FOR_EDIT";
+        payload: {
+          styleId: string;
+        };
+      }
+    | {
+        type: "UPDATE_STYLE";
+        payload: {
+          styleId: string;
+          name: string;
+          css: string;
+          meta: {
+            name: string;
+            namespace: string;
+            version: string;
+            description: string;
+            author: string;
+            sourceUrl: string;
+            domains: string[];
+          };
+          variables: Array<{
+            name: string;
+            type: string;
+            default: string;
+            min?: number;
+            max?: number;
+            options?: Array<{ value: string; label: string }>;
+            optionCss?: Record<string, string>;
+          }>;
+          source?: string;
+        };
+      };
+  GET_STYLE_FOR_EDIT: {
+    success: boolean;
+    error?: string;
+    style?: {
+      id: string;
+      name: string;
+      css: string;
+      meta: {
+        name: string;
+        namespace: string;
+        version: string;
+        description: string;
+        author: string;
+        sourceUrl: string;
+        domains: string[];
+        variables?: Record<string, VariableDescriptor>;
+      };
+      variables?: Record<string, VariableDescriptor>;
+    };
+  };
+  UPDATE_STYLE: {
     success: boolean;
     error?: string;
     styleId?: string;
@@ -260,6 +322,39 @@ export type SaveMessages =
         styleId: string;
         domain?: string;
         fontName: string;
+      };
+    }
+  | {
+      type: "GET_STYLE_FOR_EDIT";
+      payload: {
+        styleId: string;
+      };
+    }
+  | {
+      type: "UPDATE_STYLE";
+      payload: {
+        styleId: string;
+        name: string;
+        css: string;
+        meta: {
+          name: string;
+          namespace: string;
+          version: string;
+          description: string;
+          author: string;
+          sourceUrl: string;
+          domains: string[];
+        };
+        variables: Array<{
+          name: string;
+          type: string;
+          default: string;
+          min?: number;
+          max?: number;
+          options?: Array<{ value: string; label: string }>;
+          optionCss?: Record<string, string>;
+        }>;
+        source?: string;
       };
     };
 
