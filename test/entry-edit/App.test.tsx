@@ -1,8 +1,14 @@
 /**
- * Unit tests for Edit Page App component
- */
+* Unit tests for Edit Page App component
+*/
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+fireEvent,
+render,
+screen,
+waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock URLSearchParams
@@ -55,6 +61,23 @@ beforeEach(() => {
   // Mock window.history.back
   Object.defineProperty(window.history, "back", {
     value: vi.fn(),
+    writable: true,
+  });
+
+  // Mock browser.runtime for cancel button navigation
+  Object.defineProperty(global, "browser", {
+    value: {
+      runtime: {
+        getURL: vi.fn().mockReturnValue("chrome-extension://test/manager/index.html"),
+      },
+    },
+    writable: true,
+  });
+
+  // Mock window.location.href for navigation testing
+  const mockLocation = { href: "" };
+  Object.defineProperty(window, "location", {
+    value: mockLocation,
     writable: true,
   });
 });
@@ -257,6 +280,11 @@ describe("EditPage Component", () => {
       { timeout: 10000 },
     );
 
+    // Verify the title is displayed (metadata section was removed)
+    expect(screen.getByDisplayValue("Test Style")).toBeTruthy();
+
+    // Verify the CSS content is displayed
+    expect(screen.getByText(/body \{ color: red; \}/)).toBeTruthy();
   }, 15000);
 
   it("allows editing the title", async () => {
@@ -347,18 +375,20 @@ describe("EditPage Component", () => {
     const cancelButton = screen.getByText("Cancel");
     fireEvent.click(cancelButton);
 
+    expect(global.browser.runtime.getURL).toHaveBeenCalledWith("manager/index.html");
+    expect(window.location.href).toBe("chrome-extension://test/manager/index.html");
   });
 
   it("renders CodeMirror editor with initial CSS content", async () => {
-  await act(async () => {
+    await act(async () => {
       render(<EditPage />);
     });
 
     await waitFor(
-    () => {
-    expect(screen.getByDisplayValue("Test Style")).toBeTruthy();
-    },
-    { timeout: 10000 },
+      () => {
+        expect(screen.getByDisplayValue("Test Style")).toBeTruthy();
+      },
+      { timeout: 10000 },
     );
 
     // Wait for the editor container to be present in the DOM
@@ -371,7 +401,7 @@ describe("EditPage Component", () => {
     );
 
     // Give more time for CodeMirror to initialize
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Verify EditorView was initialized with correct CSS content
     const mockClass = (global as { mockEditorViewClass?: typeof vi.fn })
@@ -394,15 +424,15 @@ describe("EditPage Component", () => {
       render(<EditPage />);
     });
 
-  await waitFor(
-    () => {
-      expect(screen.getByDisplayValue("Test Style")).toBeTruthy();
-    },
-    { timeout: 10000 },
-  );
+    await waitFor(
+      () => {
+        expect(screen.getByDisplayValue("Test Style")).toBeTruthy();
+      },
+      { timeout: 10000 },
+    );
 
-  // Wait for the editor container to be present in the DOM
-  await waitFor(
+    // Wait for the editor container to be present in the DOM
+    await waitFor(
       () => {
         const editorContainer = document.querySelector(".absolute.inset-0");
         expect(editorContainer).toBeTruthy();
@@ -411,7 +441,7 @@ describe("EditPage Component", () => {
     );
 
     // Give time for CodeMirror to initialize
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Verify updateListener was set
     const mockClass = (global as { mockEditorViewClass?: typeof vi.fn })
@@ -442,9 +472,10 @@ describe("EditPage Component", () => {
   it("includes CodeMirror content in save operation", async () => {
     render(<EditPage />);
 
+    // Wait for the component to load and parse the style
     await waitFor(
       () => {
-        expect(screen.getByText("Save Changes")).toBeTruthy();
+        expect(screen.getByDisplayValue("Test Style")).toBeTruthy();
       },
       { timeout: 10000 },
     );

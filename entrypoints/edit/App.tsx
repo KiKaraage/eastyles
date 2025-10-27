@@ -5,16 +5,11 @@
  */
 
 import { css } from "@codemirror/lang-css";
+import { Compartment } from "@codemirror/state";
 import { basicSetup, EditorView } from "codemirror";
-import { ArrowUpRight, FloppyDisk, Settings } from "iconoir-react";
+import { FloppyDisk, Settings } from "iconoir-react";
 import type React from "react";
-import {
-useCallback,
-useEffect,
-useMemo,
-useRef,
-useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VariableControls } from "../../components/features/VariableControls";
 import { useEditActions, useSaveActions } from "../../hooks/useMessage";
 import { useTheme } from "../../hooks/useTheme";
@@ -52,15 +47,19 @@ const EditPage: React.FC = () => {
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [styleId, setStyleId] = useState<string | null>(null);
+  const [editorInitialized, setEditorInitialized] = useState<boolean>(false);
 
   const editorRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+  const themeCompartmentRef = useRef<Compartment>(new Compartment());
+  const cssContentRef = useRef<string>(cssContent);
 
   const { parseUserCSS } = useSaveActions();
   const { getStyleForEdit, updateStyle } = useEditActions();
   const { effectiveTheme } = useTheme();
 
   // Load style data from URL parameters
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentional empty deps to run only once
   useEffect(() => {
     const loadStyle = async (): Promise<void> => {
       try {
@@ -177,98 +176,42 @@ const EditPage: React.FC = () => {
     loadStyle();
   }, []); // Empty dependency array to run only once on mount
 
-  // Real-time parsing when CSS content changes - simplified to avoid infinite loops
-  useEffect(() => {
-    if (!cssContent) return;
-
-    const parseContent = async () => {
-      try {
-        const parseResponse = await parseUserCSS(cssContent, "edit://local");
-
-        if (
-          parseResponse &&
-          typeof parseResponse === "object" &&
-          parseResponse.success &&
-          parseResponse.meta &&
-          parseResponse.css
-        ) {
-          const result = {
-            meta: {
-              ...parseResponse.meta,
-              domains: parseResponse.meta.domains || [],
-            },
-            css: parseResponse.css,
-            metadataBlock: parseResponse.metadataBlock,
-            variables:
-              (
-                parseResponse as {
-                  variables?: Record<string, VariableDescriptor>;
-                }
-              ).variables || {},
-            warnings: parseResponse.warnings || [],
-            errors: parseResponse.errors || [],
-          };
-
-          // Only update if the result actually changed to prevent infinite loops
-          setParseResult((prevResult) => {
-            if (JSON.stringify(prevResult) !== JSON.stringify(result)) {
-              return result;
-            }
-            return prevResult;
-          });
-        }
-      } catch (error) {
-        console.error("[ea-EditPage] Error parsing CSS:", error);
-      }
-    };
-
-    // Debounce parsing to avoid excessive calls during typing
-    const timeoutId = setTimeout(parseContent, 500);
-    return () => clearTimeout(timeoutId);
-  }, [cssContent]); // Only depend on cssContent, remove parseUserCSS to prevent re-renders
+  // Skip real-time parsing during editing - metadata is already parsed on load
+  // This avoids unnecessary background processing that fails due to DOM dependencies
 
   // Initialize CodeMirror editor
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentionally exclude effectiveTheme to avoid recreating editor
   useEffect(() => {
     // Use a timeout to ensure DOM is fully ready
     const initTimer = setTimeout(() => {
-    console.log("[ea] CodeMirror init check:", {
-    hasCssContent: !!cssContent,
-    hasEditorRef: !!editorRef.current,
-    hasEditorView: !!editorViewRef.current,
-    cssLength: cssContent?.length,
-  cssContentValue: cssContent.substring(0, 50) + (cssContent.length > 50 ? "..." : ""),
-    });
+      console.log("[ea] CodeMirror init check:", {
+        hasCssContent: !!cssContent,
+        hasEditorRef: !!editorRef.current,
+        hasEditorView: !!editorViewRef.current,
+        cssLength: cssContent?.length,
+        cssContentValue:
+          cssContent.substring(0, 50) + (cssContent.length > 50 ? "..." : ""),
+      });
 
-    // Only initialize if we have content, a container that's mounted, and haven't initialized yet
-    if (!cssContent || !editorRef.current || editorViewRef.current) {
-    console.log("[ea] CodeMirror init skipped:", {
-    hasCssContent: !!cssContent,
-    hasEditorRef: !!editorRef.current,
-      hasEditorView: !!editorViewRef.current,
-    cssLength: cssContent?.length,
-      cssContentStartsWith: cssContent.substring(0, 20),
-    });
-  return;
-  }
+      // Only initialize if we have content, a container that's mounted, and haven't initialized yet
+      if (!cssContent || !editorRef.current || editorViewRef.current) {
+        console.log("[ea] CodeMirror init skipped:", {
+          hasCssContent: !!cssContent,
+          hasEditorRef: !!editorRef.current,
+          hasEditorView: !!editorViewRef.current,
+          cssLength: cssContent?.length,
+          cssContentStartsWith: cssContent.substring(0, 20),
+        });
+        return;
+      }
 
-    console.log(
-    "[ea] Initializing CodeMirror editor with content length:",
-    cssContent.length,
-  );
+      console.log(
+        "[ea] Initializing CodeMirror editor with content length:",
+        cssContent.length,
+      );
 
-  try {
-    editorViewRef.current = new EditorView({
-      doc: cssContent,
-      extensions: [
-        basicSetup,
-        css(),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            const newContent = update.state.doc.toString();
-            setCssContent(newContent);
-          }
-        }),
-        EditorView.theme({
+      try {
+        const themeExtension = EditorView.theme({
           "&": {
             height: "100%",
             fontSize: "14px",
@@ -293,56 +236,91 @@ const EditPage: React.FC = () => {
           ".cm-focused": {
             outline: "none",
           },
-        }),
-      ],
-      parent: editorRef.current,
-    });
+        });
 
-    console.log("[ea] CodeMirror editor initialized successfully");
-  } catch (error) {
-    console.error("[ea] Failed to initialize CodeMirror editor:", error);
-  }
-  }, 100); // Timeout to ensure DOM is ready
+        editorViewRef.current = new EditorView({
+          doc: cssContent,
+          extensions: [
+            basicSetup,
+            css(),
+            themeCompartmentRef.current.of(themeExtension),
+            EditorView.updateListener.of((update) => {
+              if (update.docChanged) {
+                // Keep ref in sync with editor content
+                cssContentRef.current = update.state.doc.toString();
+              }
+            }),
+          ],
+          parent: editorRef.current,
+        });
 
-  return () => {
-    clearTimeout(initTimer);
-    if (
-    editorViewRef.current &&
-      typeof editorViewRef.current.destroy === "function"
-    ) {
-    editorViewRef.current.destroy();
-  editorViewRef.current = null;
-  }
-  };
-  }, [effectiveTheme, cssContent]);
-
-  // Update editor content when cssContent changes (but don't recreate the editor)
-  useEffect(() => {
-    if (editorViewRef.current && cssContent !== undefined) {
-      try {
-        const currentContent = editorViewRef.current.state.doc.toString();
-        if (currentContent !== cssContent) {
-          editorViewRef.current.dispatch({
-            changes: {
-              from: 0,
-              to: currentContent.length,
-              insert: cssContent,
-            },
-          });
-        }
+        console.log("[ea] CodeMirror editor initialized successfully");
+        setEditorInitialized(true);
       } catch (error) {
-        console.error("[ea] Failed to update editor content:", error);
+        console.error("[ea] Failed to initialize CodeMirror editor:", error);
       }
-    }
+    }, 100); // Timeout to ensure DOM is ready
+
+    return () => {
+      clearTimeout(initTimer);
+      if (
+        editorViewRef.current &&
+        typeof editorViewRef.current.destroy === "function"
+      ) {
+        editorViewRef.current.destroy();
+        editorViewRef.current = null;
+        setEditorInitialized(false);
+      }
+    };
+  }, [cssContent]); // Only depend on cssContent for initialization
+
+  // Keep cssContentRef in sync with cssContent for fallback in save/validation
+  useEffect(() => {
+    cssContentRef.current = cssContent;
   }, [cssContent]);
 
+  // Update theme when effectiveTheme changes
+  useEffect(() => {
+    if (!editorViewRef.current) return;
+
+    const themeExtension = EditorView.theme({
+      "&": {
+        height: "100%",
+        fontSize: "14px",
+        backgroundColor:
+          effectiveTheme === "dark" ? "hsl(var(--b3))" : "hsl(var(--b2))",
+      },
+      ".cm-content": {
+        fontFamily:
+          'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Inconsolata, "Roboto Mono", "Source Code Pro", monospace',
+        backgroundColor:
+          effectiveTheme === "dark" ? "hsl(var(--b3))" : "hsl(var(--b2))",
+      },
+      ".cm-scroller": {
+        height: "100%",
+        overflow: "auto",
+        backgroundColor:
+          effectiveTheme === "dark" ? "hsl(var(--b3))" : "hsl(var(--b2))",
+      },
+      ".cm-line": {
+        backgroundColor: "transparent",
+      },
+      ".cm-focused": {
+        outline: "none",
+      },
+    });
+
+    editorViewRef.current.dispatch({
+      effects: themeCompartmentRef.current.reconfigure(themeExtension),
+    });
+  }, [effectiveTheme]);
+
   const handleCancel = (): void => {
-    if (document.referrer) {
-      window.history.back();
-    } else {
-      // Fallback: close window or navigate to manager
-      window.close();
+    // Navigate to manager page instead of closing tab
+    if (typeof browser !== "undefined" && browser.runtime?.getURL) {
+      window.location.href = browser.runtime.getURL("manager/index.html");
     }
+    // Don't close tab if navigation fails
   };
 
   // Memoized variables extraction to avoid recalculating on every render
@@ -364,11 +342,17 @@ const EditPage: React.FC = () => {
   const validationErrors = useMemo(() => {
     const errors = [];
     if (!title.trim()) errors.push("Style name cannot be empty");
-    if (!cssContent.trim()) errors.push("CSS content cannot be empty");
+
+    // Get current CSS content for validation
+    const currentCssContent = editorViewRef.current
+      ? editorViewRef.current.state.doc.toString()
+      : cssContentRef.current;
+
+    if (!currentCssContent.trim()) errors.push("CSS content cannot be empty");
     if (parseResult?.errors && parseResult.errors.length > 0)
       errors.push("Please fix CSS errors before saving");
     return errors;
-  }, [title, cssContent, parseResult?.errors]);
+  }, [title, parseResult?.errors]); // Remove cssContent dependency since we get it dynamically
 
   const handleSave = async () => {
     if (!parseResult || !styleId) return;
@@ -383,13 +367,18 @@ const EditPage: React.FC = () => {
       setSaving(true);
       setError(null);
 
+      // Get current CSS content from editor
+      const currentCssContent = editorViewRef.current
+        ? editorViewRef.current.state.doc.toString()
+        : cssContentRef.current;
+
       const response = await updateStyle(
         styleId,
         title.trim(),
-        cssContent,
+        currentCssContent,
         parseResult.meta,
         extractedVariables,
-        cssContent, // Use current CSS content as source
+        currentCssContent, // Use current CSS content as source
       );
 
       if (response.success) {
@@ -560,15 +549,13 @@ const EditPage: React.FC = () => {
             ref={editorRef}
             className="absolute inset-0"
             style={{
-              backgroundColor: editorViewRef.current
-                ? "transparent"
-                : "#f0f0f0",
-              color: editorViewRef.current ? "inherit" : "#666",
-              padding: editorViewRef.current ? "0" : "1rem",
-              fontFamily: editorViewRef.current ? "inherit" : "monospace",
+              backgroundColor: editorInitialized ? "transparent" : "#f0f0f0",
+              color: editorInitialized ? "inherit" : "#666",
+              padding: editorInitialized ? "0" : "1rem",
+              fontFamily: editorInitialized ? "inherit" : "monospace",
             }}
           >
-            {!editorViewRef.current && cssContent && (
+            {!editorInitialized && cssContent && (
               <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                 {cssContent}
               </pre>
