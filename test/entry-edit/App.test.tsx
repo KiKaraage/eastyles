@@ -375,8 +375,8 @@ describe("EditPage Component", () => {
     const cancelButton = screen.getByText("Cancel");
     fireEvent.click(cancelButton);
 
-    expect(global.browser.runtime.getURL).toHaveBeenCalledWith("manager/index.html");
-    expect(window.location.href).toBe("chrome-extension://test/manager/index.html");
+    expect(global.browser.runtime.getURL).toHaveBeenCalledWith("manager.html");
+    expect(window.location.href).toBe("chrome-extension://test/manager.html");
   });
 
   it("renders CodeMirror editor with initial CSS content", async () => {

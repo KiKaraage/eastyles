@@ -318,7 +318,7 @@ const EditPage: React.FC = () => {
   const handleCancel = (): void => {
     // Navigate to manager page instead of closing tab
     if (typeof browser !== "undefined" && browser.runtime?.getURL) {
-      window.location.href = browser.runtime.getURL("manager/index.html");
+      window.location.href = browser.runtime.getURL("manager.html");
     }
     // Don't close tab if navigation fails
   };
