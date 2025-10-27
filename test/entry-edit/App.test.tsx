@@ -68,7 +68,7 @@ beforeEach(() => {
   Object.defineProperty(global, "browser", {
     value: {
       runtime: {
-        getURL: vi.fn().mockReturnValue("chrome-extension://test/manager/index.html"),
+        getURL: vi.fn().mockReturnValue("chrome-extension://test/manager.html"),
       },
     },
     writable: true,
