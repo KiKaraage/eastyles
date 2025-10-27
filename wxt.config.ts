@@ -10,7 +10,7 @@ export default defineConfig({
     "@wxt-dev/i18n/module",
   ],
   i18n: {
-    localesDir: "public/_locales/"
+    localesDir: "public/_locales/",
   },
   manifest: {
     name: "__MSG_appName__",
