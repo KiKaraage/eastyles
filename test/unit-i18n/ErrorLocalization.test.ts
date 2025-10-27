@@ -25,6 +25,7 @@ vi.mock("@wxt-dev/i18n", () => ({
     t: mockI18nT,
   })),
 }));
+
 import { i18nService } from "@services/i18n/service";
 
 beforeEach(() => {

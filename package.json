@@ -13,7 +13,7 @@
     "zip": "wxt zip -b firefox",
     "zip:crx": "wxt zip",
     "compile": "tsc --noEmit",
-    "postinstall": "node ./patch-wxt-i18n.mjs && wxt prepare",
+    "postinstall": "wxt prepare",
     "lint": "npx biome check --fix .",
     "lint:all": "npx biome check .",
     "lint:fix": "npx biome check --fix .",

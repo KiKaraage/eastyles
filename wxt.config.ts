@@ -9,6 +9,9 @@ export default defineConfig({
     "@wxt-dev/webextension-polyfill",
     "@wxt-dev/i18n/module",
   ],
+  i18n: {
+    localesDir: "public/_locales/"
+  },
   manifest: {
     name: "__MSG_appName__",
     description: "__MSG_appDescription__",
