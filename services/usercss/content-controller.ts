@@ -67,7 +67,7 @@ export class UserCSSContentController implements ContentController {
 
   private debug(message: string, ...args: unknown[]): void {
     if (this.debugEnabled) {
-      console.log(`[ContentController] ${message}`, ...args);
+      console.log(`[ea-ContentController] ${message}`, ...args);
     }
   }
 
@@ -75,29 +75,21 @@ export class UserCSSContentController implements ContentController {
    * Initialize the content controller
    */
   async initialize(): Promise<void> {
-    console.log("[ea-ContentController] Starting initialization...");
     this.debug("Initializing content controller");
 
     try {
       // Get current URL
       this.currentUrl = window.location.href;
-      console.log("[ea-ContentController] Current URL:", this.currentUrl);
 
       // Check CSP headers that might affect CSS injection
-      console.log("[ea-ContentController] Checking CSP headers...");
       this.checkCSPHeaders();
 
       // Query active styles for current URL
-      console.log("[ea-ContentController] Querying and applying styles...");
-      await this.queryAndApplyStyles();
+      const activeStyles = await this.queryAndApplyStyles();
 
-      // Set up navigation listener
-      console.log("[ea-ContentController] Setting up navigation listener...");
+      // Set up navigation listener (always needed for SPA support)
       this.setupNavigationListener();
 
-      console.log(
-        "[ea-ContentController] Content controller initialized successfully",
-      );
       this.debug("Content controller initialized successfully");
     } catch (error) {
       console.error("[ea-ContentController] Failed to initialize:", error);
@@ -162,7 +154,7 @@ export class UserCSSContentController implements ContentController {
   /**
    * Query active styles and apply matching ones
    */
-  private async queryAndApplyStyles(): Promise<void> {
+  private async queryAndApplyStyles(): Promise<UserCSSStyle[]> {
     const totalStartTime = performance.now();
     const performanceSpans: Array<{ operation: string; duration: number }> = [];
 
@@ -200,35 +192,43 @@ export class UserCSSContentController implements ContentController {
       });
 
       // Log applied styles
-      this.debug(
-        `Applied ${this.appliedStyles.size} styles:`,
-        Array.from(this.appliedStyles.keys()),
-      );
-
-      // Log performance with detailed spans
-      const totalDuration = performance.now() - totalStartTime;
-      const performanceData = {
-        totalDuration: `${totalDuration.toFixed(2)}ms`,
-        spans: performanceSpans.map(
-          (s) => `${s.operation}: ${s.duration.toFixed(2)}ms`,
-        ),
-        budget: "1000ms",
-        appliedStylesCount: this.appliedStyles.size,
-      };
-
-      if (totalDuration > 1000) {
-        // Performance budget exceeded - log as warning via ErrorService
-        logger.warn?.(
-          ErrorSource.CONTENT,
-          "Performance budget exceeded",
-          performanceData,
+      if (this.appliedStyles.size > 0) {
+        console.log(
+          `[ea-ContentController] Applied ${this.appliedStyles.size} styles:`,
+          Array.from(this.appliedStyles.keys()),
         );
       } else {
-        this.debug(
-          `Performance: queryAndApplyStyles completed in ${totalDuration.toFixed(2)}ms`,
-          performanceData,
-        );
+        this.debug("No styles applied for this URL");
       }
+
+      // Log performance with detailed spans (only for styled sites or debug mode)
+      const totalDuration = performance.now() - totalStartTime;
+      if (activeStyles.length > 0 || this.debugEnabled) {
+        const performanceData = {
+          totalDuration: `${totalDuration.toFixed(2)}ms`,
+          spans: performanceSpans.map(
+            (s) => `${s.operation}: ${s.duration.toFixed(2)}ms`,
+          ),
+          budget: "1000ms",
+          appliedStylesCount: this.appliedStyles.size,
+        };
+
+        if (totalDuration > 1000) {
+          // Performance budget exceeded - log as warning via ErrorService
+          logger.warn?.(
+            ErrorSource.CONTENT,
+            "Performance budget exceeded",
+            performanceData,
+          );
+        } else {
+          this.debug(
+            `Performance: queryAndApplyStyles completed in ${totalDuration.toFixed(2)}ms`,
+            performanceData,
+          );
+        }
+      }
+
+      return activeStyles;
     } catch (error) {
       const totalDuration = performance.now() - totalStartTime;
       logger.error?.(ErrorSource.CONTENT, "Failed to query and apply styles", {
@@ -236,6 +236,7 @@ export class UserCSSContentController implements ContentController {
         duration: `${totalDuration.toFixed(2)}ms`,
         spans: performanceSpans,
       });
+      return [];
     }
   }
 
@@ -253,9 +254,6 @@ export class UserCSSContentController implements ContentController {
 
       // Check if background script is available first
       if (!browser.runtime?.id) {
-        console.log(
-          "[ea-ContentController] Background script not available (no runtime.id)",
-        );
         this.debug("Background script not available (no runtime.id)");
         return [];
       }
@@ -272,9 +270,6 @@ export class UserCSSContentController implements ContentController {
       });
 
       // Send message to background script
-      console.log(
-        "[ea-ContentController] Sending QUERY_STYLES_FOR_URL message",
-      );
       const messagePromise = browser.runtime.sendMessage({
         type: "QUERY_STYLES_FOR_URL",
         payload: { url: this.currentUrl },
@@ -289,13 +284,7 @@ export class UserCSSContentController implements ContentController {
         styles?: UserCSSStyle[];
       };
 
-      console.log("[ea-ContentController] Raw response received:", response);
-      console.log("[ea-ContentController] Response type:", typeof response);
-
       if (response && response.success && response.styles) {
-        console.log(
-          `[ContentController] Received ${response.styles.length} styles from background`,
-        );
         this.debug(
           `Received ${response.styles.length} styles from background:`,
           response.styles.map((s) => s.id),
@@ -303,9 +292,6 @@ export class UserCSSContentController implements ContentController {
         this.retryCount = 0; // Reset retry count on success
         return response.styles;
       } else {
-        console.log(
-          "[ea-ContentController] No styles received from background or query failed",
-        );
         this.debug("No styles received from background or query failed");
         return [];
       }
@@ -326,7 +312,7 @@ export class UserCSSContentController implements ContentController {
 
         if (this.retryCount >= this.maxRetries) {
           console.error(
-            `[ContentController] Background script not available after ${this.maxRetries} retries`,
+            `[ea-ContentController] Background script not available after ${this.maxRetries} retries`,
           );
           logger.error?.(
             ErrorSource.CONTENT,
@@ -342,7 +328,7 @@ export class UserCSSContentController implements ContentController {
         }
 
         console.log(
-          `[ContentController] Retrying background query in 2 seconds (${this.retryCount}/${this.maxRetries})`,
+          `[ea-ContentController] Retrying background query in 2 seconds (${this.retryCount}/${this.maxRetries})`,
         );
         logger.error?.(
           ErrorSource.CONTENT,
@@ -357,7 +343,7 @@ export class UserCSSContentController implements ContentController {
         return this.queryActiveStyles();
       } else {
         console.error(
-          "[ContentController] Unexpected query error:",
+          "[ea-ContentController] Unexpected query error:",
           errorMessage,
         );
         logger.error?.(
@@ -484,7 +470,7 @@ export class UserCSSContentController implements ContentController {
     } catch (error) {
       const styleDuration = performance.now() - styleStartTime;
       console.error(
-        "[ContentController] Failed to apply style:",
+        "[ea-ContentController] Failed to apply style:",
         style.id,
         error,
       );
@@ -517,7 +503,7 @@ export class UserCSSContentController implements ContentController {
       }
 
       console.log(
-        "[ContentController] Resolving variables for style:",
+        "[ea-ContentController] Resolving variables for style:",
         style.id,
         "variables:",
         values,
@@ -535,12 +521,12 @@ export class UserCSSContentController implements ContentController {
         finalCss.length,
       );
       console.log(
-        "[ContentController] Variables resolved, final CSS preview:",
+        "[ea-ContentController] Variables resolved, final CSS preview:",
         finalCss.substring(0, 200) + "...",
       );
     } else {
       console.log(
-        "[ContentController] No variables to resolve for style:",
+        "[ea-ContentController] No variables to resolve for style:",
         style.id,
       );
     }
@@ -562,7 +548,7 @@ export class UserCSSContentController implements ContentController {
       const totalAssets = assetResult.assets.length;
 
       console.log(
-        `[ContentController] Asset processing completed in ${assetProcessingDuration.toFixed(2)}ms:`,
+        `[ea-ContentController] Asset processing completed in ${assetProcessingDuration.toFixed(2)}ms:`,
         `${successfulAssets}/${totalAssets} assets processed`,
       );
 
@@ -593,7 +579,7 @@ export class UserCSSContentController implements ContentController {
         );
       }
     } catch (error) {
-      console.warn("[ContentController] Asset processing failed:", error);
+      console.warn("[ea-ContentController] Asset processing failed:", error);
       logger.error?.(ErrorSource.CONTENT, "Failed to process external assets", {
         error: error instanceof Error ? error.message : String(error),
         styleId: style.id,
@@ -606,26 +592,26 @@ export class UserCSSContentController implements ContentController {
 
     // Inject the CSS using the CSS injector
     console.log(
-      "[ContentController] Injecting CSS for style:",
+      "[ea-ContentController] Injecting CSS for style:",
       style.id,
       "final CSS length:",
       finalCss.length,
     );
     console.log(
-      "[ContentController] Final CSS content preview:",
+      "[ea-ContentController] Final CSS content preview:",
       finalCss.substring(0, 300) + (finalCss.length > 300 ? "..." : ""),
     );
 
     // Check if CSS contains valid selectors
     const selectorMatches = finalCss.match(/\{[^}]*\}/g);
     console.log(
-      "[ContentController] CSS rule blocks found:",
+      "[ea-ContentController] CSS rule blocks found:",
       selectorMatches?.length || 0,
     );
 
     await cssInjector.inject(finalCss, style.id);
     console.log(
-      "[ContentController] CSS injection completed for style:",
+      "[ea-ContentController] CSS injection completed for style:",
       style.id,
     );
 
@@ -719,7 +705,7 @@ export class UserCSSContentController implements ContentController {
             this.debug(`Reprocessed style ${styleId} with updated variables`);
           } catch (processError) {
             console.error(
-              "[ContentController] Failed to reprocess CSS for style update:",
+              "[ea-ContentController] Failed to reprocess CSS for style update:",
               processError,
             );
             // Fall back to using the existing compiled CSS
@@ -845,7 +831,7 @@ export class UserCSSContentController implements ContentController {
 
               if (oldAssets.length > 0) {
                 console.log(
-                  `[ContentController] Cleared ${oldAssets.length} old assets from cache for style ${styleId}`,
+                  `[ea-ContentController] Cleared ${oldAssets.length} old assets from cache for style ${styleId}`,
                 );
               }
             } catch (error) {
@@ -886,17 +872,12 @@ export class UserCSSContentController implements ContentController {
    */
   private checkCSPHeaders(): void {
     try {
-      console.log("[ea-ContentController] Checking CSP headers...");
-
       // Check meta tag CSP
       const cspMeta = globalThis.document.querySelector(
         'meta[http-equiv="Content-Security-Policy"]',
       );
       if (cspMeta) {
-        console.log(
-          "[ContentController] Found CSP meta tag:",
-          cspMeta.getAttribute("content"),
-        );
+        this.debug("Found CSP meta tag:", cspMeta.getAttribute("content"));
       }
 
       // Try to detect CSP violations by attempting a simple style injection
@@ -908,12 +889,10 @@ export class UserCSSContentController implements ContentController {
       setTimeout(() => {
         if (testStyle.parentNode) {
           testStyle.parentNode.removeChild(testStyle);
-          console.log(
-            "[ContentController] CSP test passed - style injection allowed",
-          );
+          this.debug("CSP test passed - style injection allowed");
         } else {
           console.warn(
-            "[ContentController] CSP test failed - style may be blocked",
+            "[ea-ContentController] CSP test failed - style may be blocked",
           );
         }
       }, 100);
@@ -922,7 +901,7 @@ export class UserCSSContentController implements ContentController {
       globalThis.document.addEventListener(
         "securitypolicyviolation",
         (event) => {
-          console.error("[ContentController] CSP violation detected:", {
+          console.error("[ea-ContentController] CSP violation detected:", {
             violatedDirective: event.violatedDirective,
             blockedURI: event.blockedURI,
             sourceFile: event.sourceFile,
@@ -931,7 +910,7 @@ export class UserCSSContentController implements ContentController {
         },
       );
     } catch (error) {
-      console.error("[ContentController] Error checking CSP headers:", error);
+      this.debug("Error checking CSP headers:", error);
     }
   }
 
@@ -944,7 +923,7 @@ export class UserCSSContentController implements ContentController {
   ): Promise<string> {
     console.log("[ea-ContentController] Original CSS length:", css.length);
     console.log(
-      "[ContentController] Original CSS preview:",
+      "[ea-ContentController] Original CSS preview:",
       css.substring(0, 500),
     );
 
@@ -988,7 +967,7 @@ export class UserCSSContentController implements ContentController {
         "[ea-ContentController] CSS was modified during preprocessing",
       );
       console.log(
-        "[ContentController] Original length:",
+        "[ea-ContentController] Original length:",
         css.length,
         "Processed length:",
         processedCss.length,
@@ -1038,7 +1017,7 @@ export class UserCSSContentController implements ContentController {
       extractionCount++;
 
       console.log(
-        `[ContentController] Extracting @-moz-document block ${extractionCount}`,
+        `[ea-ContentController] Extracting @-moz-document block ${extractionCount}`,
         {
           blockLength: content.length,
           preview: content.substring(0, 200),
@@ -1068,14 +1047,14 @@ export class UserCSSContentController implements ContentController {
     if (hasExtractedContent) {
       const result = allExtractedContent.trim();
       console.log(
-        "[ContentController] Total extracted content length:",
+        "[ea-ContentController] Total extracted content length:",
         result.length,
         "from",
         extractionCount,
         "blocks",
       );
       console.log(
-        "[ContentController] Extracted content preview:",
+        "[ea-ContentController] Extracted content preview:",
         result.substring(0, 500),
       );
       return result;
@@ -1153,25 +1132,25 @@ export class UserCSSContentController implements ContentController {
         `style[data-eastyles-id="${styleId}"]`,
       );
       console.log(
-        `[ContentController] Style ${styleId} found in DOM as style element:`,
+        `[ea-ContentController] Style ${styleId} found in DOM as style element:`,
         !!styleElement,
       );
 
       if (styleElement) {
         const sheet = (styleElement as HTMLStyleElement).sheet;
         console.log(
-          `[ContentController] Style ${styleId} has CSS sheet:`,
+          `[ea-ContentController] Style ${styleId} has CSS sheet:`,
           !!sheet,
         );
 
         if (sheet) {
           console.log(
-            `[ContentController] Style ${styleId} has ${sheet.cssRules.length} CSS rules`,
+            `[ea-ContentController] Style ${styleId} has ${sheet.cssRules.length} CSS rules`,
           );
           // Log first few rules to see if they're valid
           for (let i = 0; i < Math.min(sheet.cssRules.length, 3); i++) {
             console.log(
-              `[ContentController] Rule ${i}:`,
+              `[ea-ContentController] Rule ${i}:`,
               sheet.cssRules[i].cssText,
             );
           }
@@ -1181,14 +1160,14 @@ export class UserCSSContentController implements ContentController {
       // Check if constructable stylesheet was used
       if (globalThis.document.adoptedStyleSheets) {
         console.log(
-          `[ContentController] AdoptedStyleSheets count: ${globalThis.document.adoptedStyleSheets.length}`,
+          `[ea-ContentController] AdoptedStyleSheets count: ${globalThis.document.adoptedStyleSheets.length}`,
         );
       }
 
       // Check if any elements on the page have styles that might be from our CSS
       setTimeout(() => {
         console.log(
-          `[ContentController] Page style verification for ${styleId}:`,
+          `[ea-ContentController] Page style verification for ${styleId}:`,
         );
         console.log(
           `- Body background:`,
@@ -1202,7 +1181,7 @@ export class UserCSSContentController implements ContentController {
       }, 200);
     } catch (error) {
       console.error(
-        `[ContentController] Error verifying style application for ${styleId}:`,
+        `[ea-ContentController] Error verifying style application for ${styleId}:`,
         error,
       );
     }
@@ -1223,7 +1202,7 @@ export class UserCSSContentController implements ContentController {
       const result = await processAssetsInCss(css);
 
       console.log(
-        `[ContentController] Asset processing completed: ${result.assets.filter((a) => a.dataUrl).length}/${result.assets.length} successful`,
+        `[ea-ContentController] Asset processing completed: ${result.assets.filter((a) => a.dataUrl).length}/${result.assets.length} successful`,
       );
 
       return { css: result.css, assets: result.assets };

@@ -50,15 +50,10 @@ type ContentScriptMessage =
 export default defineContentScript({
   matches: ["<all_urls>"],
   main() {
-    console.log(
-      "[ea-ContentScript] UserCSS content script initializing on:",
-      window.location.href,
-    );
-
     // Hide #stylus element on userstyles.world
-    if (window.location.hostname === 'userstyles.world') {
-      const style = document.createElement('style');
-      style.textContent = '#stylus { display: none !important; }';
+    if (window.location.hostname === "userstyles.world") {
+      const style = document.createElement("style");
+      style.textContent = "#stylus { display: none !important; }";
       document.head.appendChild(style);
     }
 
@@ -77,9 +72,6 @@ export default defineContentScript({
             "../services/usercss/content-controller"
           );
           await contentController.initialize();
-          console.log(
-            "[ea] UserCSS content controller initialized successfully",
-          );
         } catch (error) {
           console.error(
             "Failed to initialize UserCSS content controller:",

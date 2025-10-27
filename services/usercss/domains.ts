@@ -5,7 +5,7 @@
  * Supports url(), url-prefix(), domain(), and regexp() patterns.
  */
 
-import { DomainRule } from "@services/usercss/types";
+import { DomainRule } from "./types";
 
 /**
  * Regular expressions for matching different types of domain rules

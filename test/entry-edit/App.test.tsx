@@ -1,13 +1,13 @@
 /**
-* Unit tests for Edit Page App component
-*/
+ * Unit tests for Edit Page App component
+ */
 
 import {
   act,
-fireEvent,
-render,
-screen,
-waitFor,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

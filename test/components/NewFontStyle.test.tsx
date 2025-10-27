@@ -6,7 +6,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import NewFontStyle from "../../../components/features/NewFontStyle";
+import NewFontStyle from "../../components/features/NewFontStyle";
 
 // Mock font registry
 vi.mock("../../../services/usercss/font-registry", () => ({
@@ -71,7 +71,7 @@ describe("NewFontStyle", () => {
     // Check for the main container with specific class
     expect(
       screen.getByText((_, element) => {
-        return element?.className?.includes("space-y-4 pt-2");
+        return element?.className?.includes("space-y-4 pt-2") ?? false;
       }),
     ).toBeTruthy();
 
