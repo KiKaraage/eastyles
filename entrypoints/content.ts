@@ -55,6 +55,13 @@ export default defineContentScript({
       window.location.href,
     );
 
+    // Hide #stylus element on userstyles.world
+    if (window.location.hostname === 'userstyles.world') {
+      const style = document.createElement('style');
+      style.textContent = '#stylus { display: none !important; }';
+      document.head.appendChild(style);
+    }
+
     try {
       // Check if this is a .user.css file and redirect to Save page
       if (isUserCSSFile()) {
