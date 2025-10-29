@@ -515,7 +515,7 @@ describe("ApplyPage Message Bus Communication", () => {
       });
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[useSaveActions] parseUserCSS called, text length:",
+        "[ea-useSaveActions] parseUserCSS called, text length:",
         16,
       );
 
@@ -549,7 +549,7 @@ describe("ApplyPage Message Bus Communication", () => {
       });
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[useSaveActions] installStyle called, style:",
+        "[ea-useSaveActions] installStyle called, style:",
         "Logged Style",
       );
 
