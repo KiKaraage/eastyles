@@ -27,12 +27,33 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
   );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Reset category when selectedFont changes
+  useEffect(() => {
+    setSelectedCategory(null);
+  }, [selectedFont]);
+
   // Load font CSS for preview
   useEffect(() => {
     const allBuiltInFonts = fontRegistry.getBuiltInFonts();
     const builtInFonts = selectedCategory
       ? allBuiltInFonts.filter((font) => font.category === selectedCategory)
       : allBuiltInFonts;
+
+    // Also include fonts for selectedFont and customFontName if they are built-in
+    const fontsToLoad = new Set(builtInFonts);
+    const selectedBuiltIn = allBuiltInFonts.find(
+      (font) => font.name === selectedFont,
+    );
+    if (selectedBuiltIn) {
+      fontsToLoad.add(selectedBuiltIn);
+    }
+    const customBuiltIn = allBuiltInFonts.find(
+      (font) => font.name === customFontName,
+    );
+    if (customBuiltIn) {
+      fontsToLoad.add(customBuiltIn);
+    }
+
     const styleId = "font-preview-styles";
 
     // Remove existing style if any
@@ -44,7 +65,7 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
     // Create new style element
     const style = document.createElement("style");
     style.id = styleId;
-    style.textContent = builtInFonts
+    style.textContent = Array.from(fontsToLoad)
       .map((font) => {
         const fontPath = `/fonts/${font.file}`;
         return `
@@ -70,7 +91,7 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
         styleToRemove.remove();
       }
     };
-  }, [selectedCategory]);
+  }, [selectedCategory, selectedFont, customFontName]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -174,11 +195,14 @@ const NewFontStyle: React.FC<NewFontStyleProps> = ({
           </button>
           <button
             type="button"
-            onClick={() =>
-              setSelectedCategory(
-                selectedCategory === "custom" ? null : "custom",
-              )
-            }
+            onClick={() => {
+              const newCategory =
+                selectedCategory === "custom" ? null : "custom";
+              setSelectedCategory(newCategory);
+              if (newCategory === "custom") {
+                setCustomFontName(selectedFont);
+              }
+            }}
             className={`btn btn-sm ${selectedCategory === "custom" ? "btn-primary" : "btn-outline"}`}
           >
             Custom
