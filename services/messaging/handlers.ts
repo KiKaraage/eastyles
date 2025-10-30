@@ -697,7 +697,11 @@ const handleParseUserCSS: MessageHandler = async (message) => {
             potentialDomain.length <= 253 &&
             potentialDomain.includes(".")
           ) {
-            domains.push(potentialDomain);
+            domains.push({
+              kind: "domain",
+              pattern: potentialDomain,
+              include: true,
+            });
           }
         }
       } catch (error) {
@@ -781,9 +785,11 @@ const handleParseUserCSS: MessageHandler = async (message) => {
       const license = licenseMatch ? licenseMatch[1].trim() : undefined;
       const sourceUrl = homepageURLMatch
         ? homepageURLMatch[1].trim()
-        : supportURLMatch
-          ? supportURLMatch[1].trim()
-          : "";
+        : websiteMatch
+          ? websiteMatch[1].trim()
+          : supportURLMatch
+            ? supportURLMatch[1].trim()
+            : "";
 
       // Validation - only if metadata block exists
       if (metadataMatch) {
@@ -804,8 +810,12 @@ const handleParseUserCSS: MessageHandler = async (message) => {
         domains.push(
           ...domainMatches[1]
             .split(",")
-            .map((d: string) => d.trim())
-            .filter(Boolean),
+            .map((d: string) => ({
+              kind: "domain" as const,
+              pattern: d.trim(),
+              include: true,
+            }))
+            .filter((d) => d.pattern),
         );
       }
 
@@ -817,7 +827,8 @@ const handleParseUserCSS: MessageHandler = async (message) => {
           // Very basic domain extraction from pattern
           if (pattern.includes("*://*.")) {
             const domain = pattern.split("*://*.")[1]?.split("/")[0];
-            if (domain) domains.push(domain);
+            if (domain)
+              domains.push({ kind: "domain", pattern: domain, include: true });
           }
         });
       }
@@ -839,7 +850,11 @@ const handleParseUserCSS: MessageHandler = async (message) => {
           domainMatchesCss.forEach((match: string) => {
             const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
             if (domainMatch) {
-              domains.push(domainMatch[1]);
+              domains.push({
+                kind: "domain",
+                pattern: domainMatch[1],
+                include: true,
+              });
             }
           });
         }
@@ -867,8 +882,13 @@ const handleParseUserCSS: MessageHandler = async (message) => {
                 "[ea-parseUserCSSMinimal] Extracted domains:",
                 extractedDomains,
               );
-              extractedDomains.forEach((domain: string) => {
-                if (!domains.includes(domain)) {
+              extractedDomains.forEach((domain: DomainRule) => {
+                if (
+                  !domains.some(
+                    (d) =>
+                      d.pattern === domain.pattern && d.kind === domain.kind,
+                  )
+                ) {
                   domains.push(domain);
                 }
               });
@@ -884,7 +904,11 @@ const handleParseUserCSS: MessageHandler = async (message) => {
           urlPrefixMatches.forEach((match: string) => {
             const urlMatch = match.match(/url-prefix\\(["']?([^"')]+)["']?\\)/);
             if (urlMatch) {
-              domains.push(extractHostname(urlMatch[1]));
+              domains.push({
+                kind: "url-prefix",
+                pattern: urlMatch[1],
+                include: true,
+              });
             }
           });
         }
@@ -1404,8 +1428,12 @@ const handleInstallStyle: MessageHandler = async (message) => {
       if (domainMatches) {
         domainMatches.forEach((match: string) => {
           const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
-          if (domainMatch && !allDomains.includes(domainMatch[1])) {
-            allDomains.push(domainMatch[1]);
+          if (domainMatch && !hasDomainPattern(domainMatch[1])) {
+            allDomainRules.push({
+              kind: "domain",
+              pattern: domainMatch[1],
+              include: true,
+            });
             console.log(
               "[ea-handleInstallStyle] Extracted domain from CSS:",
               domainMatch[1],
@@ -1425,8 +1453,12 @@ const handleInstallStyle: MessageHandler = async (message) => {
             try {
               const url = new URL(urlMatch[1]);
               const domain = url.hostname;
-              if (!allDomains.includes(domain)) {
-                allDomains.push(domain);
+              if (!hasDomainPattern(domain)) {
+                allDomainRules.push({
+                  kind: "domain",
+                  pattern: domain,
+                  include: true,
+                });
                 console.log(
                   "[ea-handleInstallStyle] Extracted domain from url-prefix:",
                   domain,
@@ -2797,11 +2829,11 @@ const handleUpdateStyle: MessageHandler = async (message) => {
       description: meta.description,
       author: meta.author,
       sourceUrl: meta.sourceUrl,
-      domains: meta.domains.map((domain) => ({
-        kind: "domain" as const,
-        pattern: domain,
-        include: true,
-      })), // Convert string[] to DomainRule[]
+      domains: meta.domains.map((domain: DomainRule) => ({
+        kind: domain.kind,
+        pattern: domain.pattern,
+        include: domain.include,
+      })),
       variables: variables
         ? Object.fromEntries(
             variables.map((v) => [

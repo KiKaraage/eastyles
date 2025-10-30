@@ -32,7 +32,11 @@ export interface SaveMessageResponses {
       description: string;
       author: string;
       sourceUrl: string;
-      domains: string[];
+      domains: Array<{
+        kind: "url" | "url-prefix" | "domain" | "regexp";
+        pattern: string;
+        include: boolean;
+      }>;
       variables?: Record<string, VariableDescriptor>;
     };
     css?: string;
@@ -82,7 +86,11 @@ export interface SaveMessageResponses {
             description: string;
             author: string;
             sourceUrl: string;
-            domains: string[];
+            domains: Array<{
+              kind: "url" | "url-prefix" | "domain" | "regexp";
+              pattern: string;
+              include: boolean;
+            }>;
           };
           variables: Array<{
             name: string;
@@ -110,7 +118,11 @@ export interface SaveMessageResponses {
         description: string;
         author: string;
         sourceUrl: string;
-        domains: string[];
+        domains: Array<{
+          kind: "url" | "url-prefix" | "domain" | "regexp";
+          pattern: string;
+          include: boolean;
+        }>;
         variables?: Record<string, VariableDescriptor>;
       };
       variables?: Record<string, VariableDescriptor>;
@@ -286,7 +298,11 @@ export type SaveMessages =
           description: string;
           author: string;
           sourceUrl: string;
-          domains: string[];
+          domains: Array<{
+            kind: "url" | "url-prefix" | "domain" | "regexp";
+            pattern: string;
+            include: boolean;
+          }>;
           variables?: Record<string, VariableDescriptor>;
         };
         compiledCss: string;
@@ -343,7 +359,11 @@ export type SaveMessages =
           description: string;
           author: string;
           sourceUrl: string;
-          domains: string[];
+          domains: Array<{
+            kind: "url" | "url-prefix" | "domain" | "regexp";
+            pattern: string;
+            include: boolean;
+          }>;
         };
         variables: Array<{
           name: string;

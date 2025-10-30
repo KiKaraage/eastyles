@@ -617,7 +617,7 @@ export function parseUserCSS(
   let css = raw;
   let meta: StyleMeta;
   let metadataBlock: string = "";
-  const domains: string[] = [];
+  const domains: DomainRule[] = [];
 
   try {
     const metadataBlockMatch = raw.match(METADATA_BLOCK_REGEX);
@@ -812,7 +812,11 @@ export function parseUserCSS(
               /url\(["']?(https?:\/\/[^"')]+)["']?\)/,
             );
             if (urlMatch) {
-              domains.push(extractHostname(urlMatch[1]));
+              domains.push({
+                kind: "url",
+                pattern: urlMatch[1],
+                include: true,
+              });
             }
           });
         }
@@ -823,7 +827,11 @@ export function parseUserCSS(
               /url-prefix\(["']?(https?:\/\/[^"')]+)["']?\)/,
             );
             if (urlMatch) {
-              domains.push(extractHostname(urlMatch[1]));
+              domains.push({
+                kind: "url-prefix",
+                pattern: urlMatch[1],
+                include: true,
+              });
             }
           });
         }
@@ -832,7 +840,11 @@ export function parseUserCSS(
           domainMatches.forEach((match) => {
             const domainMatch = match.match(/domain\(["']?([^"')]+)["']?\)/);
             if (domainMatch) {
-              domains.push(domainMatch[1]);
+              domains.push({
+                kind: "domain",
+                pattern: domainMatch[1],
+                include: true,
+              });
             }
           });
         }
@@ -844,8 +856,16 @@ export function parseUserCSS(
               // Parse the regexp pattern to extract domain
               const extractedDomains = extractDomainsFromRegexp(regexpMatch[1]);
               extractedDomains.forEach((domain) => {
-                if (!domains.includes(domain)) {
-                  domains.push(domain);
+                if (
+                  !domains.some(
+                    (d) => d.pattern === domain && d.kind === "domain",
+                  )
+                ) {
+                  domains.push({
+                    kind: "domain",
+                    pattern: domain,
+                    include: true,
+                  });
                 }
               });
             }
@@ -858,15 +878,17 @@ export function parseUserCSS(
     const extractedRules = extractDomains(css);
     extractedRules.forEach((rule) => {
       if (rule.kind === "domain") {
-        domains.push(rule.pattern);
+        domains.push(rule);
       } else if (rule.kind === "url-prefix") {
-        domains.push(extractHostname(rule.pattern));
+        domains.push(rule);
       } else if (rule.kind === "regexp") {
         // Extract domains from regexp pattern
         const extractedDomains = extractDomainsFromRegexp(rule.pattern);
         extractedDomains.forEach((domain) => {
-          if (!domains.includes(domain)) {
-            domains.push(domain);
+          if (
+            !domains.some((d) => d.pattern === domain && d.kind === "domain")
+          ) {
+            domains.push({ kind: "domain", pattern: domain, include: true });
           }
         });
       }
@@ -910,7 +932,7 @@ export function parseUserCSS(
           );
         }
 
-        domains.push(domain);
+        domains.push({ kind: "domain", pattern: domain, include: true });
       });
     }
 
@@ -934,7 +956,11 @@ export function parseUserCSS(
           ) {
             dummyUrl = "https://" + dummyUrl;
           }
-          domains.push(extractHostname(dummyUrl));
+          domains.push({
+            kind: "domain",
+            pattern: extractHostname(dummyUrl),
+            include: true,
+          });
         } catch {
           warnings.push(`Invalid @match pattern: ${match}`);
         }

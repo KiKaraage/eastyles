@@ -92,7 +92,11 @@ export interface SaveMessagePayloads {
       description: string;
       author: string;
       sourceUrl: string;
-      domains: string[];
+      domains: Array<{
+        kind: "url" | "url-prefix" | "domain" | "regexp";
+        pattern: string;
+        include: boolean;
+      }>;
     };
     compiledCss: string;
     variables: Array<{
@@ -133,7 +137,11 @@ export interface SaveMessagePayloads {
       description: string;
       author: string;
       sourceUrl: string;
-      domains: string[];
+      domains: Array<{
+        kind: "url" | "url-prefix" | "domain" | "regexp";
+        pattern: string;
+        include: boolean;
+      }>;
     };
     variables: Array<{
       name: string;
@@ -529,7 +537,11 @@ export function useSaveActions() {
         description: string;
         author: string;
         sourceUrl: string;
-        domains: string[];
+        domains: Array<{
+          kind: "url" | "url-prefix" | "domain" | "regexp";
+          pattern: string;
+          include: boolean;
+        }>;
         variables?: Record<string, VariableDescriptor>;
       },
       compiledCss: string,
@@ -613,7 +625,11 @@ export function useEditActions() {
         description: string;
         author: string;
         sourceUrl: string;
-        domains: string[];
+        domains: Array<{
+          kind: "url" | "url-prefix" | "domain" | "regexp";
+          pattern: string;
+          include: boolean;
+        }>;
       },
       variables: Array<{
         name: string;

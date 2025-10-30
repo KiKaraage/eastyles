@@ -23,7 +23,11 @@ interface StyleMetadata {
   description: string;
   author: string;
   sourceUrl: string;
-  domains: string[];
+  domains: Array<{
+    kind: "url" | "url-prefix" | "domain" | "regexp";
+    pattern: string;
+    include: boolean;
+  }>;
   variables?: Record<string, VariableDescriptor>;
   license?: string;
   homepageURL?: string;

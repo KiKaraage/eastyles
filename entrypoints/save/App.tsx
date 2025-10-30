@@ -23,7 +23,11 @@ interface StyleMetadata {
   description: string;
   author: string;
   sourceUrl: string;
-  domains: string[];
+  domains: Array<{
+    kind: "url" | "url-prefix" | "domain" | "regexp";
+    pattern: string;
+    include: boolean;
+  }>;
   variables?: Record<string, VariableDescriptor>;
   license?: string;
   homepageURL?: string;
@@ -109,10 +113,42 @@ const extractDomainFromRegexp = (pattern: string): string => {
 
 // Format domains for display
 const formatDomainForDisplay = (
-  domain: string,
+  domain:
+    | string
+    | {
+        kind: "url" | "url-prefix" | "domain" | "regexp";
+        pattern: string;
+        include: boolean;
+      },
   cssContent: string,
   metadataBlock?: string,
 ): string => {
+  // Handle DomainRule objects
+  if (typeof domain === "object" && domain !== null) {
+    switch (domain.kind) {
+      case "url":
+        return `exact: ${domain.pattern}`;
+      case "url-prefix":
+        try {
+          const url = new URL(domain.pattern);
+          return `starts with ${url.hostname}`;
+        } catch {
+          return `starts with ${domain.pattern}`;
+        }
+      case "domain":
+        return domain.pattern;
+      case "regexp": {
+        const extractedDomain = extractDomainFromRegexp(domain.pattern);
+        return `regexp: ${extractedDomain}`;
+      }
+      default:
+        return domain.pattern;
+    }
+  }
+
+  // Handle string domains (legacy support)
+  const domainStr = domain as string;
+
   // Handle regexp-prefixed domains from inline parser
   if (domainStr.startsWith("regexp:")) {
     const regexpPattern = domainStr.substring(7);
@@ -683,7 +719,10 @@ const SavePage: React.FC = () => {
             <div className="flex items-center gap-2">
               {parseResult.meta.domains.length > 0 ? (
                 parseResult.meta.domains.map((domain) => (
-                  <span key={domain} className="badge badge-primary badge-sm">
+                  <span
+                    key={`${domain.kind}-${domain.pattern}`}
+                    className="badge badge-primary badge-sm"
+                  >
                     {formatDomainForDisplay(
                       domain,
                       parseResult.css,
