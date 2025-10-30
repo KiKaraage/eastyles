@@ -15,8 +15,9 @@ import type {
   VariableDescriptor,
 } from "../usercss/types";
 import type { ErrorDetails, ReceivedMessages } from "./types";
+import { regex } from "arkregex";
 
-function extractHostname(url: string): string {
+function _extractHostname(url: string): string {
   const match = url.match(/^https?:\/\/([^/]+)/);
   return match ? match[1] : url;
 }
@@ -663,8 +664,8 @@ const handleParseUserCSS: MessageHandler = async (message) => {
     // Use the main processor which now supports background context
 
     // Extract domains from regexp patterns
-    const extractDomainsFromRegexp = (pattern: string): string[] => {
-      const domains: string[] = [];
+    const extractDomainsFromRegexp = (pattern: string): DomainRule[] => {
+      const domains: DomainRule[] = [];
 
       try {
         // Remove protocol prefix
@@ -730,14 +731,14 @@ const handleParseUserCSS: MessageHandler = async (message) => {
     //   /@([^\s\r\n]+)[^\S\r\n]*([\s\S]*?)(?=\r?\n@|\r?\n==\/UserStyle==|$)/g;
 
     // Minimal parseUserCSS function with zero DOM dependencies
-    const parseUserCSSUltraMinimal = (raw: string) => {
+    const parseUserCSSUltraMinimal = (raw: string): ParseResult => {
       console.log("[ea-parseUserCSSMinimal] Function called");
 
       const warnings: string[] = [];
       const errors: string[] = [];
       let css: string = raw;
       let metadataBlock: string = "";
-      const domains: string[] = [];
+      const domains: DomainRule[] = [];
 
       // Basic metadata extraction
       const metadataMatch = raw.match(METADATA_BLOCK_REGEX);
@@ -1439,21 +1440,21 @@ const handleInstallStyle: MessageHandler = async (message) => {
       }
     }
 
-    // Convert string domains to DomainRule format (inline to avoid window access)
-    console.log("[ea-handleInstallStyle] About to create domain rules...");
+    // Normalize domain pattern (inline to avoid window access)
+    console.log("[ea-handleInstallStyle] About to normalize domain rules...");
     const normalizePattern = (domain: string): string => {
       // Simple normalization without URL constructor
       return domain.toLowerCase().trim();
     };
 
-    const domainRules: DomainRule[] = allDomains.map((domain) => ({
-      kind: "domain" as const,
-      pattern: normalizePattern(domain),
-      include: true,
+    // Normalize existing domain rules
+    const normalizedDomainRules: DomainRule[] = allDomainRules.map((rule) => ({
+      ...rule,
+      pattern: normalizePattern(rule.pattern),
     }));
     console.log(
-      "[ea-handleInstallStyle] Domain rules created:",
-      domainRules.length,
+      "[ea-handleInstallStyle] Domain rules normalized:",
+      normalizedDomainRules.length,
     );
 
     // Simple domain extraction from CSS content (inline to avoid window access)
@@ -1539,18 +1540,24 @@ const handleInstallStyle: MessageHandler = async (message) => {
       );
       // Merge with existing rules, avoiding duplicates
       for (const rule of extractedRules) {
-        const exists = domainRules.some(
-          (existing) =>
+        const exists = normalizedDomainRules.some(
+          (existing: DomainRule) =>
             existing.kind === rule.kind && existing.pattern === rule.pattern,
         );
         if (!exists) {
-          domainRules.push(rule);
+          normalizedDomainRules.push(rule);
         }
       }
     }
 
-    console.log("[ea-handleInstallStyle] Final domains:", allDomains);
-    console.log("[ea-handleInstallStyle] Domain rules:", domainRules);
+    console.log(
+      "[ea-handleInstallStyle] Final domain rules:",
+      normalizedDomainRules,
+    );
+    console.log(
+      "[ea-handleInstallStyle] Total domain count:",
+      normalizedDomainRules.length,
+    );
 
     // Convert variables array to Record format
     const variablesRecord: Record<
@@ -1613,7 +1620,7 @@ const handleInstallStyle: MessageHandler = async (message) => {
       description: meta.description || "",
       author: meta.author || "",
       sourceUrl: meta.sourceUrl || "",
-      domains: domainRules,
+      domains: normalizedDomainRules,
       originalDomainCondition,
       compiledCss: processedCompiledCss,
       variables: variablesRecord,
@@ -2530,8 +2537,8 @@ const handleQueryStylesForUrl: MessageHandler = async (message) => {
 
           case "regexp":
             try {
-              const regex = new RegExp(rulePattern);
-              return regex.test(url);
+              const arkRegex = regex.as<string>(rulePattern);
+              return arkRegex.test(url);
             } catch (error) {
               console.log(
                 "[ea-handleQueryStylesForUrl] Invalid regex pattern:",

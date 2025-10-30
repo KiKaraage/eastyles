@@ -27,7 +27,7 @@ export interface StyleMeta {
   /** Support URL for the style */
   supportURL?: string;
   /** List of domains this style should apply to */
-  domains: string[];
+  domains: DomainRule[];
   /** Compiled CSS ready for injection */
   compiledCss: string;
   /** User-configurable variables with their current values */

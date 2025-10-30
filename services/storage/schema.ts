@@ -3,6 +3,7 @@
  * Defines TypeScript interfaces for all data structures stored in browser storage
  */
 
+import { regex } from "arkregex";
 import { Asset, DomainRule, VariableDescriptor } from "../usercss/types";
 
 /**
@@ -235,7 +236,7 @@ export function validateSettings(data: unknown): ValidationResult {
     result.errors.push("lastUsed cannot be in the future");
   }
 
-  if (data.version && !/^\d+\.\d+\.\d+/.test(data.version)) {
+  if (data.version && !regex("^\\d+\\.\\d+\\.\\d+$").test(data.version)) {
     result.errors.push("version must follow semantic versioning format");
   }
 
