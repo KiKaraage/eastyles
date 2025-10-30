@@ -8,6 +8,7 @@ import {
   ViewGrid,
 } from "iconoir-react";
 import { useCallback, useEffect, useState } from "react";
+import FlipMove from "react-flip-move";
 import { browser } from "wxt/browser";
 import NewFontStyle from "../../components/features/NewFontStyle";
 import { VariableControls } from "../../components/features/VariableControls";
@@ -295,6 +296,41 @@ const App = () => {
   const [originalFontDomain, setOriginalFontDomain] = useState("");
   const [originalSelectedFont, setOriginalSelectedFont] = useState("");
 
+  // Display sorted styles
+  const [displaySortedStyles, setDisplaySortedStyles] = useState<
+    UserCSSStyle[]
+  >([]);
+
+  // Update display sorted styles
+  useEffect(() => {
+    const getPriority = (style: UserCSSStyle) => {
+      const mode = style.mode || "both";
+      const isFont = style.name.startsWith("[FONT] ");
+      if (mode === "both" && !isFont) return 4; // Both non-font highest
+      if (isFont && mode === "both") return 3; // Font both next
+      if (mode === "both") return 3; // This shouldn't happen
+    };
+
+    const newSorted = [...state.availableStyles].sort((a, b) => {
+      if (a.enabled && !b.enabled) return -1;
+      if (!a.enabled && b.enabled) return 1;
+      const aIsFont = a.name.startsWith("[FONT] ");
+      const bIsFont = b.name.startsWith("[FONT] ");
+      if (a.enabled && b.enabled) {
+        if (!aIsFont && bIsFont) return -1;
+        if (aIsFont && !bIsFont) return 1;
+      } else if (!a.enabled && !b.enabled) {
+        if (!aIsFont && bIsFont) return -1;
+        if (aIsFont && !bIsFont) return 1;
+      }
+      const aPriority = getPriority(a);
+      const bPriority = getPriority(b);
+      if (aPriority !== bPriority) return bPriority - aPriority;
+      return a.name.localeCompare(b.name);
+    });
+    setDisplaySortedStyles(newSorted);
+  }, [state.availableStyles, isDark]);
+
   // Check if there are unsaved changes in font editing
   const hasFontChanges =
     Boolean(editingFontStyleId) &&
@@ -463,10 +499,10 @@ const App = () => {
       return (
         <div className="space-y-4 px-2 py-2">
           {/* Show available styles for this site */}
-          {state.availableStyles.length > 0 ? (
+          {displaySortedStyles.length > 0 ? (
             <>
-              <div className="space-y-2">
-                {state.availableStyles.map((style) => (
+              <FlipMove className="space-y-2">
+                {displaySortedStyles.map((style) => (
                   <div key={style.id} className="space-y-2">
                     <div className="flex items-center justify-between p-3 bg-base-200 rounded-lg">
                       <div className="flex-1 min-w-0">
@@ -574,7 +610,7 @@ const App = () => {
                       )}
                   </div>
                 ))}
-              </div>
+              </FlipMove>
               <div className="text-center mt-4">
                 <button
                   type="button"
