@@ -25,6 +25,7 @@ import type { UserCSSStyle } from "../../../services/storage/schema";
 import type { DomainRule } from "../../../services/usercss/types";
 import NewFontStyle from "../NewFontStyle";
 import { VariableControls } from "../VariableControls";
+import { regex as arkRegex } from "arkregex";
 
 const ManagerPage: React.FC = () => {
   const [styles, setStyles] = useState<UserCSSStyle[]>([]);
@@ -222,10 +223,10 @@ const ManagerPage: React.FC = () => {
     const cleanText = text.replace(/^@-moz-document\s+/, "").trim();
     const domains: DomainRule[] = [];
     // Split by comma, but handle quotes
-    const regex = /([^,()]+)\(("([^"]*)")\)/g;
+    const domainRegex = arkRegex(`([^,()]+)\\(("([^"]*)")\\)`, "g");
     let match: RegExpExecArray | null;
     while (true) {
-      match = regex.exec(cleanText);
+      match = domainRegex.exec(cleanText);
       if (match === null) break;
       const kind = match[1].trim();
       const pattern = match[3];
@@ -512,11 +513,13 @@ const ManagerPage: React.FC = () => {
       // Try to extract domain from common URL patterns
       const urlPatterns = [
         // https://domain.com or http://domain.com
-        /https?:\/\/([^/?#\\]+)/,
+        arkRegex(`https?://([^/?#\\\\]+)`),
         // Escaped protocols: https\\:\\/\\/domain\\.com
-        /https?\\\\:\\\\\/\\\\\/([^/?#\\]+)/,
+        arkRegex(`https?\\\\\\\\:\\\\\\\\\/\\\\\\\\\/([^/?#\\\\]+)`),
         // Domain with optional protocol indicators
-        /(?:https?\\?:)?\\?\/\\?\/?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
+        arkRegex(
+          `(?:https?\\\\?:)?\\\\?\/\\\\?\/?([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})`,
+        ),
       ];
 
       for (const urlPattern of urlPatterns) {
@@ -524,16 +527,19 @@ const ManagerPage: React.FC = () => {
         if (match) {
           let hostname = match[1];
           // Clean up escaped characters
-          hostname = hostname.replace(/\\+/g, "");
+          hostname = hostname.replace(arkRegex(`\\\\+`, "g"), "");
           // Remove regex groups and quantifiers
-          hostname = hostname.replace(/\([^)]*\)[*+?]?/g, "");
-          hostname = hostname.replace(/[[\]{}()*+?^$|\\]/g, "");
-          hostname = hostname.replace(/^\*?\.+/, "");
+          hostname = hostname.replace(arkRegex(`\\([^)]*\\)[*+?]?`, "g"), "");
+          hostname = hostname.replace(
+            arkRegex(`[[\\]{}()*+?^$|\\\\]`, "g"),
+            "",
+          );
+          hostname = hostname.replace(arkRegex(`^\\*?\\.`, ""), "");
 
           // Extract meaningful domain
           const parts = hostname
             .split(".")
-            .filter((p) => p.length > 0 && !/^[*+?]$/.test(p));
+            .filter((p) => p.length > 0 && !arkRegex(`^[*+?]$`).test(p));
           if (parts.length >= 2) {
             return parts.slice(-2).join(".");
           }
@@ -546,15 +552,17 @@ const ManagerPage: React.FC = () => {
       // Try to find any domain-like pattern in the regex
       const domainPatterns = [
         // Standard domain pattern
-        /([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})?)/,
+        arkRegex(`([a-zA-Z0-9-]+\\.[a-zA-Z0-9-]+(?:\\.[a-zA-Z]{2,})?)`),
         // Escaped domain pattern
-        /([a-zA-Z0-9-]+\\\.?[a-zA-Z0-9-]+(?:\\\.?[a-zA-Z]{2,})?)/,
+        arkRegex(
+          `([a-zA-Z0-9-]+\\\\\\.?[a-zA-Z0-9-]+(?:\\\\\\.?[a-zA-Z]{2,})?)`,
+        ),
       ];
 
       for (const domainPattern of domainPatterns) {
         const match = pattern.match(domainPattern);
         if (match) {
-          const domain = match[1].replace(/\\+/g, "");
+          const domain = match[1].replace(arkRegex(`\\\\+`, "g"), "");
           // Clean up and validate
           if (domain.includes(".") && domain.length > 3) {
             return domain;
@@ -1135,5 +1143,4 @@ const ManagerPage: React.FC = () => {
     </div>
   );
 };
-
 export default ManagerPage;
