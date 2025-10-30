@@ -5,12 +5,13 @@ import { defineConfig } from "wxt";
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: [
+    "@wxt-dev/i18n/module",
     "@wxt-dev/module-react",
     "@wxt-dev/webextension-polyfill",
-    "@wxt-dev/i18n/module",
   ],
+  // @ts-expect-error - i18n config is not in UserConfig type but required for @wxt-dev/i18n/module
   i18n: {
-    localesDir: "public/_locales/",
+    localesDir: "public/_locales",
   },
   manifest: {
     name: "__MSG_appName__",
@@ -64,6 +65,18 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
+        external: (id) => {
+          // Exclude Node.js modules that are not compatible with browser
+          if (
+            id === "less" ||
+            id.startsWith("less/") ||
+            id === "stylus" ||
+            id.startsWith("stylus/")
+          ) {
+            return true;
+          }
+          return false;
+        },
         onwarn(warning, warn) {
           // Suppress various warnings including daisyUI @property warnings
           const message =
