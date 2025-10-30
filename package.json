@@ -31,8 +31,10 @@
     "@wxt-dev/i18n": "^0.2.4",
     "@wxt-dev/storage": "^1.2.5",
     "@wxt-dev/webextension-polyfill": "^1.0.0",
+    "arkregex": "^0.0.2",
     "codemirror": "^6.0.2",
     "iconoir-react": "^7.11.0",
+    "react-flip-move": "^3.0.5",
     "tailwindcss": "^4.1.14",
     "webextension-polyfill": "^0.12.0",
     "zod": "^4.1.12"
