@@ -116,7 +116,7 @@ function parseEOTBlocks(value: string): SelectParseResult | null {
     const labelWithMarkers = stripWrappingQuotes(rawLabel.trim());
     const keyClean = rawKey.trim();
 
-    const labelDefault = labelWithMarkers.replace(/\*$/, "");
+    const labelDefault = labelWithMarkers.replace(regex("\\*$"), "");
     const optionDefault =
       keyClean.includes("*") || labelWithMarkers.endsWith("*");
 
@@ -124,9 +124,9 @@ function parseEOTBlocks(value: string): SelectParseResult | null {
     options.push({ value: normalizedLabel, label: normalizedLabel });
 
     optionCss[normalizedLabel] = cssContent
-      .replace(/^\s*\n/, "")
-      .replace(/\n\s*$/, "")
-      .replace(/\*\\\//g, "*/");
+      .replace(regex(`^\\s*\n`), "")
+      .replace(regex(`\n\\s*$`), "")
+      .replace(regex(`\\*/`, "g"), "*/");
 
     if (optionDefault && !defaultCaptured) {
       defaultValue = normalizedLabel;
@@ -182,7 +182,7 @@ function parseSelectOptions(raw: string): SelectParseResult | null {
         optionLabel = optionLabel.slice(0, -1);
       }
       if (nameHasDefault) {
-        optionName = optionName.replace(/\*$/, "");
+        optionName = optionName.replace(regex(`\\*$`), "");
       }
 
       options.push({ value, label: optionLabel });
@@ -494,7 +494,9 @@ function parseVarDirective(value: string): VariableDescriptor | null {
  */
 
 import { extractDomains } from "./domains";
+import { regex } from "arkregex";
 import {
+  DomainRule,
   ParseResult,
   PreprocessorResult,
   StyleMeta,
@@ -506,14 +508,16 @@ import { resolveVariables } from "./variables";
  * Regular expression to match UserCSS metadata block
  * Handles both empty and populated blocks, flexible with missing closing comment
  */
-const METADATA_BLOCK_REGEX =
-  /\/\*\s*==UserStyle==\s*\r?\n([\s\S]*?)\s*==\/UserStyle==\s*(?:\*\/|\r?\n|$)/;
+const METADATA_BLOCK_REGEX = new RegExp(
+  "/*\\s*==UserStyle==\\s*\\r?\\n([\\s\\S]*?)\\s*==/UserStyle==\\s*(?:\\*/|\\r?\\n|\\$)",
+);
 
 /**
  * Regular expression to extract individual metadata directives
  */
-const DIRECTIVE_REGEX =
-  /\s*@([^\s\r\n]+)[^\S\r\n]*([\s\S]*?)(?=\r?\n\s*@|\r?\n==\/UserStyle==|$)/g;
+const DIRECTIVE_REGEX = regex(
+  `\\s*@([^\\s\r\n]+)[^\\S\r\n]*([\\s\\S]*?)(?=\r?\n\\s*@|\r\n==/UserStyle==|\\$)`,
+);
 
 /**
  * Regular expression to match URL fields for validation
@@ -536,19 +540,19 @@ function extractDomainsFromRegexp(pattern: string): string[] {
 
   try {
     // Remove protocol prefix
-    let domainPart = pattern.replace(/^https?:\/\//, "");
+    let domainPart = pattern.replace(regex("^https?://"), "");
 
     // Handle escaped characters in the pattern
     domainPart = domainPart.replace(/\\./g, ".");
 
     // Remove regexp quantifiers and groups that don't affect the domain
     // This is a simplified approach - remove common patterns that don't affect domain extraction
-    domainPart = domainPart.replace(/\([^)]*\)\*/g, ""); // Remove optional groups like (gist\.)*
-    domainPart = domainPart.replace(/\([^)]*\)\?/g, ""); // Remove optional groups
-    domainPart = domainPart.replace(/\([^)]*\)/g, ""); // Remove other groups
+    domainPart = domainPart.replace(regex("\\([^)]*\\)\\*", "g"), ""); // Remove optional groups like (gist\.)*
+    domainPart = domainPart.replace(regex("\\([^)]*\\)\\?", "g"), ""); // Remove optional groups
+    domainPart = domainPart.replace(regex("\\([^)]*\\)", "g"), ""); // Remove other groups
 
     // Split by common separators and extract domain-like parts
-    const parts = domainPart.split(/[/?#]/)[0]; // Take everything before path/query/fragment
+    const parts = domainPart.split(regex("[/?#]"))[0]; // Take everything before path/query/fragment
 
     // Look for domain patterns (word.word or word.word.word)
     const domainRegex =
@@ -674,7 +678,7 @@ export function parseUserCSS(
     }
 
     // Case 2: Check for nested comments that contain UserCSS structural markers
-    const nestedCommentPattern = /\/\*[\s\S]*?\*\//g;
+    const nestedCommentPattern = regex("/\\*[\s\S]*?\\*/", "g");
     const nestedComments = metadataContent.match(nestedCommentPattern);
 
     if (nestedComments && nestedComments.length > 0) {
@@ -1195,7 +1199,14 @@ export function extractMetadataBlock(raw: string): {
   start: number;
   end: number;
 } {
-  const match = raw.match(METADATA_BLOCK_REGEX);
+  let match = raw.match(METADATA_BLOCK_REGEX);
+
+  // If no CSS comment block found, try preprocessor comment syntax
+  if (!match) {
+    const preprocessorRegex =
+      /^\/\/\s*==UserStyle==\s*\r?\n([\s\S]*?)\r?\n\/\/\s*==\/UserStyle==\s*\r?\n?/m;
+    match = raw.match(preprocessorRegex);
+  }
 
   if (!match) {
     return { block: null, start: -1, end: -1 };

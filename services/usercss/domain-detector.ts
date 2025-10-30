@@ -7,6 +7,7 @@
  */
 
 import { DomainRule } from "./types";
+import { regex } from "arkregex";
 
 /**
  * Interface for the domain detector
@@ -215,8 +216,8 @@ export class UserCSSDomainDetector implements DomainDetector {
    */
   private matchesRegexpPattern(url: string, pattern: string): boolean {
     try {
-      const regex = new RegExp(pattern);
-      return regex.test(url);
+      const arkRegex = regex.as<string>(pattern);
+      return arkRegex.test(url);
     } catch (error) {
       this.debug(`Invalid regex pattern: ${pattern}`, error);
       return false; // Invalid regex doesn't match

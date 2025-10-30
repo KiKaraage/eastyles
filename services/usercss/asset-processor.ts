@@ -5,6 +5,7 @@
  * to work around CSP restrictions in browser extensions.
  */
 
+import { regex } from "arkregex";
 import { browser } from "wxt/browser";
 
 export interface ExternalAsset {
@@ -294,7 +295,7 @@ export async function processAssetsInCss(
           continue;
         }
 
-        const urlPattern = new RegExp(
+        const urlPattern = regex.as<string>(
           `url\\((['"]?)${escapeRegExp(result.originalUrl)}\\1\\)`,
           "g",
         );

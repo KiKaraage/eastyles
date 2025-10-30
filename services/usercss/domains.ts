@@ -6,15 +6,16 @@
  */
 
 import { DomainRule } from "./types";
+import { regex } from "arkregex";
 
 /**
  * Regular expressions for matching different types of domain rules
  */
 const DOMAIN_PATTERNS = {
-  url: /url\(\s*["']?([^"')]+)["']?\s*\)/g,
-  urlPrefix: /url-prefix\(\s*["']?([^"')]+)["']?\s*\)/g,
-  domain: /domain\(\s*["']?([^"')]+)["']?\s*\)/g,
-  regexp: /regexp\(\s*["']?([^"')]+)["']?\s*\)/g,
+  url: regex(`url\\(\\s*["']?([^"')]+)["']?\\s*\\)`, "g"),
+  urlPrefix: regex(`url-prefix\\(\\s*["']?([^"')]+)["']?\\s*\\)`, "g"),
+  domain: regex(`domain\\(\\s*["']?([^"')]+)["']?\\s*\\)`, "g"),
+  regexp: regex(`regexp\\(\\s*["']?([^"')]+)["']?\\s*\\)`, "g"),
 };
 
 /**
@@ -28,7 +29,7 @@ export function extractDomains(css: string): DomainRule[] {
 
   // Find all @-moz-document blocks using matchAll to avoid regex state issues
   // This regex matches the @-moz-document directive and its conditions
-  const mozDocumentRegex = /@-moz-document\s+([^}]+?)\s*\{/g;
+  const mozDocumentRegex = regex(`@-moz-document\\s+([^}]+?)\\s*\\{`, "g");
   const matches = Array.from(css.matchAll(mozDocumentRegex));
 
   for (const match of matches) {
@@ -39,9 +40,9 @@ export function extractDomains(css: string): DomainRule[] {
 
     for (const condition of conditions) {
       // Check each pattern type
-      for (const [type, regex] of Object.entries(DOMAIN_PATTERNS)) {
+      for (const [type, arkRegex] of Object.entries(DOMAIN_PATTERNS)) {
         // Use matchAll to avoid regex state issues
-        const patternRegex = new RegExp(regex.source, "g");
+        const patternRegex = arkRegex;
         const patternMatches = Array.from(condition.matchAll(patternRegex));
 
         for (const patternResult of patternMatches) {
@@ -50,7 +51,7 @@ export function extractDomains(css: string): DomainRule[] {
           // Validate regex patterns
           if (type === "regexp") {
             try {
-              new RegExp(patternValue);
+              regex.as<string>(patternValue);
               rules.push({
                 kind: "regexp" as const,
                 pattern: patternValue,
