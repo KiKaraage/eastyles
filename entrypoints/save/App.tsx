@@ -7,6 +7,7 @@
 import { css } from "@codemirror/lang-css";
 import { basicSetup, EditorView } from "codemirror";
 import { ArrowUpRight, FloppyDisk, Settings } from "iconoir-react";
+import { regex } from "arkregex";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { VariableControls } from "../../components/features/VariableControls";
@@ -44,11 +45,11 @@ const extractDomainFromRegexp = (pattern: string): string => {
     // First, try to extract domain from common URL patterns
     const urlPatterns = [
       // https://domain.com or http://domain.com
-      /https?:\/\/([^/?#\\]+)/,
+      regex(`https?://([^/?#\\\\]+)`),
       // Escaped protocols: https\\:\\/\\/domain\\.com
-      /https?\\\\:\\\\\/\\\\\/([^/?#\\]+)/,
+      regex(`https?\\\\\\\\:\\\\\\\\\/\\\\\\\\\/([^/?#\\\\]+)`),
       // Domain with optional protocol indicators
-      /(?:https?\\?:)?\\?\/\\?\/?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
+      regex(`(?:https?\\\\?:)?\\\\?\/\\\\?\/?([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})`),
     ];
 
     for (const urlPattern of urlPatterns) {
@@ -57,17 +58,17 @@ const extractDomainFromRegexp = (pattern: string): string => {
         let hostname = match[1];
 
         // Clean up escaped characters
-        hostname = hostname.replace(/\\+/g, "");
+        hostname = hostname.replace(regex(`\\\\+`, "g"), "");
 
         // Remove regex groups and quantifiers
-        hostname = hostname.replace(/\([^)]*\)[*+?]?/g, "");
-        hostname = hostname.replace(/[[\]{}()*+?^$|\\]/g, "");
-        hostname = hostname.replace(/^\*?\.+/, "");
+        hostname = hostname.replace(regex(`\\([^)]*\\)[*+?]?`, "g"), "");
+        hostname = hostname.replace(regex(`[[\\]{}()*+?^$|\\\\]`, "g"), "");
+        hostname = hostname.replace(regex(`^\\*?\\.`, ""), "");
 
         // Extract meaningful domain
         const parts = hostname
           .split(".")
-          .filter((p) => p.length > 0 && !/^[*+?]$/.test(p));
+          .filter((p) => p.length > 0 && !regex(`^[*+?]$`).test(p));
         if (parts.length >= 2) {
           return parts.slice(-2).join(".");
         }
@@ -88,7 +89,7 @@ const extractDomainFromRegexp = (pattern: string): string => {
     for (const domainPattern of domainPatterns) {
       const match = pattern.match(domainPattern);
       if (match) {
-        const domain = match[1].replace(/\\+/g, "");
+        const domain = match[1].replace(regex(`\\\\+`, "g"), "");
         // Clean up and validate
         if (domain.includes(".") && domain.length > 3) {
           return domain;
@@ -113,8 +114,8 @@ const formatDomainForDisplay = (
   metadataBlock?: string,
 ): string => {
   // Handle regexp-prefixed domains from inline parser
-  if (domain.startsWith("regexp:")) {
-    const regexpPattern = domain.substring(7);
+  if (domainStr.startsWith("regexp:")) {
+    const regexpPattern = domainStr.substring(7);
     const extracted = extractDomainFromRegexp(regexpPattern);
     return `regexp: ${extracted}`;
   }
@@ -127,11 +128,11 @@ const formatDomainForDisplay = (
   // Check if this domain came from a regexp rule
   const regexpPatterns = [
     new RegExp(
-      `regexp\\(["']?[^"']*${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^"']*["']?\\)`,
+      `regexp\\(["']?[^"']*${domainStr.replace(/[.*+?^\\$\\{\\}()|[\\]\\\\]/g, "\\$&")}[^"']*["']?\\)`,
       "i",
     ),
     new RegExp(
-      `regexp\\(["']?${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+      `regexp\\(["']?${domainStr.replace(/[.*+?^\\$\\{\\}()|[\\]\\\\]/g, "\\$&")}`,
       "i",
     ),
   ];
@@ -139,45 +140,38 @@ const formatDomainForDisplay = (
   for (const pattern of regexpPatterns) {
     if (pattern.test(fullContent)) {
       // Try to extract the full regexp pattern for better display
-      const regexpMatch = fullContent.match(/regexp\(["']?([^"')]+)["']?\)/i);
+      const regexpMatch = fullContent.match(
+        regex(`regexp\\(["']?([^"')]+)["']?\\)`, "i"),
+      );
       if (regexpMatch) {
         const fullPattern = regexpMatch[1];
         const simplifiedDomain = extractDomainFromRegexp(fullPattern);
         return `regexp: ${simplifiedDomain}`;
       }
-      return `regexp: ${domain}`;
+      return `regexp: ${domainStr}`;
     }
   }
 
   // Check if this domain came from a url-prefix rule
   const urlPrefixPattern = new RegExp(
-    `url-prefix\\(["']?https?://[^"']*${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+    `url-prefix\\(["']?[^"']*${domainStr.replace(/[.*+?^\\$\\{\\}()|[\\]\\\\]/g, "\\$&")}[^"']*["']?\\)`,
     "i",
   );
   if (urlPrefixPattern.test(fullContent)) {
-    return `starts with ${domain}`;
+    return `starts with ${domainStr}`;
   }
 
-  // Check if this domain came from a domain rule
-  const domainPattern = new RegExp(
-    `domain\\(["']?${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
-    "i",
-  );
-  if (domainPattern.test(fullContent)) {
-    return domain;
-  }
-
-  // Check for URL exact match
+  // Check if this domain came from a url rule
   const urlPattern = new RegExp(
-    `url\\(["']?https?://[^"']*${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+    `url\\(["']?[^"']*${domainStr.replace(/[.*+?^\\$\\{\\}()|[\\]\\\\]/g, "\\$&")}[^"']*["']?\\)`,
     "i",
   );
   if (urlPattern.test(fullContent)) {
-    return `exact: ${domain}`;
+    return `exact: ${domainStr}`;
   }
 
-  // Default fallback
-  return domain;
+  // Default case - just return the domain as-is
+  return domainStr;
 };
 
 const SavePage: React.FC = () => {
