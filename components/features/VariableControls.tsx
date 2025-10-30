@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import { regex } from "arkregex";
 import { VariableDescriptor } from "../../services/usercss/types";
 
 interface VariableControlsProps {
@@ -30,7 +31,7 @@ interface VariableControlProps {
 // Helper function to check if a string is a valid color value (including alpha)
 const isValidColor = (color: string): boolean => {
   // Must be a valid hex color: #rgb, #rrggbb, or #rrggbbaa
-  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color);
+  return regex("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$").test(color);
 };
 
 const VariableControl: React.FC<VariableControlProps> = ({
